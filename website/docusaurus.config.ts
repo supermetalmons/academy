@@ -47,7 +47,7 @@ const config: Config = {
         },
         blog: false,
         theme: {
-          customCss: ['./src/css/custom.css', './src/css/ultrametal.css'],
+          customCss: ['./src/css/custom.css'],
         },
       } satisfies Preset.Options,
     ],
@@ -55,12 +55,12 @@ const config: Config = {
 
   themeConfig: {
     // Social card
-    image: 'img/ultrametal/logoimage.jpg',
+    image: 'img/logo-1371.png',
     navbar: {
       title: 'Ultrametal Dojo',
       logo: {
         alt: 'Ultrametal Dojo',
-        src: 'img/ultrametal/logoimage.jpg',
+        src: 'img/logo-1371.png',
       },
       items: [
         {type: 'doc', docId: 'index', to: '/', label: 'Home', position: 'left'},
@@ -86,14 +86,6 @@ const config: Config = {
           items: [
             {label: 'mons.link', href: 'https://mons.link/'},
             {label: 'Official Player Guide', href: 'https://guide.mons.link'},
-          ],
-        },
-        {
-          title: 'Deploy',
-          items: [
-            {
-              html: '<a href="https://aws.amazon.com/amplify/" rel="noopener">\n<img alt="Deployed with Amplify" src="https://img.shields.io/badge/Deployed%20with-AWS%20Amplify-orange?logo=awsamplify"/>\n</a>'
-            }
           ],
         },
       ],
