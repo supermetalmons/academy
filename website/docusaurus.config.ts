@@ -1,0 +1,109 @@
+import {themes as prismThemes} from 'prism-react-renderer';
+import type {Config} from '@docusaurus/types';
+import type * as Preset from '@docusaurus/preset-classic';
+
+// This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
+
+const config: Config = {
+  title: 'Ultrametal Dojo',
+  tagline: 'Super Metal Mons Academy, Puzzles, and Resources',
+  favicon: 'img/favicon.png',
+
+  // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
+  future: {
+    v4: true, // Improve compatibility with the upcoming Docusaurus v4
+  },
+
+  // Set the production url of your site here
+  url: 'https://example.com',
+  // Set the /<baseUrl>/ pathname under which your site is served
+  // For GitHub pages deployment, it is often '/<projectName>/'
+  baseUrl: '/',
+
+  // GitHub pages deployment config.
+  // If you aren't using GitHub pages, you don't need these.
+  organizationName: 'ultrametal',
+  projectName: 'dojo',
+
+  onBrokenLinks: 'throw',
+  onBrokenMarkdownLinks: 'warn',
+
+  // Even if you don't use internationalization, you can use this field to set
+  // useful metadata like html lang. For example, if your site is Chinese, you
+  // may want to replace "en" with "zh-Hans".
+  i18n: {
+    defaultLocale: 'en',
+    locales: ['en'],
+  },
+
+  presets: [
+    [
+      'classic',
+      {
+        docs: {
+          routeBasePath: '/',
+          sidebarPath: './sidebars.ts',
+          editUrl: undefined,
+        },
+        blog: false,
+        theme: {
+          customCss: ['./src/css/custom.css', './src/css/ultrametal.css'],
+        },
+      } satisfies Preset.Options,
+    ],
+  ],
+
+  themeConfig: {
+    // Social card
+    image: 'img/ultrametal/logoimage.jpg',
+    navbar: {
+      title: 'Ultrametal Dojo',
+      logo: {
+        alt: 'Ultrametal Dojo',
+        src: 'img/ultrametal/logoimage.jpg',
+      },
+      items: [
+        {type: 'doc', docId: 'index', to: '/', label: 'Home', position: 'left'},
+        {to: '/academy', label: 'Mons Academy', position: 'left'},
+        {to: '/puzzles', label: 'Puzzles', position: 'left'},
+        {to: '/resources', label: 'Resources', position: 'left'},
+        {to: '/faq', label: 'FAQ', position: 'left'},
+      ],
+    },
+    footer: {
+      style: 'dark',
+      links: [
+        {
+          title: 'Community',
+          items: [
+            {label: 'Telegram', href: 'https://t.me/supermetalmons'},
+            {label: 'Discord', href: 'https://discord.gg/hDKhu9yX8d'},
+            {label: 'X/Twitter', href: 'https://x.com/supermetalmons'},
+          ],
+        },
+        {
+          title: 'Play',
+          items: [
+            {label: 'mons.link', href: 'https://mons.link/'},
+            {label: 'Official Player Guide', href: 'https://guide.mons.link'},
+          ],
+        },
+        {
+          title: 'Deploy',
+          items: [
+            {
+              html: '<a href="https://aws.amazon.com/amplify/" rel="noopener">\n<img alt="Deployed with Amplify" src="https://img.shields.io/badge/Deployed%20with-AWS%20Amplify-orange?logo=awsamplify"/>\n</a>'
+            }
+          ],
+        },
+      ],
+      copyright: `© ${new Date().getFullYear()} Ultrametal Dojo`,
+    },
+    prism: {
+      theme: prismThemes.github,
+      darkTheme: prismThemes.dracula,
+    },
+  } satisfies Preset.ThemeConfig,
+};
+
+export default config;

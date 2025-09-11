@@ -1,0 +1,76 @@
+/* Ultrametal layout/theme helpers scoped to .um-page container */
+
+.um-page {
+  /* Provide a page background and fun cursor; individual pages add bg classes */
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  background-size: cover;
+  cursor: url('/img/ultrametal/cursornavi.png'), default;
+  padding: 1.25rem 0 2.5rem;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  line-height: 1.5;
+}
+
+/* Background presets mapped from original site */
+.um-bg-grass { background-image: url('/img/ultrametal/boschgrass.jpg'); }
+.um-bg-library { background-image: url('/img/ultrametal/library.jpg'); }
+
+/* Base (light) palette taken from style.css, scoped */
+.um-page .wrapper { width: 1000px; margin: 0 auto; }
+.um-page .sidebar-img, .um-page .footer, .um-page .title, .um-page .links, .um-page .box { margin-top: 25px; }
+.um-page .title, .um-page .links, .um-page .footer { text-align: center; }
+.um-page .links ul { list-style-type: none; padding: 0; margin: 0; }
+.um-page .links li { display: inline-block; }
+.um-page .links li:before, .um-page .links li:after { content: ""; letter-spacing: 0.1em; }
+.um-page .box { border: 1px solid rgba(0,0,0,0.7); padding: 0.75em 1.1em; background-color: rgba(255,255,255,0.96); border-radius: 10px; box-shadow: 0 6px 16px rgba(0,0,0,0.12); }
+.um-page .inner { }
+.um-page .box img, .um-page .sidebar img { max-width: 100%; height: auto; }
+.um-page .sidebar { width: 200px; float: left; }
+.um-page .sidebar-image { border: 1px solid rgba(0,0,0,0.7); border-radius: 8px; overflow: hidden; }
+.um-page .sidebar-image img { display: block; }
+.um-page .main-wrapper { margin-left: 225px; }
+.um-page .main { columns: 2; column-gap: 28px; }
+.um-page .main .box span { display: inline-block; width: 100%; }
+.um-page .single-column { columns: 1; }
+.um-page .footer { margin-bottom: 25px; }
+
+@media(max-width:915px) {
+  .um-page .wrapper { width: 95%; }
+  .um-page .main-wrapper { width: calc(100% - 225px); }
+}
+
+@media (orientation: portrait), (max-width: 480px) {
+  .um-page .wrapper { width: 100%; }
+  .um-page .main-wrapper, .um-page .sidebar, .um-page .footer { margin: 0 auto; width: 90%; }
+  .um-page .sidebar { float: none; display: block; }
+  .um-page .sidebar-image { margin: 0 auto; width: 33%; margin-top: 25px; }
+  .um-page .sidebar .sidebar-image img { width: 100%; }
+  .um-page .footer { margin-bottom: 25px; }
+}
+
+/* Link colors per theme */
+.um-theme-light a:link, .um-theme-light a:visited { color: #1747ff; text-decoration: none; }
+.um-theme-light a:hover { text-decoration: underline; }
+.um-theme-dark a:link, .um-theme-dark a:visited { color: yellow; }
+
+/* Headings per theme */
+.um-theme-dark h2 { color: white; }
+.um-theme-dark a:link, .um-theme-dark a:visited { color: #ffe869; text-decoration: none; }
+.um-theme-dark a:hover { text-decoration: underline; }
+
+/* Dark theme overrides (from style2.css) */
+.um-theme-dark .box { border: 1px solid rgba(255,255,255,0.8); background-color: rgba(0,0,0,0.82); box-shadow: 0 8px 18px rgba(0,0,0,0.5); }
+.um-theme-dark .sidebar-image { border: 1px solid white; }
+
+/* Headings and title box polish */
+.um-page .title .box h2 { margin: 0.2rem 0; font-size: 1.35rem; letter-spacing: 0.3px; }
+
+/* Nav links spacing inside the white box */
+.um-page .links .box ul { display: inline-flex; gap: 1.25rem; align-items: center; }
+.um-page .links .box li { display: inline; }
+
+/* Telegram/Discord/X row spacing */
+.um-page .sidebar a img { filter: drop-shadow(0 2px 2px rgba(0,0,0,0.25)); }
+
+/* Marquee subtle style */
+.um-page marquee { font-weight: 600; letter-spacing: 0.3px; }
