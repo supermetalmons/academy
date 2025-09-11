@@ -5,10 +5,10 @@ applications:
       phases:
         preBuild:
           commands:
-            - cd website && npm ci
+            - npm ci --prefix website
         build:
           commands:
-            - cd website && npm run build
+            - npm run build --prefix website
       artifacts:
         baseDirectory: website/build
         files:
