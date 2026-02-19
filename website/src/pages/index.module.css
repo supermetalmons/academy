@@ -73,3 +73,43 @@
 .welcomeSection {
   margin: 2rem 0 1rem;
 }
+
+:global([data-theme='dark']) .hero {
+  border-color: #8d783c;
+  background:
+    radial-gradient(circle at 16% 16%, rgba(216, 191, 110, 0.2), transparent 42%),
+    linear-gradient(130deg, rgba(6, 9, 6, 0.88), rgba(14, 20, 13, 0.9)),
+    url('/img/legacy/images/boschgrass.jpg') center/cover;
+  color: #f5ebc8;
+  box-shadow: 0 18px 32px rgba(0, 0, 0, 0.45);
+}
+
+:global([data-theme='dark']) .kicker {
+  background: rgba(7, 10, 7, 0.84);
+  border-color: #c7af67;
+  color: #ecdcb0;
+}
+
+:global([data-theme='dark']) .subtitle {
+  color: #dbd1af;
+}
+
+:global([data-theme='dark']) .card {
+  border-color: #7f6d37;
+  background:
+    linear-gradient(165deg, rgba(16, 21, 16, 0.95), rgba(23, 31, 22, 0.96));
+  color: #e3d9b7;
+}
+
+:global([data-theme='dark']) .card:hover {
+  box-shadow: 0 12px 20px rgba(0, 0, 0, 0.45);
+  border-color: #d0b96d;
+}
+
+:global([data-theme='dark']) .card h2 {
+  color: #f8e4a2;
+}
+
+:global([data-theme='dark']) .card p {
+  color: #d5cba8;
+}
