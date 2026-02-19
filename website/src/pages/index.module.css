@@ -1,0 +1,75 @@
+.hero {
+  margin: 1.5rem 0 2rem;
+  border-radius: 20px;
+  border: 2px solid #205512;
+  background:
+    radial-gradient(circle at 15% 15%, rgba(255, 238, 174, 0.42), transparent 45%),
+    linear-gradient(130deg, rgba(25, 50, 19, 0.95), rgba(43, 82, 22, 0.88)),
+    url('/img/legacy/images/boschgrass.jpg') center/cover;
+  color: #f9f5d5;
+  padding: 2.4rem 1.6rem;
+}
+
+.kicker {
+  display: inline-block;
+  font-size: 0.8rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin-bottom: 0.65rem;
+  font-family: var(--mons-font-mono);
+  background: rgba(12, 22, 8, 0.68);
+  border: 1px solid #d8be63;
+  padding: 0.32rem 0.55rem;
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(2.2rem, 4vw, 3.6rem);
+  font-family: var(--mons-font-display);
+  letter-spacing: 0.04em;
+}
+
+.subtitle {
+  margin: 0.8rem 0 0;
+  max-width: 52rem;
+  font-size: 1.1rem;
+  line-height: 1.5;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.card {
+  display: block;
+  border-radius: 14px;
+  border: 1px solid #304f23;
+  background: linear-gradient(165deg, #f8f4db, #ece3bf);
+  color: #1e2a16;
+  text-decoration: none;
+  padding: 1rem;
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 18px rgba(22, 33, 14, 0.18);
+}
+
+.card h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.2rem;
+  font-family: var(--mons-font-display);
+}
+
+.card p {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+.welcomeSection {
+  margin: 2rem 0 1rem;
+}
