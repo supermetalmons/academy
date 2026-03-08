@@ -10,7 +10,7 @@
   --ifm-color-primary-lightest: #568f35;
   --ifm-background-color: #f6f1dd;
   --ifm-navbar-background-color: #f9f5df;
-  --ifm-footer-background-color: #1f2b19;
+  --ifm-footer-background-color: #1a1a1a;
   --ifm-link-color: #2a5c1e;
   --ifm-link-hover-color: #467f2f;
   --ifm-heading-color: #1e2f16;
@@ -36,7 +36,7 @@
   --ifm-background-color: #0c100d;
   --ifm-background-surface-color: #141a15;
   --ifm-navbar-background-color: #101510;
-  --ifm-footer-background-color: #0a0d0a;
+  --ifm-footer-background-color: #111111;
   --ifm-link-color: #f3d879;
   --ifm-link-hover-color: #ffe8ac;
   --ifm-heading-color: #f2e8c7;
@@ -123,6 +123,43 @@ body {
   border-color: rgba(198, 173, 95, 0.28);
 }
 
+.footer {
+  padding: 1.5rem 0;
+}
+
+.footer__title {
+  display: none;
+}
+
+.footer__items {
+  display: flex;
+  flex-direction: row;
+  gap: 1.5rem;
+  justify-content: center;
+}
+
+.footer__item {
+  margin: 0;
+}
+
+.footer__link-item {
+  color: #aaa;
+  font-size: 0.9rem;
+}
+
+.footer__link-item:hover {
+  color: #fff;
+}
+
+.footer__bottom {
+  margin-top: 1rem;
+}
+
+.footer__copyright {
+  color: #666;
+  font-size: 0.8rem;
+}
+
 .legacy-frame {
   border: 2px solid #203616;
   border-radius: 16px;
@@ -196,27 +233,7 @@ body {
   border: 0;
 }
 
-.legacy-frame__content marquee {
-  font-family: var(--mons-font-mono);
-}
 
-.legacy-frame__ticker {
-  margin: 0.9rem 0 0;
-  border-radius: 9px;
-  border: 1px solid rgba(27, 39, 19, 0.9);
-  background: rgba(255, 255, 255, 0.9);
-  font-family: var(--mons-font-mono);
-  font-size: 0.9rem;
-  letter-spacing: 0.06em;
-  text-align: center;
-  padding: 0.55rem;
-}
-
-.legacy-frame--library .legacy-frame__ticker {
-  border-color: #f0d277;
-  background: rgba(0, 0, 0, 0.75);
-  color: #f9f4df;
-}
 
 [data-theme='dark'] .legacy-frame {
   border-color: #8f7a3d;
@@ -270,17 +287,6 @@ body {
   color: #ffe9ad;
 }
 
-[data-theme='dark'] .legacy-frame__ticker {
-  border-color: rgba(198, 173, 95, 0.75);
-  background: rgba(9, 14, 10, 0.9);
-  color: #e9e0c0;
-}
-
-[data-theme='dark'] .legacy-frame--library .legacy-frame__ticker {
-  border-color: #d2bc6f;
-  background: rgba(0, 0, 0, 0.84);
-  color: #f6edce;
-}
 
 @media (max-width: 996px) {
   .legacy-frame {

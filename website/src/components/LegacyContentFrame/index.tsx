@@ -6,14 +6,12 @@ type LegacyContentFrameProps = {
   theme: LegacyTheme;
   heading: string;
   html: string;
-  showTicker?: boolean;
 };
 
 export default function LegacyContentFrame({
   theme,
   heading,
   html,
-  showTicker = false,
 }: LegacyContentFrameProps) {
   return (
     <section
@@ -31,9 +29,6 @@ export default function LegacyContentFrame({
         dangerouslySetInnerHTML={{__html: html}}
       />
 
-      {showTicker && (
-        <p className="legacy-frame__ticker">SWAG IS ETERNAL</p>
-      )}
     </section>
   );
 }

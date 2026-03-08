@@ -62,38 +62,22 @@ const config: Config = {
           label: 'FAQ',
           position: 'left',
         },
-        {to: '/docs/legacy/', label: 'Legacy', position: 'left'},
+
       ],
     },
     footer: {
       style: 'dark',
       links: [
         {
-          title: 'Learn',
-          items: [
-            {label: 'Intro', to: '/docs/intro/overview'},
-            {label: 'Puzzles', to: '/docs/puzzles/overview'},
-            {label: 'Resources', to: '/docs/resources/overview'},
-          ],
-        },
-        {
-          title: 'Community',
-          items: [
-            {label: 'Telegram', href: 'https://t.me/supermetalmons'},
-            {label: 'Discord', href: 'https://discord.gg/hDKhu9yX8d'},
-            {label: 'X', href: 'https://x.com/supermetalmons'},
-          ],
-        },
-        {
-          title: 'Play',
+          title: ' ',
           items: [
             {label: 'mons.link', href: 'https://mons.link/'},
-            {label: 'Official Guide', href: 'https://guide.mons.link'},
-            {label: 'Legacy Archive', to: '/docs/legacy/'},
+            {label: 'X', href: 'https://x.com/supermetalmons'},
+            {label: 'Telegram', href: 'https://t.me/supermetalmons'},
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} Mons Academy.`,
+      copyright: `© ${new Date().getFullYear()} Mons Academy`,
     },
     prism: {
       theme: prismThemes.github,

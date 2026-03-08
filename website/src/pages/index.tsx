@@ -27,11 +27,7 @@ const quickLinks = [
     to: '/docs/faq/super-metal-mons-faq',
     description: 'Frequently asked questions about the game and its ecosystem.',
   },
-  {
-    title: 'Legacy',
-    to: '/docs/legacy/',
-    description: 'Raw historical pages, styles, and migration preservation notes.',
-  },
+
 ];
 
 export default function Home(): ReactNode {
@@ -41,10 +37,10 @@ export default function Home(): ReactNode {
       description="Mons Academy is a comprehensive Super Metal Mons learning and strategy resource.">
       <header className={styles.hero}>
         <div className="container">
-          <p className={styles.kicker}>Rebuilt from ultrametal.neocities.org</p>
+
           <h1 className={styles.title}>Mons Academy</h1>
           <p className={styles.subtitle}>
-            The complete home for Super Metal Mons lessons, puzzles, resources, and preserved legacy material.
+            The complete home for Super Metal Mons lessons, puzzles, and resources.
           </p>
         </div>
       </header>
@@ -64,7 +60,6 @@ export default function Home(): ReactNode {
             theme="grass"
             heading="⋆✰ Mons Academy ✰⋆"
             html={legacyContent.index}
-            showTicker
           />
         </section>
       </main>

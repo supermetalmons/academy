@@ -33,11 +33,7 @@ const sidebars: SidebarsConfig = {
       label: 'FAQ',
       items: ['faq/super-metal-mons-faq'],
     },
-    {
-      type: 'category',
-      label: 'Legacy',
-      items: ['legacy/index', 'legacy/raw-pages', 'legacy/styles-and-colors'],
-    },
+
   ],
 };
 
