@@ -171,10 +171,20 @@ const statusTextStyle: CSSProperties = {
 };
 
 const errorTextStyle: CSSProperties = {
+  position: 'absolute',
+  inset: 0,
   margin: 0,
-  padding: '1rem',
+  padding: '1rem 1.25rem',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  textAlign: 'center',
   fontSize: '1rem',
+  fontWeight: 600,
+  lineHeight: 1.4,
   color: '#000',
+  backgroundColor: 'rgba(255, 255, 255, 0.86)',
+  zIndex: 6,
 };
 
 const fallbackStyle: CSSProperties = {
@@ -218,6 +228,27 @@ function getPrevSpreadStart(spreadStart: number): number {
 
   const prev = spreadStart - 2;
   return prev <= 1 ? 1 : prev;
+}
+
+function isExpectedRenderInterruption(error: unknown): boolean {
+  const name =
+    typeof error === 'object' && error !== null && 'name' in error
+      ? String((error as {name?: unknown}).name ?? '')
+      : '';
+  const message =
+    typeof error === 'string'
+      ? error
+      : error instanceof Error
+      ? error.message
+      : typeof error === 'object' && error !== null && 'message' in error
+      ? String((error as {message?: unknown}).message ?? '')
+      : '';
+  const normalized = `${name} ${message}`.toLowerCase();
+  return (
+    normalized.includes('cancel') ||
+    normalized.includes('aborted') ||
+    normalized.includes('canvas is already in use')
+  );
 }
 
 async function renderPageToCanvas(
@@ -276,6 +307,7 @@ function ManualPdfViewer(): ReactNode {
   const lensCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const pdfDocRef = useRef<PdfDocumentProxy | null>(null);
   const renderCycleRef = useRef<number>(0);
+  const navLockRef = useRef<boolean>(false);
 
   const hideMagnifier = useCallback((): void => {
     const lens = lensRef.current;
@@ -471,6 +503,23 @@ function ManualPdfViewer(): ReactNode {
   const canGoPrev = spreadStart > 1;
   const canGoNext =
     numPages !== null && (spreadStart <= 1 ? numPages > 1 : spreadStart + 2 <= numPages);
+  const canNavigate = !isLoading && !isRendering && !loadError;
+
+  const handlePrevClick = useCallback((): void => {
+    if (!canGoPrev || !canNavigate || navLockRef.current) {
+      return;
+    }
+    navLockRef.current = true;
+    setSpreadStart((current) => getPrevSpreadStart(current));
+  }, [canGoPrev, canNavigate]);
+
+  const handleNextClick = useCallback((): void => {
+    if (!numPages || !canGoNext || !canNavigate || navLockRef.current) {
+      return;
+    }
+    navLockRef.current = true;
+    setSpreadStart((current) => getNextSpreadStart(current, numPages));
+  }, [canGoNext, canNavigate, numPages]);
 
   useEffect(() => {
     if (!isMagnifierEnabled) {
@@ -519,11 +568,14 @@ function ManualPdfViewer(): ReactNode {
         }
       } catch (error) {
         if (!cancelled && renderCycleRef.current === renderCycle) {
-          setLoadError('Unable to render manual pages.');
+          if (!isExpectedRenderInterruption(error)) {
+            setLoadError('Unable to render manual pages.');
+          }
         }
       } finally {
         if (!cancelled && renderCycleRef.current === renderCycle) {
           setIsRendering(false);
+          navLockRef.current = false;
         }
       }
     };
@@ -568,13 +620,7 @@ function ManualPdfViewer(): ReactNode {
         ) : null}
 
         {loadError ? (
-          <p style={errorTextStyle}>
-            {loadError} Open the PDF directly here:{' '}
-            <a href="/assets/manual.pdf" target="_blank" rel="noreferrer">
-              manual.pdf
-            </a>
-            .
-          </p>
+          <p style={errorTextStyle}>{loadError}</p>
         ) : null}
       </div>
 
@@ -582,9 +628,9 @@ function ManualPdfViewer(): ReactNode {
         <div style={controlsEdgeStyle}>
           <button
             type="button"
-            style={canGoPrev ? arrowButtonStyle : disabledArrowButtonStyle}
-            onClick={() => setSpreadStart((current) => getPrevSpreadStart(current))}
-            disabled={!canGoPrev}>
+            style={canGoPrev && canNavigate ? arrowButtonStyle : disabledArrowButtonStyle}
+            onClick={handlePrevClick}
+            disabled={!canGoPrev || !canNavigate}>
             ← Previous
           </button>
         </div>
@@ -616,11 +662,9 @@ function ManualPdfViewer(): ReactNode {
         <div style={controlsEdgeRightStyle}>
           <button
             type="button"
-            style={canGoNext ? arrowButtonStyle : disabledArrowButtonStyle}
-            onClick={() =>
-              setSpreadStart((current) => (numPages ? getNextSpreadStart(current, numPages) : current))
-            }
-            disabled={!canGoNext}>
+            style={canGoNext && canNavigate ? arrowButtonStyle : disabledArrowButtonStyle}
+            onClick={handleNextClick}
+            disabled={!canGoNext || !canNavigate}>
             Next →
           </button>
         </div>

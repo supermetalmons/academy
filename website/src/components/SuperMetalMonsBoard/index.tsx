@@ -1,4 +1,12 @@
-import {useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode} from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react';
 import Link from '@docusaurus/Link';
 
 const BOARD_SIZE = 11;
@@ -156,7 +164,13 @@ const itemTileKeys = new Set(
   pickupPositions.map(([col, row]) => toTileKey(col, row)),
 );
 
-const monPositions = {
+type MonType = keyof typeof boardAssets.white;
+type BoardScaleGroup = 'whiteMana' | 'blackMana' | 'item' | MonType;
+
+const monPositions: Record<
+  'black' | 'white',
+  Array<{col: number; row: number; href: string; type: MonType}>
+> = {
   black: [
     {col: 3, row: 0, href: boardAssets.black.mystic, type: 'mystic'},
     {col: 4, row: 0, href: boardAssets.black.spirit, type: 'spirit'},
@@ -172,6 +186,19 @@ const monPositions = {
     {col: 7, row: 10, href: boardAssets.white.mystic, type: 'mystic'},
   ],
 };
+const monTileKeysByType: Record<MonType, Set<string>> = {
+  angel: new Set<string>(),
+  demon: new Set<string>(),
+  drainer: new Set<string>(),
+  spirit: new Set<string>(),
+  mystic: new Set<string>(),
+};
+const monTypeByTileKey: Record<string, MonType> = {};
+([...monPositions.black, ...monPositions.white]).forEach((mon) => {
+  const tileKey = toTileKey(mon.col, mon.row);
+  monTileKeysByType[mon.type].add(tileKey);
+  monTypeByTileKey[tileKey] = mon.type;
+});
 const blackMonTileKeys = new Set(
   monPositions.black.map((mon) => toTileKey(mon.col, mon.row)),
 );
@@ -344,6 +371,8 @@ export default function SuperMetalMonsBoard({
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const boardContainerRef = useRef<HTMLDivElement | null>(null);
   const previewMessageBoxRef = useRef<HTMLDivElement | null>(null);
+  const thinHintRowRef = useRef<HTMLParagraphElement | null>(null);
+  const thinHintContentRef = useRef<HTMLSpanElement | null>(null);
   const moveResourceButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [hoveredTile, setHoveredTile] = useState<Tile | null>(null);
   const [selectedTile, setSelectedTile] = useState<Tile | null>(null);
@@ -355,13 +384,14 @@ export default function SuperMetalMonsBoard({
   const [renderWidth, setRenderWidth] = useState(MAX_UNIT_PIXELS * VIEWBOX_SIZE);
   const [isPreviewBelow, setIsPreviewBelow] = useState(false);
   const [availableWidth, setAvailableWidth] = useState<number | null>(null);
+  const [thinHintScale, setThinHintScale] = useState(1);
   const scaledFactorRef = useRef(1);
 
   useEffect(() => {
     scaledFactorRef.current = scaledFactor;
   }, [scaledFactor]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const node = wrapRef.current;
     if (node === null) {
       return;
@@ -389,7 +419,7 @@ export default function SuperMetalMonsBoard({
     };
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const updateRenderWidth = () => {
       const layoutWidth = availableWidth ?? window.innerWidth;
       const maxAvailableWidth = Math.max(120, layoutWidth - 2);
@@ -571,7 +601,7 @@ export default function SuperMetalMonsBoard({
       : null;
   const selectedTileKey =
     selectedTile !== null ? `${selectedTile.row}-${selectedTile.col}` : null;
-  const selectedBoardScaleGroup =
+  const selectedBoardScaleGroup: BoardScaleGroup | null =
     selectedTileKey === null
       ? null
       : whiteManaTileKeys.has(selectedTileKey)
@@ -580,7 +610,7 @@ export default function SuperMetalMonsBoard({
           ? 'blackMana'
           : itemTileKeys.has(selectedTileKey)
             ? 'item'
-            : null;
+            : monTypeByTileKey[selectedTileKey] ?? null;
   const highlightedTile =
     selectedMoveResource !== null
       ? null
@@ -771,6 +801,47 @@ export default function SuperMetalMonsBoard({
       : thinFloatingPreviewTopPx;
   const moveResourcesOffsetX = Math.round(tilePixels * -0.9);
   const moveResourcesOffsetY = Math.round(tilePixels * -0.62);
+
+  useEffect(() => {
+    if (!showHoverPreview || !isPreviewBelow || activePiece !== null) {
+      setThinHintScale(1);
+      return;
+    }
+
+    const node = thinHintRowRef.current;
+    const contentNode = thinHintContentRef.current;
+    if (node === null || contentNode === null) {
+      return;
+    }
+
+    const updateThinHintScale = () => {
+      const available = node.clientWidth;
+      const content = contentNode.scrollWidth;
+      if (available <= 0 || content <= 0) {
+        setThinHintScale(1);
+        return;
+      }
+      const nextScale = Math.min(1, available / content);
+      setThinHintScale((current) => (Math.abs(current - nextScale) < 0.001 ? current : nextScale));
+    };
+
+    updateThinHintScale();
+
+    if (typeof ResizeObserver !== 'undefined') {
+      const observer = new ResizeObserver(() => {
+        updateThinHintScale();
+      });
+      observer.observe(node);
+      return () => {
+        observer.disconnect();
+      };
+    }
+
+    window.addEventListener('resize', updateThinHintScale);
+    return () => {
+      window.removeEventListener('resize', updateThinHintScale);
+    };
+  }, [activePiece, isPreviewBelow, renderWidth, showHoverPreview]);
   const boardRowStyle: CSSProperties = {
     display: 'flex',
     flexDirection: useBelowPreviewLayout ? 'column' : 'row',
@@ -947,6 +1018,38 @@ export default function SuperMetalMonsBoard({
     display: 'inline-block',
     marginTop: `${Math.round(previewTextFontPx * 2.5)}px`,
   };
+  const thinPreviewHintRowStyle: CSSProperties = {
+    width: `${renderWidth}px`,
+    display: 'block',
+    position: 'relative',
+    alignSelf: 'flex-start',
+    height: `${Math.max(12, Math.round(previewTextFontPx * 1.35))}px`,
+    marginBottom: `${Math.max(6, Math.round(tilePixels * 0.2))}px`,
+    overflow: 'visible',
+  };
+  const thinPreviewHintContentStyle: CSSProperties = {
+    position: 'absolute',
+    left: '50%',
+    top: 'calc(50% + 14px)',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: `${Math.max(8, Math.round(previewTextFontPx * 0.9))}px`,
+    fontSize: `${previewTextFontPx}px`,
+    lineHeight: 1.2,
+    whiteSpace: 'nowrap',
+    transform: `translate(-50%, -50%) scale(${thinHintScale})`,
+    transformOrigin: 'center center',
+  };
+  const thinPreviewHintPrimaryTextStyle: CSSProperties = {
+    ...previewHintPrimaryTextStyle,
+    whiteSpace: 'nowrap',
+  };
+  const thinPreviewHintLinkStyle: CSSProperties = {
+    ...previewHintLinkStyle,
+    marginTop: 0,
+    whiteSpace: 'nowrap',
+  };
   const getPieceFrame = (row: number, col: number) => {
     const tileKey = `${row}-${col}`;
     const isGroupActive =
@@ -956,7 +1059,9 @@ export default function SuperMetalMonsBoard({
           ? blackManaTileKeys.has(tileKey)
           : selectedBoardScaleGroup === 'item'
             ? itemTileKeys.has(tileKey)
-            : false;
+            : selectedBoardScaleGroup !== null
+              ? monTileKeysByType[selectedBoardScaleGroup].has(tileKey)
+              : false;
     const isSingleActive =
       scaledTile !== null &&
       scaledTile.row === row &&
@@ -1035,6 +1140,19 @@ export default function SuperMetalMonsBoard({
     <div ref={wrapRef} style={currentWrapStyle}>
       <div style={boardRowStyle}>
         <div ref={boardContainerRef} style={boardStackStyle}>
+          {showHoverPreview && useBelowPreviewLayout ? (
+            <p ref={thinHintRowRef} style={thinPreviewHintRowStyle}>
+              <span ref={thinHintContentRef} style={thinPreviewHintContentStyle}>
+                <span style={thinPreviewHintPrimaryTextStyle}>
+                  (Click/hover over an element for details)
+                </span>
+                <Link to="/piece-details" style={thinPreviewHintLinkStyle}>
+                  show all piece details
+                </Link>
+              </span>
+            </p>
+          ) : null}
+
           <svg
             viewBox="-1 -1 13 13"
             style={svgStyle}

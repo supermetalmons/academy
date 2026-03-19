@@ -44,11 +44,128 @@ const pressedButtonStyle: CSSProperties = {
   filter: 'brightness(0.87)',
 };
 
-const items: Array<{key: InstructionSection; label: string; to: string}> = [
-  {key: 'basic-rules', label: 'Basic Rules', to: '/instruction'},
-  {key: 'video-tutorial', label: 'Video Tutorials', to: '/instruction/video-tutorial'},
-  {key: 'lessons', label: 'Lessons', to: '/instruction/lessons'},
-  {key: 'manual', label: 'Manual', to: '/instruction/manual'},
+const labelWithIconStyle: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '0.38rem',
+};
+
+const labelIconStyle: CSSProperties = {
+  width: '14px',
+  height: '14px',
+  display: 'block',
+  flexShrink: 0,
+};
+
+const videoIconStyle: CSSProperties = {
+  ...labelIconStyle,
+  width: '17px',
+  height: '17px',
+};
+
+const lessonsIconStyle: CSSProperties = {
+  ...labelIconStyle,
+  width: '16px',
+  height: '16px',
+};
+
+const manualIconStyle: CSSProperties = {
+  ...labelIconStyle,
+  width: '19px',
+  height: '15px',
+  objectFit: 'contain',
+  imageRendering: 'auto',
+};
+
+const basicRulesLabel: ReactNode = (
+  <span style={labelWithIconStyle}>
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      style={labelIconStyle}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.25"
+      strokeLinecap="square"
+      strokeLinejoin="miter">
+      <rect x="2" y="2" width="20" height="20" />
+      <line x1="8.67" y1="2" x2="8.67" y2="22" />
+      <line x1="15.33" y1="2" x2="15.33" y2="22" />
+      <line x1="2" y1="8.67" x2="22" y2="8.67" />
+      <line x1="2" y1="15.33" x2="22" y2="15.33" />
+
+      <rect x="2" y="2" width="6.67" height="6.67" fill="currentColor" stroke="none" />
+      <rect x="15.33" y="2" width="6.67" height="6.67" fill="currentColor" stroke="none" />
+      <rect x="8.67" y="8.67" width="6.67" height="6.67" fill="currentColor" stroke="none" />
+      <rect x="2" y="15.33" width="6.67" height="6.67" fill="currentColor" stroke="none" />
+      <rect x="15.33" y="15.33" width="6.67" height="6.67" fill="currentColor" stroke="none" />
+    </svg>
+    Basic Rules
+  </span>
+);
+
+const videoTutorialLabel: ReactNode = (
+  <span style={labelWithIconStyle}>
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      style={videoIconStyle}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9.2" />
+      <path d="M8.4 6.9v10.2L17 12z" fill="currentColor" stroke="none" />
+    </svg>
+    Video Tutorials
+  </span>
+);
+
+const lessonsLabel = (isActive: boolean): ReactNode => {
+  const pageColor = isActive ? '#fff' : '#000';
+  const detailColor = isActive ? '#000' : '#fff';
+  return (
+    <span style={labelWithIconStyle}>
+      <svg
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+        style={lessonsIconStyle}
+        fill="none"
+        stroke="none"
+        strokeLinecap="round"
+        strokeLinejoin="round">
+        <rect x="3.1" y="2.3" width="13.8" height="19.4" rx="0.8" fill={pageColor} />
+        <line x1="6.2" y1="7.5" x2="13.9" y2="7.5" stroke={detailColor} strokeWidth="1.35" />
+        <line x1="6.2" y1="10.9" x2="13.9" y2="10.9" stroke={detailColor} strokeWidth="1.35" />
+        <path d="m13.9 13.3 4.8-4.8 2.2 2.2-4.8 4.8-3.1.8z" fill={detailColor} />
+        <path d="m18.7 8.5 1.1-1.1 2.2 2.2-1.1 1.1z" fill={pageColor} />
+      </svg>
+      Lessons
+    </span>
+  );
+};
+
+const manualLabel = (isActive: boolean): ReactNode => (
+  <span style={labelWithIconStyle}>
+    <img
+      src="/assets/171322.png"
+      alt=""
+      aria-hidden="true"
+      style={{
+        ...manualIconStyle,
+        filter: isActive ? 'invert(1)' : 'none',
+      }}
+    />
+    Manual
+  </span>
+);
+
+const items: Array<{key: InstructionSection; label: (isActive: boolean) => ReactNode; to: string}> = [
+  {key: 'basic-rules', label: () => basicRulesLabel, to: '/instruction'},
+  {key: 'video-tutorial', label: () => videoTutorialLabel, to: '/instruction/video-tutorial'},
+  {key: 'lessons', label: lessonsLabel, to: '/instruction/lessons'},
+  {key: 'manual', label: manualLabel, to: '/instruction/manual'},
 ];
 
 export default function InstructionSubnav({active}: InstructionSubnavProps): ReactNode {
@@ -71,7 +188,7 @@ export default function InstructionSubnav({active}: InstructionSubnavProps): Rea
               ...(item.key === active ? activeButtonStyle : inactiveButtonStyle),
               ...(isPressed ? pressedButtonStyle : undefined),
             }}>
-            {item.label}
+            {item.label(item.key === active)}
           </Link>
         );
       })}

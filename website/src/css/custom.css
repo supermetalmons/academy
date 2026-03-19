@@ -52,6 +52,25 @@ body {
     linear-gradient(180deg, rgba(242, 235, 205, 0.94), rgba(249, 246, 230, 0.98));
 }
 
+html {
+  scrollbar-gutter: stable both-edges;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+body,
+#__docusaurus,
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+*::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;
+}
+
 [data-theme='dark'] html,
 [data-theme='dark'] body {
   background:
@@ -287,6 +306,102 @@ body {
   color: #ffe9ad;
 }
 
+.mons-shell {
+  position: relative;
+  isolation: isolate;
+}
+
+.cloud-shadows {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 1;
+}
+
+.cloud-shadows--intro {
+  opacity: 0;
+  animation: monsCloudLayerFade 1200ms ease-out 120ms forwards;
+}
+
+.cloud-shadows__blob {
+  position: absolute;
+  left: 0;
+  display: block;
+  color: rgba(10, 15, 10, 0.38);
+  filter: blur(var(--cloud-blur, 12px));
+  border-radius: var(--cloud-blob-radius, 58%);
+  mix-blend-mode: multiply;
+  transform: translate3d(0, 0, 0);
+  animation-name: monsCloudShadowFlow, monsCloudShadowPulse;
+  animation-timing-function: linear, ease-in-out;
+  animation-iteration-count: infinite, infinite;
+  will-change: transform, filter, opacity;
+}
+
+.cloud-shadows__lobe {
+  position: absolute;
+  display: block;
+  background: currentColor;
+}
+
+@keyframes monsCloudLayerFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes monsCloudShadowFlow {
+  0% {
+    transform: translate3d(-150vw, 0, 0) scale(1) rotate(var(--cloud-rot, 0deg));
+  }
+  18% {
+    transform: translate3d(-90vw, var(--cloud-y1, -6px), 0) scale(var(--cloud-scale-mid, 1.03)) rotate(var(--cloud-rot, 0deg));
+  }
+  37% {
+    transform: translate3d(-25vw, var(--cloud-y2, 9px), 0) scale(1.01) rotate(var(--cloud-rot, 0deg));
+  }
+  56% {
+    transform: translate3d(35vw, var(--cloud-y3, -11px), 0) scale(var(--cloud-scale-mid, 1.03)) rotate(var(--cloud-rot, 0deg));
+  }
+  76% {
+    transform: translate3d(95vw, var(--cloud-y4, 12px), 0) scale(1.02) rotate(var(--cloud-rot, 0deg));
+  }
+  100% {
+    transform: translate3d(165vw, var(--cloud-y5, -8px), 0) scale(var(--cloud-scale-end, 0.98)) rotate(var(--cloud-rot, 0deg));
+  }
+}
+
+@keyframes monsCloudShadowPulse {
+  0%,
+  12%,
+  27%,
+  45%,
+  58%,
+  74%,
+  100% {
+    opacity: var(--cloud-opacity-high, 0.24);
+  }
+  18%,
+  52%,
+  82% {
+    opacity: var(--cloud-opacity-mid, 0.17);
+  }
+  35%,
+  67%,
+  91% {
+    opacity: var(--cloud-opacity-low, 0.1);
+  }
+}
+
+[data-theme='dark'] .cloud-shadows__blob {
+  color: rgba(18, 29, 38, 0.42);
+  mix-blend-mode: normal;
+}
 
 @media (max-width: 996px) {
   .legacy-frame {

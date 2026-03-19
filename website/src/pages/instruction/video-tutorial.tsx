@@ -59,6 +59,7 @@ const activePartButtonStyle: CSSProperties = {
   color: '#000',
   textDecoration: 'none',
   fontWeight: 900,
+  textTransform: 'uppercase',
   cursor: 'default',
 };
 
@@ -152,7 +153,7 @@ export default function InstructionVideoTutorialPage(): ReactNode {
       <div style={videosWrapStyle}>
         <section style={videoCardStyle}>
           <div style={videoTitleRowStyle}>
-            <h3 style={videoTitleStyle}>Intro Tutorial Video</h3>
+            <h3 style={videoTitleStyle}>Intro to Super Metal Mons</h3>
             <div style={videoPartsWrapStyle}>
               <button
                 type="button"
