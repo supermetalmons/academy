@@ -1,12 +1,30 @@
 import type {CSSProperties, ReactNode} from 'react';
-import {useEffect, useLayoutEffect, useRef, useState} from 'react';
+import {useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react';
 import Link from '@docusaurus/Link';
+import {
+  CLOUD_ENABLED_DEFAULT,
+  CLOUD_ENABLED_EVENT_NAME,
+  CLOUD_ENABLED_STORAGE_KEY,
+  CLOUD_SPEED_DEFAULT,
+  CLOUD_SPEED_EVENT_NAME,
+  CLOUD_SPEED_STORAGE_KEY,
+  clampCloudSpeed,
+  parseCloudEnabled,
+  parseCloudSpeed,
+  readCloudEnabledFromStorage,
+  readCloudSpeedFromStorage,
+} from '@site/src/constants/cloudSpeed';
 
 type NewTopLayoutProps = {
   children?: ReactNode;
 };
 
 type TitleIconKey = 'mons' | 'x' | 'discord' | 'telegram';
+type MenuItem = {
+  label: string;
+  to: string;
+  navigateTo?: string;
+};
 type CloudShadow = {
   top: number;
   width: number;
@@ -14,6 +32,10 @@ type CloudShadow = {
   opacity: number;
   duration: number;
   delay: number;
+};
+
+type MonsWindow = Window & {
+  __monsNavResetAppliedForDocument?: boolean;
 };
 
 const pageStyle: CSSProperties = {
@@ -25,6 +47,7 @@ const pageStyle: CSSProperties = {
   backgroundImage: 'url("/assets/grass.png")',
   backgroundRepeat: 'repeat',
   backgroundPosition: 'top left',
+  backgroundSize: '620px',
   backgroundAttachment: 'fixed',
   imageRendering: 'pixelated',
 };
@@ -145,6 +168,19 @@ const navStyle: CSSProperties = {
   justifyContent: 'flex-end',
 };
 
+const navBelowRowStyle: CSSProperties = {
+  width: '100%',
+  borderTop: '1px solid #000',
+  padding: '0.48rem 1rem',
+  boxSizing: 'border-box',
+};
+
+const navBelowNavStyle: CSSProperties = {
+  ...navStyle,
+  width: '100%',
+  justifyContent: 'center',
+};
+
 const buttonStyle: CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
@@ -179,19 +215,38 @@ const swirlStyle: CSSProperties = {
   textDecoration: 'none',
 };
 
+const settingsShortcutStyle: CSSProperties = {
+  ...swirlStyle,
+  right: 'auto',
+  left: '0.9rem',
+};
+
 const foregroundLayerStyle: CSSProperties = {
   position: 'relative',
   zIndex: 2,
 };
 
-const menuItems = [
+const BASE_MENU_ITEMS: MenuItem[] = [
   {label: 'Instruction', to: '/instruction'},
   {label: 'Puzzles', to: '/puzzles'},
   {label: 'Resources', to: '/resources'},
   {label: 'FAQ', to: '/faq'},
 ];
+const LOGO_SOURCES = [
+  '/assets/logoimage.jpg',
+  '/assets/kingmon72.jpg',
+  '/assets/puzzleimage.jpg',
+  '/assets/faq.jpg',
+];
 const LOGO_RESTORE_HYSTERESIS_PX = 72;
+const NAV_BELOW_RESTORE_HYSTERESIS_PX = 72;
 const CLOUD_INTRO_SESSION_KEY = 'mons_cloud_intro_seen_v1';
+const LAST_INSTRUCTION_ROUTE_STORAGE_KEY = 'mons_last_instruction_route_v1';
+const LAST_PUZZLES_ROUTE_STORAGE_KEY = 'mons_last_puzzles_route_v1';
+const LAST_RESOURCES_ROUTE_STORAGE_KEY = 'mons_last_resources_route_v1';
+const DEFAULT_INSTRUCTION_ROUTE = '/instruction';
+const DEFAULT_PUZZLES_ROUTE = '/puzzles';
+const DEFAULT_RESOURCES_ROUTE = '/resources';
 const CLOUD_SPEED_SCALE = 3.25;
 const CLOUD_WAVE_PX = 34;
 const CLOUD_LOBE_COUNT = 6;
@@ -251,18 +306,17 @@ function getCloudShadowStyle(
     baseOpacity * (0.68 + ((Math.cos(seed * 0.22) + 1) * 0.5) * 0.16),
   );
   const flowSpeedJitter = 0.62 + ((Math.sin(seed * 0.047) + 1) * 0.5) * 1.12;
-  const flowDuration = shadow.duration * CLOUD_SPEED_SCALE * flowSpeedJitter;
+  const baseFlowDuration = shadow.duration * CLOUD_SPEED_SCALE * flowSpeedJitter;
   const pulseDuration = 38 + ((Math.cos(seed * 0.053) + 1) * 0.5) * 74;
   const pulsePhaseSeed = Number((phaseOffset * 0.73 + (index + 1) * 2.9).toFixed(2));
-  const flowElapsed = positiveModulo(animationClockSeconds + phaseOffset, flowDuration);
+  const flowElapsed = positiveModulo(animationClockSeconds + phaseOffset, baseFlowDuration);
+  const morphElapsed = positiveModulo(animationClockSeconds + phaseOffset, baseFlowDuration);
   const pulseElapsed = positiveModulo(animationClockSeconds * 0.91 + pulsePhaseSeed, pulseDuration);
   return {
     top: `${shadow.top}%`,
     width: `${Math.round((shadow.width + widthVariance) * sizeScale)}px`,
     height: `${Math.round((shadow.height + heightVariance) * (0.85 + sizeScale * 0.55))}px`,
     opacity: baseOpacity,
-    animationDuration: `${flowDuration.toFixed(2)}s, ${pulseDuration.toFixed(2)}s`,
-    animationDelay: `-${flowElapsed.toFixed(2)}s, -${pulseElapsed.toFixed(2)}s`,
     ['--cloud-blur' as any]: `${blurPx}px`,
     ['--cloud-blob-radius' as any]: `${roundA}% ${roundB}% ${roundC}% ${roundD}% / ${roundV1}% ${roundV2}% ${roundV3}% ${roundV4}%`,
     ['--cloud-opacity-high' as any]: baseOpacity.toFixed(3),
@@ -276,6 +330,12 @@ function getCloudShadowStyle(
     ['--cloud-scale-mid' as any]: scaleMid,
     ['--cloud-scale-end' as any]: scaleEnd,
     ['--cloud-rot' as any]: rotation,
+    ['--cloud-flow-duration' as any]: `${baseFlowDuration.toFixed(2)}s`,
+    ['--cloud-pulse-duration' as any]: `${pulseDuration.toFixed(2)}s`,
+    ['--cloud-flow-delay' as any]: `-${flowElapsed.toFixed(2)}s`,
+    ['--cloud-pulse-delay' as any]: `-${pulseElapsed.toFixed(2)}s`,
+    ['--cloud-morph-duration' as any]: `${baseFlowDuration.toFixed(2)}s`,
+    ['--cloud-morph-delay' as any]: `-${morphElapsed.toFixed(2)}s`,
   };
 }
 
@@ -315,19 +375,144 @@ function isMenuItemActive(pathname: string, to: string): boolean {
   return pathname === to || pathname.startsWith(`${to}/`);
 }
 
+function isInstructionRoute(pathname: string): boolean {
+  return pathname === '/instruction' || pathname.startsWith('/instruction/');
+}
+
+function isResourcesRoute(pathname: string): boolean {
+  return pathname === '/resources' || pathname.startsWith('/resources/');
+}
+
+function isPuzzlesRoute(pathname: string): boolean {
+  return pathname === '/puzzles' || pathname.startsWith('/puzzles/');
+}
+
 function isInstructionContext(pathname: string): boolean {
   return (
     pathname === '/instruction' || pathname.startsWith('/instruction/') || pathname === '/piece-details'
   );
 }
 
+function isPuzzlesContext(pathname: string): boolean {
+  return pathname === '/puzzles' || pathname.startsWith('/puzzles/');
+}
+
+function isFaqContext(pathname: string): boolean {
+  return pathname === '/faq' || pathname.startsWith('/faq/');
+}
+
+function getLogoSrc(pathname: string): string {
+  if (isPuzzlesContext(pathname)) {
+    return '/assets/puzzleimage.jpg';
+  }
+  if (isFaqContext(pathname)) {
+    return '/assets/faq.jpg';
+  }
+  if (isInstructionContext(pathname)) {
+    return '/assets/kingmon72.jpg';
+  }
+  return '/assets/logoimage.jpg';
+}
+
+const loadedLogoSources = new Set<string>();
+
+function preloadLogoSource(source: string): Promise<void> {
+  if (loadedLogoSources.has(source) || typeof Image === 'undefined') {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.decoding = 'async';
+    image.onload = () => {
+      loadedLogoSources.add(source);
+      resolve();
+    };
+    image.onerror = () => {
+      resolve();
+    };
+    image.src = source;
+  });
+}
+
+function normalizeInstructionRoute(value: string | null): string {
+  if (value !== null && isInstructionRoute(value)) {
+    return value;
+  }
+  return DEFAULT_INSTRUCTION_ROUTE;
+}
+
+function normalizeResourcesRoute(value: string | null): string {
+  if (value !== null && isResourcesRoute(value)) {
+    return value;
+  }
+  return DEFAULT_RESOURCES_ROUTE;
+}
+
+function normalizePuzzlesRoute(value: string | null): string {
+  if (value !== null && isPuzzlesRoute(value)) {
+    return value;
+  }
+  return DEFAULT_PUZZLES_ROUTE;
+}
+
+function shouldResetOtherNavTargetsOnReload(): boolean {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+  const appWindow = window as MonsWindow;
+  if (appWindow.__monsNavResetAppliedForDocument) {
+    return false;
+  }
+  let isReloadNavigation = false;
+  try {
+    const navigationEntries = window.performance.getEntriesByType('navigation');
+    const firstNavigationEntry = navigationEntries[0] as PerformanceNavigationTiming | undefined;
+    if (firstNavigationEntry?.type === 'reload') {
+      isReloadNavigation = true;
+    }
+  } catch {
+    // Ignore Performance API failures.
+  }
+  if (!isReloadNavigation) {
+    const legacyPerformance = window.performance as Performance & {
+      navigation?: {type?: number};
+    };
+    isReloadNavigation = legacyPerformance.navigation?.type === 1;
+  }
+  if (isReloadNavigation) {
+    appWindow.__monsNavResetAppliedForDocument = true;
+  }
+  return isReloadNavigation;
+}
+
 export default function NewTopLayout({children}: NewTopLayoutProps): ReactNode {
   const pathname = typeof window === 'undefined' ? '' : window.location.pathname;
-  const logoSrc = isInstructionContext(pathname) ? '/assets/kingmon72.jpg' : '/assets/logoimage.jpg';
+  const shouldResetOtherTargetsThisLoad = useMemo(
+    () => shouldResetOtherNavTargetsOnReload(),
+    [],
+  );
+  const initialPathnameRef = useRef(pathname);
+  const targetLogoSrc = getLogoSrc(pathname);
   const animationClockSecondsRef = useRef<number>(
     typeof window === 'undefined' ? 0 : Date.now() / 1000,
   );
   const animationClockSeconds = animationClockSecondsRef.current;
+  const cloudShadowStyles = useMemo(
+    () =>
+      CLOUD_SHADOWS.map((shadow, index) =>
+        getCloudShadowStyle(shadow, index, animationClockSeconds),
+      ),
+    [animationClockSeconds],
+  );
+  const cloudLobeStyles = useMemo(
+    () =>
+      CLOUD_SHADOWS.map((shadow, index) =>
+        Array.from({length: CLOUD_LOBE_COUNT}, (_unused, lobeIndex) =>
+          getCloudLobeStyle(shadow, index, lobeIndex),
+        ),
+      ),
+    [],
+  );
   const [showCloudIntro] = useState<boolean>(() => {
     if (typeof window === 'undefined') {
       return true;
@@ -340,16 +525,238 @@ export default function NewTopLayout({children}: NewTopLayoutProps): ReactNode {
   });
   const [pressedItem, setPressedItem] = useState<string | null>(null);
   const [hoveredTitleIcon, setHoveredTitleIcon] = useState<TitleIconKey | null>(null);
+  const [cloudEnabled, setCloudEnabled] = useState<boolean>(CLOUD_ENABLED_DEFAULT);
+  const [cloudSpeedMultiplier, setCloudSpeedMultiplier] = useState<number>(CLOUD_SPEED_DEFAULT);
+  const safeCloudSpeedMultiplier = clampCloudSpeed(cloudSpeedMultiplier);
+  const cloudLayerStyle = useMemo<CSSProperties>(
+    () => ({
+      ['--cloud-speed-multiplier' as any]: safeCloudSpeedMultiplier.toFixed(2),
+      ['--cloud-speed-blur-boost' as any]: `${Math.max(
+        0,
+        (safeCloudSpeedMultiplier - 1) * 0.3,
+      ).toFixed(2)}px`,
+      ['--cloud-speed-width-scale' as any]: (1 + Math.max(0, safeCloudSpeedMultiplier - 1) * 0.022).toFixed(3),
+    }),
+    [safeCloudSpeedMultiplier],
+  );
+  const [displayedLogoSrc, setDisplayedLogoSrc] = useState<string>(targetLogoSrc);
+  const [instructionNavTarget, setInstructionNavTarget] = useState<string>(() => {
+    if (isInstructionRoute(pathname)) {
+      return normalizeInstructionRoute(pathname);
+    }
+    if (shouldResetOtherTargetsThisLoad) {
+      return DEFAULT_INSTRUCTION_ROUTE;
+    }
+    if (typeof window === 'undefined') {
+      return DEFAULT_INSTRUCTION_ROUTE;
+    }
+    try {
+      return normalizeInstructionRoute(
+        window.localStorage.getItem(LAST_INSTRUCTION_ROUTE_STORAGE_KEY),
+      );
+    } catch {
+      return DEFAULT_INSTRUCTION_ROUTE;
+    }
+  });
+  const [resourcesNavTarget, setResourcesNavTarget] = useState<string>(() => {
+    if (isResourcesRoute(pathname)) {
+      return normalizeResourcesRoute(pathname);
+    }
+    if (shouldResetOtherTargetsThisLoad) {
+      return DEFAULT_RESOURCES_ROUTE;
+    }
+    if (typeof window === 'undefined') {
+      return DEFAULT_RESOURCES_ROUTE;
+    }
+    try {
+      return normalizeResourcesRoute(window.localStorage.getItem(LAST_RESOURCES_ROUTE_STORAGE_KEY));
+    } catch {
+      return DEFAULT_RESOURCES_ROUTE;
+    }
+  });
+  const [puzzlesNavTarget, setPuzzlesNavTarget] = useState<string>(() => {
+    if (isPuzzlesRoute(pathname)) {
+      return normalizePuzzlesRoute(pathname);
+    }
+    if (shouldResetOtherTargetsThisLoad) {
+      return DEFAULT_PUZZLES_ROUTE;
+    }
+    if (typeof window === 'undefined') {
+      return DEFAULT_PUZZLES_ROUTE;
+    }
+    try {
+      return normalizePuzzlesRoute(window.localStorage.getItem(LAST_PUZZLES_ROUTE_STORAGE_KEY));
+    } catch {
+      return DEFAULT_PUZZLES_ROUTE;
+    }
+  });
   const headerRowRef = useRef<HTMLDivElement | null>(null);
   const headerInnerRef = useRef<HTMLDivElement | null>(null);
   const navRef = useRef<HTMLElement | null>(null);
   const logoHideBreakpointWidthRef = useRef<number | null>(null);
+  const logoHideBelowBreakpointWidthRef = useRef<number | null>(null);
+  const navBelowBreakpointWidthRef = useRef<number | null>(null);
+  const showNavBelowRowRef = useRef(false);
   const [logoSizePx, setLogoSizePx] = useState(54);
   const [hideLogoForSpace, setHideLogoForSpace] = useState(false);
+  const [showNavBelowRow, setShowNavBelowRow] = useState(false);
 
   useEffect(() => {
     setPressedItem(null);
   }, [pathname]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !shouldResetOtherTargetsThisLoad) {
+      return;
+    }
+    const initialPathname = initialPathnameRef.current;
+    if (!isInstructionRoute(initialPathname)) {
+      setInstructionNavTarget(DEFAULT_INSTRUCTION_ROUTE);
+      try {
+        window.localStorage.setItem(
+          LAST_INSTRUCTION_ROUTE_STORAGE_KEY,
+          DEFAULT_INSTRUCTION_ROUTE,
+        );
+      } catch {
+        // Ignore storage failures.
+      }
+    }
+    if (!isResourcesRoute(initialPathname)) {
+      setResourcesNavTarget(DEFAULT_RESOURCES_ROUTE);
+      try {
+        window.localStorage.setItem(
+          LAST_RESOURCES_ROUTE_STORAGE_KEY,
+          DEFAULT_RESOURCES_ROUTE,
+        );
+      } catch {
+        // Ignore storage failures.
+      }
+    }
+    if (!isPuzzlesRoute(initialPathname)) {
+      setPuzzlesNavTarget(DEFAULT_PUZZLES_ROUTE);
+      try {
+        window.localStorage.setItem(LAST_PUZZLES_ROUTE_STORAGE_KEY, DEFAULT_PUZZLES_ROUTE);
+      } catch {
+        // Ignore storage failures.
+      }
+    }
+  }, [shouldResetOtherTargetsThisLoad]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    if (isInstructionRoute(pathname)) {
+      setInstructionNavTarget((current) => {
+        const next = normalizeInstructionRoute(pathname);
+        if (current === next) {
+          return current;
+        }
+        return next;
+      });
+      try {
+        window.localStorage.setItem(LAST_INSTRUCTION_ROUTE_STORAGE_KEY, pathname);
+      } catch {
+        // Ignore storage failures.
+      }
+    }
+    if (isResourcesRoute(pathname)) {
+      setResourcesNavTarget((current) => {
+        const next = normalizeResourcesRoute(pathname);
+        if (current === next) {
+          return current;
+        }
+        return next;
+      });
+      try {
+        window.localStorage.setItem(LAST_RESOURCES_ROUTE_STORAGE_KEY, pathname);
+      } catch {
+        // Ignore storage failures.
+      }
+    }
+    if (isPuzzlesRoute(pathname)) {
+      setPuzzlesNavTarget((current) => {
+        const next = normalizePuzzlesRoute(pathname);
+        if (current === next) {
+          return current;
+        }
+        return next;
+      });
+      try {
+        window.localStorage.setItem(LAST_PUZZLES_ROUTE_STORAGE_KEY, pathname);
+      } catch {
+        // Ignore storage failures.
+      }
+    }
+  }, [pathname]);
+
+  useEffect(() => {
+    showNavBelowRowRef.current = showNavBelowRow;
+  }, [showNavBelowRow]);
+
+  useEffect(() => {
+    loadedLogoSources.add(displayedLogoSrc);
+    if (typeof window === 'undefined') {
+      return;
+    }
+    for (const source of LOGO_SOURCES) {
+      void preloadLogoSource(source);
+    }
+  }, [displayedLogoSrc]);
+
+  useEffect(() => {
+    if (displayedLogoSrc === targetLogoSrc) {
+      return;
+    }
+    if (loadedLogoSources.has(targetLogoSrc)) {
+      setDisplayedLogoSrc(targetLogoSrc);
+      return;
+    }
+    let isCancelled = false;
+    void preloadLogoSource(targetLogoSrc).then(() => {
+      if (!isCancelled) {
+        setDisplayedLogoSrc(targetLogoSrc);
+      }
+    });
+    return () => {
+      isCancelled = true;
+    };
+  }, [displayedLogoSrc, targetLogoSrc]);
+
+  useEffect(() => {
+    setCloudEnabled(readCloudEnabledFromStorage());
+    setCloudSpeedMultiplier(readCloudSpeedFromStorage());
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const handleStorageUpdate = (event: StorageEvent) => {
+      if (event.key === CLOUD_SPEED_STORAGE_KEY) {
+        setCloudSpeedMultiplier(parseCloudSpeed(event.newValue));
+      } else if (event.key === CLOUD_ENABLED_STORAGE_KEY) {
+        setCloudEnabled(parseCloudEnabled(event.newValue));
+      }
+    };
+
+    const handleSpeedUpdate = (event: Event) => {
+      const speedEvent = event as CustomEvent<number>;
+      setCloudSpeedMultiplier(clampCloudSpeed(speedEvent.detail));
+    };
+    const handleEnabledUpdate = (event: Event) => {
+      const enabledEvent = event as CustomEvent<boolean>;
+      setCloudEnabled(Boolean(enabledEvent.detail));
+    };
+
+    window.addEventListener('storage', handleStorageUpdate);
+    window.addEventListener(CLOUD_SPEED_EVENT_NAME, handleSpeedUpdate as EventListener);
+    window.addEventListener(CLOUD_ENABLED_EVENT_NAME, handleEnabledUpdate as EventListener);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageUpdate);
+      window.removeEventListener(CLOUD_SPEED_EVENT_NAME, handleSpeedUpdate as EventListener);
+      window.removeEventListener(CLOUD_ENABLED_EVENT_NAME, handleEnabledUpdate as EventListener);
+    };
+  }, []);
 
   useEffect(() => {
     if (!showCloudIntro || typeof window === 'undefined') {
@@ -402,36 +809,71 @@ export default function NewTopLayout({children}: NewTopLayoutProps): ReactNode {
       const navItems = Array.from(navNode.children).filter(
         (child): child is HTMLElement => child instanceof HTMLElement,
       );
-      const navRowCount = new Set(navItems.map((item) => item.offsetTop)).size;
+      const navRowTops = Array.from(new Set(navItems.map((item) => item.offsetTop))).sort(
+        (a, b) => a - b,
+      );
+      const navRowCount = navRowTops.length;
       const hasFourStackedRows = navRowCount >= 4;
+      const secondRowTop = navRowTops[1];
+      const secondRowCount =
+        secondRowTop === undefined
+          ? 0
+          : navItems.filter((item) => item.offsetTop === secondRowTop).length;
 
-      const rowRect = rowNode.getBoundingClientRect();
-      const navRect = navNode.getBoundingClientRect();
-      const overflowRight = navRect.right > rowRect.right + 1;
-      const rowOverflow = rowNode.scrollWidth > rowNode.clientWidth + 1;
-      const shouldHideNow = hasFourStackedRows && (overflowRight || rowOverflow);
+      const currentShowNavBelowRow = showNavBelowRowRef.current;
+      let nextShowNavBelowRow = currentShowNavBelowRow;
+      if (!currentShowNavBelowRow) {
+        if (hasFourStackedRows) {
+          navBelowBreakpointWidthRef.current = window.innerWidth;
+          nextShowNavBelowRow = true;
+        }
+      } else {
+        const hideWidth = navBelowBreakpointWidthRef.current ?? window.innerWidth;
+        const restoreThreshold = hideWidth + NAV_BELOW_RESTORE_HYSTERESIS_PX;
+        if (window.innerWidth >= restoreThreshold) {
+          navBelowBreakpointWidthRef.current = null;
+          nextShowNavBelowRow = false;
+        }
+      }
+      if (nextShowNavBelowRow !== currentShowNavBelowRow) {
+        showNavBelowRowRef.current = nextShowNavBelowRow;
+        setShowNavBelowRow(nextShowNavBelowRow);
+      }
 
-      setHideLogoForSpace((current) => {
-        if (!current) {
-          if (shouldHideNow) {
-            logoHideBreakpointWidthRef.current = window.innerWidth;
+      if (nextShowNavBelowRow) {
+        if (!currentShowNavBelowRow) {
+          setHideLogoForSpace(false);
+          return;
+        }
+        const hasTwoByTwoBelowNav = secondRowCount >= 2;
+        logoHideBreakpointWidthRef.current = null;
+        setHideLogoForSpace((current) => {
+          if (!current) {
+            if (hasTwoByTwoBelowNav) {
+              logoHideBelowBreakpointWidthRef.current = window.innerWidth;
+              return true;
+            }
+            return false;
+          }
+
+          if (hasTwoByTwoBelowNav) {
             return true;
           }
-          return false;
-        }
 
-        if (shouldHideNow) {
+          const hideWidth = logoHideBelowBreakpointWidthRef.current ?? window.innerWidth;
+          const restoreThreshold = hideWidth + LOGO_RESTORE_HYSTERESIS_PX;
+          if (window.innerWidth >= restoreThreshold) {
+            logoHideBelowBreakpointWidthRef.current = null;
+            return false;
+          }
           return true;
-        }
+        });
+        return;
+      }
 
-        const hideWidth = logoHideBreakpointWidthRef.current ?? window.innerWidth;
-        const restoreThreshold = hideWidth + LOGO_RESTORE_HYSTERESIS_PX;
-        if (window.innerWidth >= restoreThreshold) {
-          logoHideBreakpointWidthRef.current = null;
-          return false;
-        }
-        return true;
-      });
+      logoHideBelowBreakpointWidthRef.current = null;
+      logoHideBreakpointWidthRef.current = null;
+      setHideLogoForSpace(false);
     };
 
     updateLogoVisibility();
@@ -451,7 +893,7 @@ export default function NewTopLayout({children}: NewTopLayoutProps): ReactNode {
     return () => {
       window.removeEventListener('resize', updateLogoVisibility);
     };
-  }, []);
+  }, [showNavBelowRow]);
 
   const dynamicLogoLinkStyle: CSSProperties = {
     ...logoLinkStyle,
@@ -463,30 +905,77 @@ export default function NewTopLayout({children}: NewTopLayoutProps): ReactNode {
     filter: logoSizePx <= 44 ? 'blur(0.18px) saturate(0.96)' : 'none',
   };
 
+  const menuItems: MenuItem[] = BASE_MENU_ITEMS.map((item) => {
+    if (item.to === '/instruction') {
+      return {...item, navigateTo: instructionNavTarget};
+    }
+    if (item.to === '/puzzles') {
+      return {...item, navigateTo: puzzlesNavTarget};
+    }
+    if (item.to === '/resources') {
+      return {...item, navigateTo: resourcesNavTarget};
+    }
+    return item;
+  });
+
+  const renderPrimaryNav = (style: CSSProperties): ReactNode => (
+    <nav ref={navRef} style={style} aria-label="Primary navigation">
+      {menuItems.map((item) => {
+        const isActive = isMenuItemActive(pathname, item.to);
+        const isPressed = pressedItem === item.to;
+        return (
+          <Link
+            key={item.label}
+            to={item.navigateTo ?? item.to}
+            onMouseDown={() => setPressedItem(item.to)}
+            onMouseUp={() => setPressedItem(null)}
+            onMouseLeave={() => setPressedItem(null)}
+            onTouchStart={() => setPressedItem(item.to)}
+            onTouchEnd={() => setPressedItem(null)}
+            style={{
+              ...(isActive ? activeButtonStyle : buttonStyle),
+              ...(isPressed ? pressedButtonStyle : undefined),
+            }}>
+            {item.label}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+
   return (
     <main style={pageStyle} className="mons-shell">
-      <div className={`cloud-shadows${showCloudIntro ? ' cloud-shadows--intro' : ''}`} aria-hidden="true">
-        {CLOUD_SHADOWS.map((shadow, index) => (
-          <span
-            key={`${shadow.top}-${index}`}
-            className="cloud-shadows__blob"
-            style={getCloudShadowStyle(shadow, index, animationClockSeconds)}>
-            {Array.from({length: CLOUD_LOBE_COUNT}).map((_, lobeIndex) => (
-              <span
-                key={`${shadow.top}-${index}-${lobeIndex}`}
-                className="cloud-shadows__lobe"
-                style={getCloudLobeStyle(shadow, index, lobeIndex)}
-              />
-            ))}
-          </span>
-        ))}
-      </div>
+      {cloudEnabled ? (
+        <div
+          className={`cloud-shadows${showCloudIntro ? ' cloud-shadows--intro' : ''}`}
+          style={cloudLayerStyle}
+          aria-hidden="true">
+          {CLOUD_SHADOWS.map((shadow, index) => (
+            <span
+              key={`${shadow.top}-${index}`}
+              className="cloud-shadows__blob"
+              style={cloudShadowStyles[index]}>
+              <span className="cloud-shadows__aspect">
+                <span className="cloud-shadows__drift">
+                  {cloudLobeStyles[index]?.map((lobeStyle, lobeIndex) => (
+                    <span
+                      key={`${shadow.top}-${index}-${lobeIndex}`}
+                      className="cloud-shadows__lobe"
+                      style={lobeStyle}
+                    />
+                  ))}
+                </span>
+              </span>
+            </span>
+          ))}
+        </div>
+      ) : null}
       <div style={foregroundLayerStyle}>
         <header style={headerBarStyle}>
           <div ref={headerRowRef} style={headerRowStyle}>
             {!hideLogoForSpace ? (
               <Link to="/" aria-label="Go to home page" style={dynamicLogoLinkStyle}>
-                <img src={logoSrc} alt="" style={dynamicLogoImageStyle} />
+                <img src={displayedLogoSrc} alt="" style={dynamicLogoImageStyle} />
               </Link>
             ) : null}
             <div ref={headerInnerRef} style={headerInnerStyle}>
@@ -564,32 +1053,17 @@ export default function NewTopLayout({children}: NewTopLayoutProps): ReactNode {
                   </a>
                 </div>
               </div>
-              <nav ref={navRef} style={navStyle} aria-label="Primary navigation">
-                {menuItems.map((item) => {
-                  const isActive = isMenuItemActive(pathname, item.to);
-                  const isPressed = pressedItem === item.to;
-                  return (
-                    <Link
-                      key={item.label}
-                      to={item.to}
-                      onMouseDown={() => setPressedItem(item.to)}
-                      onMouseUp={() => setPressedItem(null)}
-                      onMouseLeave={() => setPressedItem(null)}
-                      onTouchStart={() => setPressedItem(item.to)}
-                      onTouchEnd={() => setPressedItem(null)}
-                      style={{
-                        ...(isActive ? activeButtonStyle : buttonStyle),
-                        ...(isPressed ? pressedButtonStyle : undefined),
-                      }}>
-                      {item.label}
-                    </Link>
-                  );
-                })}
-              </nav>
+              {!showNavBelowRow ? renderPrimaryNav(navStyle) : null}
             </div>
           </div>
+          {showNavBelowRow ? (
+            <div style={navBelowRowStyle}>{renderPrimaryNav(navBelowNavStyle)}</div>
+          ) : null}
         </header>
         {children}
+        <Link to="/settings" aria-label="Go to settings" style={settingsShortcutStyle}>
+          ⚙️
+        </Link>
         <Link to="/main" aria-label="Go to old homepage" style={swirlStyle}>
           🌀
         </Link>

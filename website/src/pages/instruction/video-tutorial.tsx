@@ -84,6 +84,7 @@ const inlineSpriteStyle: CSSProperties = {
   height: '1.05em',
   marginRight: '0.2em',
   verticalAlign: '-0.12em',
+  imageRendering: 'pixelated',
   imageRendering: 'auto',
   opacity: 0.9,
 };

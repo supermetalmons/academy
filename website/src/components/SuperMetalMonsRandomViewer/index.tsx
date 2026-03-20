@@ -29,6 +29,8 @@ const SHUFFLE_HOVER_CYCLE_STEP_MS = 58;
 const IMAGE_SLIDE_DURATION_MS = 290;
 const THIN_LAYOUT_BREAKPOINT_PX = 860;
 const EXTRA_THIN_LAYOUT_BREAKPOINT_PX = 520;
+const VIEWER_BOTTOM_TRIM_PX = 23;
+const MAIN_IMAGE_EDGE_INSET_PX = 10;
 
 function getGenForCollection(collection: 'Super Metal Mons!' | 'Super Metal Mons!!'): GenKey {
   return collection === 'Super Metal Mons!' ? 'gen1' : 'gen2';
@@ -86,7 +88,7 @@ const wrapBaseStyle: CSSProperties = {
   border: '1px solid #000',
   borderRadius: 0,
   backgroundColor: '#fff',
-  padding: 'calc(0.85rem + 10px) calc(0.85rem + 10px) calc(0.85rem + 44px)',
+  padding: `calc(0.85rem + 5px) calc(0.85rem + 10px) calc(0.85rem + ${44 - VIEWER_BOTTOM_TRIM_PX}px)`,
   margin: '0 auto',
   position: 'relative',
   transition: 'width 190ms ease',
@@ -148,6 +150,18 @@ const favoritesTitleStyle: CSSProperties = {
   lineHeight: 1.2,
   fontWeight: 700,
   color: '#000',
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '0.28rem',
+};
+
+const favoritesTitleStarStyle: CSSProperties = {
+  width: '0.94rem',
+  height: '0.94rem',
+  display: 'block',
+  color: '#f2ca3f',
+  transform: 'translateY(-1px)',
+  filter: 'drop-shadow(0 0 3px rgba(242, 202, 63, 0.62))',
 };
 
 const favoritesGridStyle: CSSProperties = {
@@ -156,7 +170,7 @@ const favoritesGridStyle: CSSProperties = {
   gap: '0.5rem',
   alignContent: 'start',
   overflowY: 'auto',
-  maxHeight: 'min(56vh, 540px)',
+  maxHeight: 'min(56vh, 560px)',
   paddingRight: 0,
 };
 
@@ -216,6 +230,7 @@ const favoritesTypeIconStyle: CSSProperties = {
   width: '0.82rem',
   height: '0.82rem',
   display: 'block',
+  imageRendering: 'pixelated',
   imageRendering: 'auto',
   opacity: 0.95,
   flex: '0 0 auto',
@@ -289,7 +304,7 @@ const imageFrameStyle: CSSProperties = {
 
 const tiltRegionStyle: CSSProperties = {
   width: '100%',
-  maxWidth: '460px',
+  maxWidth: '442px',
   margin: '0 auto',
   position: 'relative',
 };
@@ -301,10 +316,10 @@ const tiltHitAreaStyle: CSSProperties = {
 };
 
 const imageStyle: CSSProperties = {
-  width: '100%',
-  height: '100%',
+  width: `calc(100% - ${MAIN_IMAGE_EDGE_INSET_PX * 2}px)`,
+  height: `calc(100% - ${MAIN_IMAGE_EDGE_INSET_PX * 2}px)`,
   position: 'absolute',
-  inset: 0,
+  inset: `${MAIN_IMAGE_EDGE_INSET_PX}px`,
   objectFit: 'contain',
   imageRendering: 'auto',
   display: 'block',
@@ -316,6 +331,10 @@ const imageStageStyle: CSSProperties = {
   height: '100%',
   position: 'relative',
   overflow: 'hidden',
+};
+
+const detailsOffsetStyle: CSSProperties = {
+  marginTop: '25px',
 };
 
 const nameStyle: CSSProperties = {
@@ -336,7 +355,7 @@ const nameStyle: CSSProperties = {
 };
 
 const nameRowStyle: CSSProperties = {
-  marginTop: '0.9rem',
+  marginTop: '0.5rem',
   display: 'flex',
   justifyContent: 'center',
   position: 'relative',
@@ -406,7 +425,7 @@ const favoritePulseIconStyle: CSSProperties = {
 };
 
 const collectionStyle: CSSProperties = {
-  margin: '0.32rem 0 0',
+  margin: '0.2rem 0 0',
   fontSize: '0.9rem',
   lineHeight: 1.2,
   color: '#000',
@@ -457,7 +476,7 @@ const collectionArrowIconStyle: CSSProperties = {
 };
 
 const typeStyle: CSSProperties = {
-  margin: '0.34rem 0 0',
+  margin: '0.24rem 0 0',
   fontSize: '0.98rem',
   lineHeight: 1,
   color: '#000',
@@ -504,7 +523,9 @@ const typeLockIconStyle: CSSProperties = {
   display: 'block',
   color: '#555',
   opacity: 0.92,
-  pointerEvents: 'none',
+  zIndex: 2,
+  pointerEvents: 'auto',
+  cursor: 'pointer',
 };
 
 const typeTildeStyle: CSSProperties = {
@@ -513,12 +534,14 @@ const typeTildeStyle: CSSProperties = {
   width: '0.72em',
   textAlign: 'center',
   lineHeight: 1,
+  pointerEvents: 'none',
 };
 
 const typeIconStyle: CSSProperties = {
   width: '1.25em',
   height: '1.25em',
   display: 'block',
+  imageRendering: 'pixelated',
   imageRendering: 'auto',
   opacity: 0.9,
 };
@@ -529,7 +552,7 @@ const typeTextStyle: CSSProperties = {
 };
 
 const controlsStyle: CSSProperties = {
-  marginTop: '0.8rem',
+  marginTop: '0.62rem',
   display: 'flex',
   gap: '0.5rem',
   justifyContent: 'center',
@@ -560,6 +583,11 @@ const buttonStyle: CSSProperties = {
   lineHeight: 1.1,
   cursor: 'pointer',
   transition: 'transform 140ms ease, filter 140ms ease',
+};
+
+const shuffleButtonStyle: CSSProperties = {
+  ...buttonStyle,
+  fontFamily: 'inherit',
 };
 
 const linkStyle: CSSProperties = {
@@ -611,8 +639,8 @@ const genToggleWrapStyle: CSSProperties = {
 
 const genToggleColumnStyle: CSSProperties = {
   position: 'absolute',
-  right: 'calc(0.5rem - 10px)',
-  bottom: 'calc(0.85rem - 7px)',
+  right: 'calc(0.5rem - 15px)',
+  bottom: `calc(0.85rem - 7px - ${VIEWER_BOTTOM_TRIM_PX}px)`,
   display: 'inline-flex',
   flexDirection: 'column',
   alignItems: 'flex-end',
@@ -843,9 +871,10 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
     if (sectionNode === null) {
       return;
     }
+    const parentNode = sectionNode.parentElement;
     const updateThinLayout = () => {
-      const sectionWidth = sectionNode.getBoundingClientRect().width;
-      const nextIsThin = sectionWidth <= THIN_LAYOUT_BREAKPOINT_PX;
+      const layoutWidth = parentNode?.getBoundingClientRect().width ?? sectionNode.getBoundingClientRect().width;
+      const nextIsThin = layoutWidth <= THIN_LAYOUT_BREAKPOINT_PX;
       setIsThinLayout((current) => (current === nextIsThin ? current : nextIsThin));
     };
     updateThinLayout();
@@ -859,10 +888,13 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
       updateThinLayout();
     });
     observer.observe(sectionNode);
+    if (parentNode !== null) {
+      observer.observe(parentNode);
+    }
     return () => {
       observer.disconnect();
     };
-  }, [isFavoritesSidebarOpen]);
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -1388,179 +1420,176 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
               </div>
             </div>
           </div>
-          <div style={nameRowStyle}>
-            <div style={nameWrapStyle}>
-              <h3 style={nameStyle}>{displayedName}</h3>
-              <button
-                type="button"
-                aria-label={
-                  isSelectedMonFavorite ? 'Remove mon from favorites' : 'Save mon to favorites'
-                }
-                aria-pressed={isSelectedMonFavorite}
-                style={getFavoriteButtonStateStyle(isSelectedMonFavorite, isFavoriteHovered)}
-                onMouseEnter={() => {
-                  setIsFavoriteHovered(true);
-                }}
-                onMouseLeave={() => {
-                  setIsFavoriteHovered(false);
-                }}
-                onClick={toggleSelectedMonFavorite}>
-                <svg ref={favoriteIconRef} viewBox="0 0 24 24" aria-hidden="true" style={favoriteIconStyle}>
-                  <path
-                    d="M12 2.6L14.9 8.4L21.2 9.3L16.6 13.7L17.7 20L12 17L6.3 20L7.4 13.7L2.8 9.3L9.1 8.4L12 2.6Z"
-                    fill={isSelectedMonFavorite ? 'currentColor' : 'transparent'}
-                    stroke="currentColor"
-                    strokeWidth="1.9"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-                <span style={favoritePulseWrapStyle} aria-hidden="true">
-                  <svg ref={favoritePulseRef} viewBox="0 0 24 24" style={favoritePulseIconStyle}>
+          <div style={detailsOffsetStyle}>
+            <div style={nameRowStyle}>
+              <div style={nameWrapStyle}>
+                <h3 style={nameStyle}>{displayedName}</h3>
+                <button
+                  type="button"
+                  aria-label={
+                    isSelectedMonFavorite ? 'Remove mon from favorites' : 'Save mon to favorites'
+                  }
+                  aria-pressed={isSelectedMonFavorite}
+                  style={getFavoriteButtonStateStyle(isSelectedMonFavorite, isFavoriteHovered)}
+                  onMouseEnter={() => {
+                    setIsFavoriteHovered(true);
+                  }}
+                  onMouseLeave={() => {
+                    setIsFavoriteHovered(false);
+                  }}
+                  onClick={toggleSelectedMonFavorite}>
+                  <svg ref={favoriteIconRef} viewBox="0 0 24 24" aria-hidden="true" style={favoriteIconStyle}>
                     <path
                       d="M12 2.6L14.9 8.4L21.2 9.3L16.6 13.7L17.7 20L12 17L6.3 20L7.4 13.7L2.8 9.3L9.1 8.4L12 2.6Z"
+                      fill={isSelectedMonFavorite ? 'currentColor' : 'transparent'}
+                      stroke="currentColor"
+                      strokeWidth="1.9"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  <span style={favoritePulseWrapStyle} aria-hidden="true">
+                    <svg ref={favoritePulseRef} viewBox="0 0 24 24" style={favoritePulseIconStyle}>
+                      <path
+                        d="M12 2.6L14.9 8.4L21.2 9.3L16.6 13.7L17.7 20L12 17L6.3 20L7.4 13.7L2.8 9.3L9.1 8.4L12 2.6Z"
+                        fill="none"
+                        stroke="#ffe26a"
+                        strokeWidth="2.1"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </span>
+                </button>
+              </div>
+            </div>
+            <p style={typeStyle}>
+              <span style={typeRowStyle}>
+                <span style={typeTildeStyle}>~</span>
+                <button
+                  type="button"
+                  style={typeValueButtonStyle}
+                  onClick={handleTypeLockToggle}
+                  aria-pressed={isTypeLocked}
+                  aria-label={isTypeLocked ? 'Unlock mon type filter' : 'Lock shuffle to this mon type'}>
+                  {typeSpriteHref !== null ? (
+                    <img src={typeSpriteHref} alt="" aria-hidden="true" style={typeIconStyle} />
+                  ) : null}
+                  <span style={typeTextStyle}>{selected.type}</span>
+                  {isTypeLocked ? (
+                    <svg viewBox="0 0 24 24" aria-hidden="true" style={typeLockIconStyle}>
+                      <path
+                        d="M7.2 10.2V7.8C7.2 5.2 9.3 3 12 3C14.7 3 16.8 5.2 16.8 7.8V10.2H18.2C19.1 10.2 19.8 10.9 19.8 11.8V19.2C19.8 20.1 19.1 20.8 18.2 20.8H5.8C4.9 20.8 4.2 20.1 4.2 19.2V11.8C4.2 10.9 4.9 10.2 5.8 10.2H7.2ZM8.8 10.2H15.2V7.8C15.2 6.1 13.8 4.6 12 4.6C10.2 4.6 8.8 6.1 8.8 7.8V10.2Z"
+                        fill="currentColor"
+                      />
+                    </svg>
+                  ) : null}
+                </button>
+                <span style={typeTildeStyle}>~</span>
+              </span>
+            </p>
+            <p style={collectionStyle}>
+              <span style={collectionLinkWrapStyle}>
+                <span
+                  aria-hidden="true"
+                  style={getCollectionArrowStateStyle(isCollectionLinkHovered, 'left')}>
+                  <svg viewBox="0 0 12 12" style={collectionArrowIconStyle}>
+                    <path
+                      d="M4 2.5L8 6L4 9.5"
                       fill="none"
-                      stroke="#ffe26a"
-                      strokeWidth="2.1"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
                       strokeLinejoin="round"
                     />
                   </svg>
                 </span>
-              </button>
-            </div>
-          </div>
-          <p style={typeStyle}>
-            <span style={typeRowStyle}>
-              <span style={typeTildeStyle}>~</span>
-              <button
-                type="button"
-                style={typeValueButtonStyle}
-                onClick={handleTypeLockToggle}
-                aria-pressed={isTypeLocked}
-                aria-label={isTypeLocked ? 'Unlock mon type filter' : 'Lock shuffle to this mon type'}>
-                {typeSpriteHref !== null ? (
-                  <img src={typeSpriteHref} alt="" aria-hidden="true" style={typeIconStyle} />
-                ) : null}
-                <span style={typeTextStyle}>{selected.type}</span>
-                {isTypeLocked ? (
-                  <svg viewBox="0 0 24 24" aria-hidden="true" style={typeLockIconStyle}>
+                <a
+                  href={collectionHref}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={collectionLinkStyle}
+                  onMouseEnter={() => {
+                    setIsCollectionLinkHovered(true);
+                  }}
+                  onMouseLeave={() => {
+                    setIsCollectionLinkHovered(false);
+                  }}
+                  onFocus={() => {
+                    setIsCollectionLinkHovered(true);
+                  }}
+                  onBlur={() => {
+                    setIsCollectionLinkHovered(false);
+                  }}>
+                  {selected.collection}
+                </a>
+                <span
+                  aria-hidden="true"
+                  style={getCollectionArrowStateStyle(isCollectionLinkHovered, 'right')}>
+                  <svg viewBox="0 0 12 12" style={collectionArrowIconStyle}>
                     <path
-                      d="M7.2 10.2V7.8C7.2 5.2 9.3 3 12 3C14.7 3 16.8 5.2 16.8 7.8V10.2H18.2C19.1 10.2 19.8 10.9 19.8 11.8V19.2C19.8 20.1 19.1 20.8 18.2 20.8H5.8C4.9 20.8 4.2 20.1 4.2 19.2V11.8C4.2 10.9 4.9 10.2 5.8 10.2H7.2ZM8.8 10.2H15.2V7.8C15.2 6.1 13.8 4.6 12 4.6C10.2 4.6 8.8 6.1 8.8 7.8V10.2Z"
+                      d="M8 2.5L4 6L8 9.5"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </span>
+              </span>
+            </p>
+            <div style={controlsStyle}>
+              <div style={shuffleButtonWrapStyle}>
+                <button
+                  type="button"
+                  aria-label="Undo shuffle"
+                  disabled={!canUndo}
+                  style={canUndo ? undoButtonStyle : undoButtonDisabledStyle}
+                  onClick={handleUndo}>
+                  <svg
+                    ref={undoIconRef}
+                    viewBox="0 0 512 512"
+                    aria-hidden="true"
+                    style={undoIconStyle}>
+                    <path
+                      d="M125.7 160H176c17.7 0 32 14.3 32 32s-14.3 32-32 32H48c-17.7 0-32-14.3-32-32V64c0-17.7 14.3-32 32-32s32 14.3 32 32v51.2L97.6 97.6c87.5-87.5 229.3-87.5 316.8 0s87.5 229.3 0 316.8s-229.3 87.5-316.8 0c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0c62.5 62.5 163.8 62.5 226.3 0s62.5-163.8 0-226.3s-163.8-62.5-226.3 0L125.7 160z"
                       fill="currentColor"
                     />
                   </svg>
-                ) : null}
-              </button>
-              <span style={typeTildeStyle}>~</span>
-            </span>
-          </p>
-          <p style={collectionStyle}>
-            <span style={collectionLinkWrapStyle}>
-              <span
-                aria-hidden="true"
-                style={getCollectionArrowStateStyle(isCollectionLinkHovered, 'left')}>
-                <svg viewBox="0 0 12 12" style={collectionArrowIconStyle}>
-                  <path
-                    d="M4 2.5L8 6L4 9.5"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </span>
-              <a
-                href={collectionHref}
-                target="_blank"
-                rel="noreferrer"
-                style={collectionLinkStyle}
-                onMouseEnter={() => {
-                  setIsCollectionLinkHovered(true);
-                }}
-                onMouseLeave={() => {
-                  setIsCollectionLinkHovered(false);
-                }}
-                onFocus={() => {
-                  setIsCollectionLinkHovered(true);
-                }}
-                onBlur={() => {
-                  setIsCollectionLinkHovered(false);
-                }}>
-                {selected.collection}
+                </button>
+                <button
+                  type="button"
+                  style={shuffleButtonStyle}
+                  onMouseEnter={() => {
+                    if (shuffleHoverHasPlayedRef.current) {
+                      return;
+                    }
+                    shuffleHoverHasPlayedRef.current = true;
+                    runShuffleHoverCycleAnimation();
+                  }}
+                  onMouseLeave={() => {
+                    shuffleHoverHasPlayedRef.current = false;
+                    clearShuffleHoverTimers();
+                    setShuffleButtonLabel(SHUFFLE_BUTTON_LABEL);
+                  }}
+                  onClick={() => {
+                    if (candidateIndices.length === 0) {
+                      return;
+                    }
+                    const nextIndex = getRandomIndexFromList(candidateIndices, index);
+                    pushUndoHistory(index, enabledGens, lockedType);
+                    setIndex(nextIndex);
+                    runNameCycleAnimation(superMetalMonsNfts[nextIndex]?.name ?? '');
+                  }}>
+                  <span style={shuffleLabelWrapStyle}>
+                    <span style={shuffleLabelSizerStyle}>{SHUFFLE_BUTTON_LABEL}</span>
+                    <span style={shuffleLabelOverlayStyle}>{shuffleButtonLabel}</span>
+                  </span>
+                </button>
+              </div>
+              <a href={selected.href} target="_blank" rel="noreferrer" style={linkStyle}>
+                OpenSea
               </a>
-              <span
-                aria-hidden="true"
-                style={getCollectionArrowStateStyle(isCollectionLinkHovered, 'right')}>
-                <svg viewBox="0 0 12 12" style={collectionArrowIconStyle}>
-                  <path
-                    d="M8 2.5L4 6L8 9.5"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </span>
-            </span>
-          </p>
-          <div style={controlsStyle}>
-            <div style={shuffleButtonWrapStyle}>
-              <button
-                type="button"
-                aria-label="Undo shuffle"
-                disabled={!canUndo}
-                style={canUndo ? undoButtonStyle : undoButtonDisabledStyle}
-                onClick={handleUndo}>
-                <svg
-                  ref={undoIconRef}
-                  viewBox="0 0 28 28"
-                  aria-hidden="true"
-                  style={undoIconStyle}
-                  fill="none">
-                  <path
-                    d="M8.9 21.6C15.5 24.8 23.6 20.7 24.2 13.9C24.8 7.1 20 2.1 13.3 2.5C10.2 2.7 7.5 3.9 5.8 5.9"
-                    stroke="currentColor"
-                    strokeWidth="5.4"
-                    strokeLinecap="butt"
-                    strokeLinejoin="miter"
-                  />
-                  <path d="M2.5 8.6L10.6 3.8L10.7 13.7L2.5 8.6Z" fill="currentColor" />
-                </svg>
-              </button>
-              <button
-                type="button"
-                style={buttonStyle}
-                onMouseEnter={() => {
-                  if (shuffleHoverHasPlayedRef.current) {
-                    return;
-                  }
-                  shuffleHoverHasPlayedRef.current = true;
-                  runShuffleHoverCycleAnimation();
-                }}
-                onMouseLeave={() => {
-                  shuffleHoverHasPlayedRef.current = false;
-                  clearShuffleHoverTimers();
-                  setShuffleButtonLabel(SHUFFLE_BUTTON_LABEL);
-                }}
-                onClick={() => {
-                  if (candidateIndices.length === 0) {
-                    return;
-                  }
-                  const nextIndex = getRandomIndexFromList(candidateIndices, index);
-                  pushUndoHistory(index, enabledGens, lockedType);
-                  setIndex(nextIndex);
-                  runNameCycleAnimation(superMetalMonsNfts[nextIndex]?.name ?? '');
-                }}>
-                <span style={shuffleLabelWrapStyle}>
-                  <span style={shuffleLabelSizerStyle}>{SHUFFLE_BUTTON_LABEL}</span>
-                  <span style={shuffleLabelOverlayStyle}>{shuffleButtonLabel}</span>
-                </span>
-              </button>
             </div>
-            <a href={selected.href} target="_blank" rel="noreferrer" style={linkStyle}>
-              OpenSea
-            </a>
           </div>
           {isExtraThinLayout ? (
             <div style={genToggleRowStyle}>{genTogglesNode}</div>
@@ -1573,7 +1602,18 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
           <aside
             style={isThinLayout ? favoritesSidebarThinStyle : favoritesSidebarStyle}
             aria-label="Favorited mons sidebar">
-            <h4 style={favoritesTitleStyle}>{favoritePreviewMons.length} Favorites:</h4>
+            <h4 style={favoritesTitleStyle}>
+              <svg viewBox="0 0 24 24" aria-hidden="true" style={favoritesTitleStarStyle}>
+                <path
+                  d="M12 2.6L14.9 8.4L21.2 9.3L16.6 13.7L17.7 20L12 17L6.3 20L7.4 13.7L2.8 9.3L9.1 8.4L12 2.6Z"
+                  fill="currentColor"
+                  stroke="currentColor"
+                  strokeWidth="1.9"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              {favoritePreviewMons.length} Favorites:
+            </h4>
             {favoritePreviewMons.length === 0 ? (
               <p style={favoritesEmptyStyle}>No favorited mons yet.</p>
             ) : (

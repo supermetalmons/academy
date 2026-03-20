@@ -71,6 +71,13 @@ body,
   display: none !important;
 }
 
+img[src*='/assets/mons/'],
+image[href*='/assets/mons/'] {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  image-rendering: auto;
+}
+
 [data-theme='dark'] html,
 [data-theme='dark'] body {
   background:
@@ -252,6 +259,136 @@ body,
   border: 0;
 }
 
+.lesson-legacy-content {
+  color: #000;
+  line-height: 1.45;
+}
+
+.lesson-legacy-content .lesson-main-heading {
+  text-align: center;
+}
+
+.lesson-legacy-content .lesson-main-heading > .lesson-main-heading-text {
+  font-size: 1.52rem;
+  line-height: 1.22;
+}
+
+.lesson-legacy-content p > i:only-child,
+.lesson-legacy-content p > b:only-child {
+  display: block;
+  width: 100%;
+  text-align: center;
+}
+
+.lesson-legacy-content .lesson-section-heading {
+  text-align: center;
+  margin: 0.9rem 0;
+}
+
+.lesson-legacy-content .lesson-section-heading > i {
+  font-size: 1.22rem;
+  line-height: 1.25;
+}
+
+.lesson-legacy-content .lesson-conclusion-line {
+  margin-top: 30px;
+}
+
+.lesson-legacy-content .lesson-conclusion-line > i {
+  font-size: 0.9rem;
+  line-height: 1.35;
+  opacity: 0.7;
+}
+
+.lesson-legacy-content .lesson-quick-note {
+  font-size: 0.92rem;
+  line-height: 1.4;
+}
+
+.lesson-legacy-content p.lesson-quick-note > i.lesson-quick-note-text:only-child {
+  display: block;
+  width: 100%;
+  text-align: left;
+}
+
+.lesson-legacy-content img {
+  display: block;
+  max-width: 100%;
+  height: auto !important;
+  margin: 0.8rem auto;
+  image-rendering: auto;
+  image-rendering: smooth;
+  image-rendering: -webkit-optimize-contrast;
+}
+
+.lesson-legacy-content img.lesson-image-after-first {
+  margin-top: calc(0.8rem + 15px);
+}
+
+.lesson-legacy-content .lesson-image-row {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 15px;
+  flex-wrap: wrap;
+  margin: 0.8rem auto;
+  max-width: 100%;
+}
+
+.lesson-legacy-content .lesson-image-row img {
+  margin: 0;
+}
+
+.lesson-legacy-content .lesson-image-row img.lesson-image-after-first {
+  margin-top: 0;
+}
+
+.lesson-legacy-content--techniques .lesson-image-row.lesson-image-row-after-first {
+  margin-top: calc(0.8rem + 30px);
+}
+
+.lesson-legacy-content--techniques p:not(.lesson-main-heading):not(.lesson-quick-note):not(:has(> i:only-child)):not(:has(> b:only-child)) {
+  font-size: 1rem;
+  line-height: 1.45;
+  margin: 1em 0;
+}
+
+.lesson-legacy-content .lesson-nowrap-phrase {
+  white-space: nowrap;
+}
+
+.instruction-lesson-card-title {
+  position: relative;
+  display: inline-block;
+  padding-bottom: 0.34rem;
+}
+
+.instruction-lesson-card-title::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 2px;
+  background-color: currentColor;
+  transform: scaleX(0);
+  transform-origin: center center;
+  transition: transform 220ms ease;
+}
+
+.instruction-lesson-card-link:hover .instruction-lesson-card-title::after {
+  transform: scaleX(1);
+}
+
+.puzzle-back-button {
+  transition: background-color 180ms ease, color 180ms ease, transform 180ms ease;
+}
+
+.puzzle-back-button:hover {
+  background-color: #000 !important;
+  color: #fff !important;
+  transform: translateY(-1px);
+}
 
 
 [data-theme='dark'] .legacy-frame {
@@ -312,6 +449,9 @@ body,
 }
 
 .cloud-shadows {
+  --cloud-speed-multiplier: 2.5;
+  --cloud-speed-blur-boost: 0px;
+  --cloud-speed-width-scale: 1;
   position: fixed;
   inset: 0;
   overflow: hidden;
@@ -330,14 +470,41 @@ body,
   left: 0;
   display: block;
   color: rgba(10, 15, 10, 0.38);
-  filter: blur(var(--cloud-blur, 12px));
-  border-radius: var(--cloud-blob-radius, 58%);
   mix-blend-mode: multiply;
-  transform: translate3d(0, 0, 0);
+  transform: translateX(0);
   animation-name: monsCloudShadowFlow, monsCloudShadowPulse;
+  animation-duration:
+    calc(var(--cloud-flow-duration, 80s) / var(--cloud-speed-multiplier, 1)),
+    var(--cloud-pulse-duration, 80s);
+  animation-delay: var(--cloud-flow-delay, 0s), var(--cloud-pulse-delay, 0s);
   animation-timing-function: linear, ease-in-out;
   animation-iteration-count: infinite, infinite;
-  will-change: transform, filter, opacity;
+  will-change: transform, opacity;
+}
+
+.cloud-shadows__drift {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: block;
+  filter: blur(calc(var(--cloud-blur, 12px) + var(--cloud-speed-blur-boost, 0px)));
+  border-radius: var(--cloud-blob-radius, 58%);
+  animation-name: monsCloudShadowMorph;
+  animation-duration: var(--cloud-morph-duration, 80s);
+  animation-delay: var(--cloud-morph-delay, 0s);
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  will-change: transform;
+}
+
+.cloud-shadows__aspect {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: block;
+  transform: scaleX(var(--cloud-speed-width-scale, 1));
+  transform-origin: center center;
+  will-change: transform;
 }
 
 .cloud-shadows__lobe {
@@ -357,22 +524,43 @@ body,
 
 @keyframes monsCloudShadowFlow {
   0% {
-    transform: translate3d(-150vw, 0, 0) scale(1) rotate(var(--cloud-rot, 0deg));
+    transform: translateX(-150vw);
   }
   18% {
-    transform: translate3d(-90vw, var(--cloud-y1, -6px), 0) scale(var(--cloud-scale-mid, 1.03)) rotate(var(--cloud-rot, 0deg));
+    transform: translateX(-90vw);
   }
   37% {
-    transform: translate3d(-25vw, var(--cloud-y2, 9px), 0) scale(1.01) rotate(var(--cloud-rot, 0deg));
+    transform: translateX(-25vw);
   }
   56% {
-    transform: translate3d(35vw, var(--cloud-y3, -11px), 0) scale(var(--cloud-scale-mid, 1.03)) rotate(var(--cloud-rot, 0deg));
+    transform: translateX(35vw);
   }
   76% {
-    transform: translate3d(95vw, var(--cloud-y4, 12px), 0) scale(1.02) rotate(var(--cloud-rot, 0deg));
+    transform: translateX(95vw);
   }
   100% {
-    transform: translate3d(165vw, var(--cloud-y5, -8px), 0) scale(var(--cloud-scale-end, 0.98)) rotate(var(--cloud-rot, 0deg));
+    transform: translateX(165vw);
+  }
+}
+
+@keyframes monsCloudShadowMorph {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1) rotate(var(--cloud-rot, 0deg));
+  }
+  18% {
+    transform: translate3d(0, var(--cloud-y1, -6px), 0) scale(var(--cloud-scale-mid, 1.03)) rotate(var(--cloud-rot, 0deg));
+  }
+  37% {
+    transform: translate3d(0, var(--cloud-y2, 9px), 0) scale(1.01) rotate(var(--cloud-rot, 0deg));
+  }
+  56% {
+    transform: translate3d(0, var(--cloud-y3, -11px), 0) scale(var(--cloud-scale-mid, 1.03)) rotate(var(--cloud-rot, 0deg));
+  }
+  76% {
+    transform: translate3d(0, var(--cloud-y4, 12px), 0) scale(1.02) rotate(var(--cloud-rot, 0deg));
+  }
+  100% {
+    transform: translate3d(0, var(--cloud-y5, -8px), 0) scale(var(--cloud-scale-end, 0.98)) rotate(var(--cloud-rot, 0deg));
   }
 }
 

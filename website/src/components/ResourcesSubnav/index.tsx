@@ -47,7 +47,7 @@ const pressedButtonStyle: CSSProperties = {
 const items: Array<{key: ResourcesSection; label: string; to: string}> = [
   {key: 'super-metal-mons', label: 'Mons', to: '/resources'},
   {key: 'gallery', label: 'Gallery', to: '/resources/gallery'},
-  {key: 'other', label: 'Other', to: '/resources/other'},
+  {key: 'other', label: 'Links', to: '/resources/links'},
 ];
 
 export default function ResourcesSubnav({active}: ResourcesSubnavProps): ReactNode {

@@ -14,7 +14,7 @@ const manualViewerStyle: CSSProperties = {
   minHeight: '620px',
   backgroundColor: '#fff',
   border: '1px solid #000',
-  borderRadius: '10px',
+  borderRadius: '0',
   overflow: 'visible',
 };
 
