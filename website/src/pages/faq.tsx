@@ -1,4 +1,4 @@
-import {useState} from 'react';
+import {useEffect, useRef, useState} from 'react';
 import type {CSSProperties, ReactNode} from 'react';
 import BlankSectionPage from '@site/src/components/BlankSectionPage';
 
@@ -94,7 +94,9 @@ const faqWindowLinkBlurRegionStyle: CSSProperties = {
 };
 
 const faqWindowLinkLabelTextStyle: CSSProperties = {
-  position: 'relative',
+  position: 'absolute',
+  left: '50%',
+  top: '50%',
   zIndex: 1,
   display: 'inline-flex',
   alignItems: 'center',
@@ -107,6 +109,8 @@ const faqWindowLinkLabelTextStyle: CSSProperties = {
   letterSpacing: '0.02em',
   whiteSpace: 'nowrap',
   textShadow: '0 1px 0 rgba(255, 255, 255, 0.72)',
+  transformOrigin: 'center center',
+  transition: 'transform 180ms ease',
 };
 
 const faqWindowRockIconStyle: CSSProperties = {
@@ -303,6 +307,130 @@ const faqEntries: FaqEntry[] = [
 
 export default function FaqPage(): ReactNode {
   const [isWindowHovered, setIsWindowHovered] = useState(false);
+  const [isNavBelowRowMode, setIsNavBelowRowMode] = useState(false);
+  const [isNavBelowButtonsWrapped, setIsNavBelowButtonsWrapped] = useState(false);
+  const [windowLabelScale, setWindowLabelScale] = useState(1);
+  const windowLinkRef = useRef<HTMLAnchorElement | null>(null);
+  const windowLabelRef = useRef<HTMLSpanElement | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const linkNode = windowLinkRef.current;
+    const labelNode = windowLabelRef.current;
+    if (!linkNode || !labelNode) {
+      return;
+    }
+
+    const horizontalSafetyPadding = 26;
+    let frameId = 0;
+
+    const updateScale = (): void => {
+      frameId = 0;
+      const availableWidth = Math.max(80, linkNode.clientWidth - horizontalSafetyPadding);
+      const naturalLabelWidth = Math.max(1, Math.ceil(labelNode.scrollWidth));
+      const nextScale = Math.min(1, availableWidth / naturalLabelWidth);
+      setWindowLabelScale((current) => {
+        if (Math.abs(current - nextScale) < 0.01) {
+          return current;
+        }
+        return nextScale;
+      });
+    };
+
+    const scheduleScaleUpdate = (): void => {
+      if (frameId !== 0) {
+        window.cancelAnimationFrame(frameId);
+      }
+      frameId = window.requestAnimationFrame(updateScale);
+    };
+
+    scheduleScaleUpdate();
+    window.addEventListener('resize', scheduleScaleUpdate);
+
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => {
+        scheduleScaleUpdate();
+      });
+      resizeObserver.observe(linkNode);
+    }
+
+    return () => {
+      window.removeEventListener('resize', scheduleScaleUpdate);
+      resizeObserver?.disconnect();
+      if (frameId !== 0) {
+        window.cancelAnimationFrame(frameId);
+      }
+    };
+  }, [isWindowHovered]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    let frameId = 0;
+    let observer: MutationObserver | null = null;
+
+    const updateNavBelowRowMode = (): void => {
+      const shellNode = window.document.querySelector('.mons-shell');
+      const nextMode =
+        shellNode instanceof HTMLElement &&
+        shellNode.classList.contains('mons-shell--nav-below');
+      setIsNavBelowRowMode((current) => (current === nextMode ? current : nextMode));
+
+      let nextWrapped = false;
+      if (nextMode && shellNode instanceof HTMLElement) {
+        const navNode = shellNode.querySelector('nav[aria-label="Primary navigation"]');
+        if (navNode instanceof HTMLElement) {
+          const navItems = Array.from(navNode.children).filter(
+            (child): child is HTMLElement => child instanceof HTMLElement,
+          );
+          const navRowCount = new Set(navItems.map((item) => item.offsetTop)).size;
+          nextWrapped = navRowCount >= 2;
+        }
+      }
+      setIsNavBelowButtonsWrapped((current) => (current === nextWrapped ? current : nextWrapped));
+    };
+
+    const scheduleUpdate = (): void => {
+      if (frameId !== 0) {
+        window.cancelAnimationFrame(frameId);
+      }
+      frameId = window.requestAnimationFrame(() => {
+        frameId = 0;
+        updateNavBelowRowMode();
+      });
+    };
+
+    scheduleUpdate();
+    window.addEventListener('resize', scheduleUpdate);
+
+    const shellNode = window.document.querySelector('.mons-shell');
+    if (shellNode instanceof HTMLElement && typeof MutationObserver !== 'undefined') {
+      observer = new MutationObserver(() => {
+        scheduleUpdate();
+      });
+      observer.observe(shellNode, {
+        attributes: true,
+        attributeFilter: ['class'],
+      });
+    }
+
+    return () => {
+      window.removeEventListener('resize', scheduleUpdate);
+      observer?.disconnect();
+      if (frameId !== 0) {
+        window.cancelAnimationFrame(frameId);
+      }
+    };
+  }, []);
+
+  const faqWindowOverlayOffsetPx =
+    isNavBelowRowMode && !isNavBelowButtonsWrapped ? 15 : 0;
 
   return (
     <BlankSectionPage title="FAQ">
@@ -320,6 +448,7 @@ export default function FaqPage(): ReactNode {
         ))}
         <div style={faqWindowLinkWrapStyle}>
           <a
+            ref={windowLinkRef}
             href="https://mons.link/"
             {...externalLinkProps}
             style={{
@@ -332,13 +461,23 @@ export default function FaqPage(): ReactNode {
             onBlur={() => setIsWindowHovered(false)}
             aria-label="Visit mons.link">
             <img src="/assets/window.jpg" alt="Visit mons.link" style={faqWindowImageStyle} />
-            <span
-              style={{
-                ...faqWindowLinkLabelOverlayStyle,
-                ...(isWindowHovered ? faqWindowLinkLabelOverlayVisibleStyle : undefined),
-              }}>
-              <span style={faqWindowLinkBlurRegionStyle} />
-              <span style={faqWindowLinkLabelTextStyle}>
+              <span
+                style={{
+                  ...faqWindowLinkLabelOverlayStyle,
+                  ...(isWindowHovered ? faqWindowLinkLabelOverlayVisibleStyle : undefined),
+                }}>
+              <span
+                style={{
+                  ...faqWindowLinkBlurRegionStyle,
+                  transform: `translate(calc(-50% - ${faqWindowOverlayOffsetPx}px), -50%)`,
+                }}
+              />
+              <span
+                ref={windowLabelRef}
+                style={{
+                  ...faqWindowLinkLabelTextStyle,
+                  transform: `translate(calc(-50% - ${faqWindowOverlayOffsetPx}px), -50%) scale(${windowLabelScale})`,
+                }}>
                 <img src="/assets/mons-rock-icon.svg" alt="" aria-hidden="true" style={faqWindowRockIconStyle} />
                 <span>mons.link</span>
               </span>

@@ -28,7 +28,10 @@ const SHUFFLE_HOVER_CYCLE_DURATION_MS = 230;
 const SHUFFLE_HOVER_CYCLE_STEP_MS = 58;
 const IMAGE_SLIDE_DURATION_MS = 290;
 const THIN_LAYOUT_BREAKPOINT_PX = 860;
-const EXTRA_THIN_LAYOUT_BREAKPOINT_PX = 520;
+const NAV_BELOW_VIEWER_BREAKPOINT_PX = 620;
+const SUPER_THIN_NAV_BREAKPOINT_PX = 520;
+const FOLDER_INLINE_NARROW_BREAKPOINT_PX = 700;
+const VIEWER_WIDTH_FALLBACK_OFFSET_PX = 120;
 const VIEWER_BOTTOM_TRIM_PX = 23;
 const MAIN_IMAGE_EDGE_INSET_PX = 10;
 
@@ -103,6 +106,12 @@ const wrapExpandedStyle: CSSProperties = {
   ...wrapBaseStyle,
   width: '100%',
   maxWidth: 'none',
+};
+
+const wrapInlineFolderClosedStyle: CSSProperties = {
+  ...wrapBaseStyle,
+  width: 'min(100%, 560px)',
+  paddingBottom: 'calc(0.85rem + 2px)',
 };
 
 const viewerLayoutStyle: CSSProperties = {
@@ -274,7 +283,7 @@ const folderToggleButtonInlineThinStyle: CSSProperties = {
   left: 0,
   bottom: 'auto',
   marginTop: '0.45rem',
-  marginBottom: '0.05rem',
+  marginBottom: 0,
   zIndex: 'auto',
 };
 
@@ -287,6 +296,21 @@ const folderIconStyle: CSSProperties = {
   width: '16px',
   height: '16px',
   display: 'block',
+};
+
+const folderInlineChevronStyle: CSSProperties = {
+  position: 'absolute',
+  left: 'calc(100% + 6px)',
+  top: '50%',
+  transform: 'translateY(-50%)',
+  width: '10px',
+  height: '10px',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  color: '#000',
+  opacity: 0.9,
+  pointerEvents: 'none',
 };
 
 const imageFrameStyle: CSSProperties = {
@@ -363,6 +387,13 @@ const nameRowStyle: CSSProperties = {
   boxSizing: 'border-box',
 };
 
+const favoriteRowSuperThinStyle: CSSProperties = {
+  marginTop: '0.2rem',
+  display: 'flex',
+  justifyContent: 'center',
+  width: '100%',
+};
+
 const nameWrapStyle: CSSProperties = {
   position: 'relative',
   display: 'inline-flex',
@@ -370,6 +401,12 @@ const nameWrapStyle: CSSProperties = {
   justifyContent: 'center',
   maxWidth: 'calc(100% - 2.45rem)',
   minWidth: 0,
+};
+
+const nameWrapSuperThinStyle: CSSProperties = {
+  ...nameWrapStyle,
+  width: '100%',
+  maxWidth: '100%',
 };
 
 const favoriteButtonStyle: CSSProperties = {
@@ -570,6 +607,12 @@ const shuffleButtonWrapStyle: CSSProperties = {
   boxSizing: 'border-box',
 };
 
+const shuffleButtonWrapSuperThinStyle: CSSProperties = {
+  ...shuffleButtonWrapStyle,
+  position: 'static',
+  gap: '0.26rem',
+};
+
 const buttonStyle: CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
@@ -615,6 +658,23 @@ const undoButtonStyle: CSSProperties = {
 
 const undoButtonDisabledStyle: CSSProperties = {
   ...undoButtonStyle,
+  opacity: 0.42,
+  cursor: 'default',
+};
+
+const undoButtonInlineSuperThinStyle: CSSProperties = {
+  ...undoButtonStyle,
+  position: 'relative',
+  left: 'auto',
+  top: 'auto',
+  transform: 'none',
+  width: '1.9rem',
+  height: '1.9rem',
+  flex: '0 0 auto',
+};
+
+const undoButtonInlineSuperThinDisabledStyle: CSSProperties = {
+  ...undoButtonInlineSuperThinStyle,
   opacity: 0.42,
   cursor: 'default',
 };
@@ -693,8 +753,21 @@ function getGenSwitchThumbStyle(enabled: boolean): CSSProperties {
   };
 }
 
-function getFavoriteButtonStateStyle(isActive: boolean, isHovered: boolean): CSSProperties {
+function getFavoriteButtonStateStyle(
+  isActive: boolean,
+  isHovered: boolean,
+  renderBelowName: boolean,
+): CSSProperties {
   const baseStyle = isActive ? favoriteButtonActiveStyle : favoriteButtonStyle;
+  if (renderBelowName) {
+    return {
+      ...baseStyle,
+      position: 'relative',
+      left: 'auto',
+      top: 'auto',
+      transform: isHovered ? 'scale(1.16)' : 'scale(1)',
+    };
+  }
   return {
     ...baseStyle,
     transform: isHovered ? 'translate(0, -50%) scale(1.16)' : 'translate(0, -50%) scale(1)',
@@ -795,8 +868,10 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
   const [isFavoriteHovered, setIsFavoriteHovered] = useState(false);
   const [isCollectionLinkHovered, setIsCollectionLinkHovered] = useState(false);
   const [isFavoritesSidebarOpen, setIsFavoritesSidebarOpen] = useState(false);
-  const [isThinLayout, setIsThinLayout] = useState(false);
-  const [isExtraThinLayout, setIsExtraThinLayout] = useState(false);
+  const [viewportWidth, setViewportWidth] = useState<number>(
+    typeof window === 'undefined' ? 0 : window.innerWidth,
+  );
+  const [viewerLayoutWidth, setViewerLayoutWidth] = useState(0);
   const [shuffleButtonLabel, setShuffleButtonLabel] = useState<string>(SHUFFLE_BUTTON_LABEL);
   const [mainImageSrc, setMainImageSrc] = useState<string>(
     () => superMetalMonsNfts[index]?.image ?? '',
@@ -863,36 +938,33 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
     if (typeof window === 'undefined') {
       return;
     }
-    setFavoriteMons(parseFavoriteMons(window.localStorage.getItem(FAVORITES_STORAGE_KEY)));
-  }, []);
 
-  useEffect(() => {
-    const sectionNode = viewerSectionRef.current;
-    if (sectionNode === null) {
-      return;
-    }
-    const parentNode = sectionNode.parentElement;
-    const updateThinLayout = () => {
-      const layoutWidth = parentNode?.getBoundingClientRect().width ?? sectionNode.getBoundingClientRect().width;
-      const nextIsThin = layoutWidth <= THIN_LAYOUT_BREAKPOINT_PX;
-      setIsThinLayout((current) => (current === nextIsThin ? current : nextIsThin));
+    let frameId = 0;
+    const syncLayoutState = (): void => {
+      const nextViewportWidth = window.innerWidth;
+      setViewportWidth((current) =>
+        current === nextViewportWidth ? current : nextViewportWidth,
+      );
+
+      const sectionNode = viewerSectionRef.current;
+      if (sectionNode !== null) {
+        const parentNode = sectionNode.parentElement;
+        const measuredLayoutWidth =
+          parentNode?.getBoundingClientRect().width ?? sectionNode.getBoundingClientRect().width;
+        const viewportFallbackWidth = Math.max(0, nextViewportWidth - VIEWER_WIDTH_FALLBACK_OFFSET_PX);
+        const effectiveLayoutWidth = Math.max(measuredLayoutWidth, viewportFallbackWidth);
+        const normalizedWidth = Math.round(effectiveLayoutWidth);
+        setViewerLayoutWidth((current) => (current === normalizedWidth ? current : normalizedWidth));
+      }
+
+      frameId = window.requestAnimationFrame(syncLayoutState);
     };
-    updateThinLayout();
-    if (typeof ResizeObserver === 'undefined') {
-      window.addEventListener('resize', updateThinLayout);
-      return () => {
-        window.removeEventListener('resize', updateThinLayout);
-      };
-    }
-    const observer = new ResizeObserver(() => {
-      updateThinLayout();
-    });
-    observer.observe(sectionNode);
-    if (parentNode !== null) {
-      observer.observe(parentNode);
-    }
+
+    frameId = window.requestAnimationFrame(syncLayoutState);
     return () => {
-      observer.disconnect();
+      if (frameId !== 0) {
+        window.cancelAnimationFrame(frameId);
+      }
     };
   }, []);
 
@@ -900,36 +972,7 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
     if (typeof window === 'undefined') {
       return;
     }
-    const navNode = document.querySelector('nav[aria-label="Primary navigation"]');
-    const resolveIsExtraThin = () => {
-      if (navNode instanceof HTMLElement) {
-        const navItems = Array.from(navNode.children).filter(
-          (child): child is HTMLElement => child instanceof HTMLElement,
-        );
-        const navRowCount = new Set(navItems.map((item) => item.offsetTop)).size;
-        return navRowCount >= 4;
-      }
-      return window.innerWidth <= EXTRA_THIN_LAYOUT_BREAKPOINT_PX;
-    };
-    const updateExtraThinLayout = () => {
-      const nextIsExtraThin = resolveIsExtraThin();
-      setIsExtraThinLayout((current) => (current === nextIsExtraThin ? current : nextIsExtraThin));
-    };
-    updateExtraThinLayout();
-    window.addEventListener('resize', updateExtraThinLayout);
-    if (navNode instanceof HTMLElement && typeof ResizeObserver !== 'undefined') {
-      const observer = new ResizeObserver(() => {
-        updateExtraThinLayout();
-      });
-      observer.observe(navNode);
-      return () => {
-        observer.disconnect();
-        window.removeEventListener('resize', updateExtraThinLayout);
-      };
-    }
-    return () => {
-      window.removeEventListener('resize', updateExtraThinLayout);
-    };
+    setFavoriteMons(parseFavoriteMons(window.localStorage.getItem(FAVORITES_STORAGE_KEY)));
   }, []);
 
   const favoriteMonsByHref = useMemo(() => {
@@ -1299,7 +1342,30 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
     };
   }, []);
 
-  const isFolderInlineThin = isThinLayout && isFavoritesSidebarOpen;
+  const viewportFallbackWidth = Math.max(0, viewportWidth - VIEWER_WIDTH_FALLBACK_OFFSET_PX);
+  const effectiveViewerWidth = Math.max(viewerLayoutWidth, viewportFallbackWidth);
+  const isThinLayoutActive = effectiveViewerWidth <= THIN_LAYOUT_BREAKPOINT_PX;
+  const isNavBelowModeForViewer =
+    viewportWidth > 0 && viewportWidth <= NAV_BELOW_VIEWER_BREAKPOINT_PX;
+  const isSuperThinNavMode =
+    viewportWidth > 0 && viewportWidth <= SUPER_THIN_NAV_BREAKPOINT_PX;
+  const shouldUseInlineFolderForNarrowWidth =
+    isNavBelowModeForViewer &&
+    effectiveViewerWidth > 0 &&
+    effectiveViewerWidth <= FOLDER_INLINE_NARROW_BREAKPOINT_PX;
+  const isFolderInlineThin =
+    isThinLayoutActive && (isFavoritesSidebarOpen || shouldUseInlineFolderForNarrowWidth);
+  const shouldForceGenToggleRowToAvoidFolderOverlap =
+    isFolderInlineThin ||
+    (effectiveViewerWidth > 0 && effectiveViewerWidth <= 640);
+  const showGenTogglesOnRow =
+    isNavBelowModeForViewer || shouldForceGenToggleRowToAvoidFolderOverlap;
+  const resolvedWrapStyle =
+    isFavoritesSidebarOpen
+      ? wrapExpandedStyle
+      : isFolderInlineThin
+        ? wrapInlineFolderClosedStyle
+        : wrapCompactStyle;
   const folderToggleButtonNode = (
     <button
       type="button"
@@ -1333,6 +1399,20 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
           strokeLinecap="round"
         />
       </svg>
+      {isFolderInlineThin && isFavoritesSidebarOpen ? (
+        <span aria-hidden="true" style={folderInlineChevronStyle}>
+          <svg viewBox="0 0 12 12" style={{width: '100%', height: '100%', display: 'block'}}>
+            <path
+              d="M2 4.2L6 8L10 4.2"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </span>
+      ) : null}
     </button>
   );
   const genTogglesNode = (
@@ -1375,9 +1455,9 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
   return (
     <section
       ref={viewerSectionRef}
-      style={isFavoritesSidebarOpen ? wrapExpandedStyle : wrapCompactStyle}
+      style={resolvedWrapStyle}
       aria-label="Random Super Metal Mons viewer">
-      <div style={isThinLayout ? viewerLayoutThinStyle : viewerLayoutStyle}>
+      <div style={isThinLayoutActive ? viewerLayoutThinStyle : viewerLayoutStyle}>
         <div style={viewerMainStyle}>
           <div style={tiltRegionStyle}>
             <div
@@ -1422,15 +1502,56 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
           </div>
           <div style={detailsOffsetStyle}>
             <div style={nameRowStyle}>
-              <div style={nameWrapStyle}>
+              <div style={isSuperThinNavMode ? nameWrapSuperThinStyle : nameWrapStyle}>
                 <h3 style={nameStyle}>{displayedName}</h3>
+                {!isSuperThinNavMode ? (
+                  <button
+                    type="button"
+                    aria-label={
+                      isSelectedMonFavorite ? 'Remove mon from favorites' : 'Save mon to favorites'
+                    }
+                    aria-pressed={isSelectedMonFavorite}
+                    style={getFavoriteButtonStateStyle(isSelectedMonFavorite, isFavoriteHovered, false)}
+                    onMouseEnter={() => {
+                      setIsFavoriteHovered(true);
+                    }}
+                    onMouseLeave={() => {
+                      setIsFavoriteHovered(false);
+                    }}
+                    onClick={toggleSelectedMonFavorite}>
+                    <svg ref={favoriteIconRef} viewBox="0 0 24 24" aria-hidden="true" style={favoriteIconStyle}>
+                      <path
+                        d="M12 2.6L14.9 8.4L21.2 9.3L16.6 13.7L17.7 20L12 17L6.3 20L7.4 13.7L2.8 9.3L9.1 8.4L12 2.6Z"
+                        fill={isSelectedMonFavorite ? 'currentColor' : 'transparent'}
+                        stroke="currentColor"
+                        strokeWidth="1.9"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    <span style={favoritePulseWrapStyle} aria-hidden="true">
+                      <svg ref={favoritePulseRef} viewBox="0 0 24 24" style={favoritePulseIconStyle}>
+                        <path
+                          d="M12 2.6L14.9 8.4L21.2 9.3L16.6 13.7L17.7 20L12 17L6.3 20L7.4 13.7L2.8 9.3L9.1 8.4L12 2.6Z"
+                          fill="none"
+                          stroke="#ffe26a"
+                          strokeWidth="2.1"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </span>
+                  </button>
+                ) : null}
+              </div>
+            </div>
+            {isSuperThinNavMode ? (
+              <div style={favoriteRowSuperThinStyle}>
                 <button
                   type="button"
                   aria-label={
                     isSelectedMonFavorite ? 'Remove mon from favorites' : 'Save mon to favorites'
                   }
                   aria-pressed={isSelectedMonFavorite}
-                  style={getFavoriteButtonStateStyle(isSelectedMonFavorite, isFavoriteHovered)}
+                  style={getFavoriteButtonStateStyle(isSelectedMonFavorite, isFavoriteHovered, true)}
                   onMouseEnter={() => {
                     setIsFavoriteHovered(true);
                   }}
@@ -1460,7 +1581,7 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
                   </span>
                 </button>
               </div>
-            </div>
+            ) : null}
             <p style={typeStyle}>
               <span style={typeRowStyle}>
                 <span style={typeTildeStyle}>~</span>
@@ -1538,12 +1659,16 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
               </span>
             </p>
             <div style={controlsStyle}>
-              <div style={shuffleButtonWrapStyle}>
+              <div style={isSuperThinNavMode ? shuffleButtonWrapSuperThinStyle : shuffleButtonWrapStyle}>
                 <button
                   type="button"
                   aria-label="Undo shuffle"
                   disabled={!canUndo}
-                  style={canUndo ? undoButtonStyle : undoButtonDisabledStyle}
+                  style={
+                    isSuperThinNavMode
+                      ? (canUndo ? undoButtonInlineSuperThinStyle : undoButtonInlineSuperThinDisabledStyle)
+                      : (canUndo ? undoButtonStyle : undoButtonDisabledStyle)
+                  }
                   onClick={handleUndo}>
                   <svg
                     ref={undoIconRef}
@@ -1591,7 +1716,7 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
               </a>
             </div>
           </div>
-          {isExtraThinLayout ? (
+          {showGenTogglesOnRow ? (
             <div style={genToggleRowStyle}>{genTogglesNode}</div>
           ) : (
             <div style={genToggleColumnStyle}>{genTogglesNode}</div>
@@ -1600,7 +1725,7 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
         {isFolderInlineThin ? folderToggleButtonNode : null}
         {isFavoritesSidebarOpen ? (
           <aside
-            style={isThinLayout ? favoritesSidebarThinStyle : favoritesSidebarStyle}
+            style={isThinLayoutActive ? favoritesSidebarThinStyle : favoritesSidebarStyle}
             aria-label="Favorited mons sidebar">
             <h4 style={favoritesTitleStyle}>
               <svg viewBox="0 0 24 24" aria-hidden="true" style={favoritesTitleStarStyle}>
@@ -1617,7 +1742,7 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
             {favoritePreviewMons.length === 0 ? (
               <p style={favoritesEmptyStyle}>No favorited mons yet.</p>
             ) : (
-              <div style={isThinLayout ? favoritesGridThinStyle : favoritesGridStyle}>
+              <div style={isThinLayoutActive ? favoritesGridThinStyle : favoritesGridStyle}>
                 {favoritePreviewMons.map((favoriteNft) => {
                   const favoriteTypeIconHref = getTypeSpriteHref(favoriteNft.type);
                   return (

@@ -451,18 +451,19 @@ export default function PuzzlesPage(): ReactNode {
   return (
     <BlankSectionPage title="Puzzles">
       <section style={puzzlesWrapStyle}>
-        <div style={toolbarStyle} aria-label="Puzzles sort toolbar">
-          <div style={toolbarGroupStyle}>
-            <span style={toolbarLabelStyle}>Filter by:</span>
-            <div style={toolbarButtonsStyle}>
+        <div style={toolbarStyle} className="gallery-toolbar" aria-label="Puzzles sort toolbar">
+          <div style={toolbarGroupStyle} className="gallery-toolbar-group gallery-toolbar-group--filter">
+            <span style={toolbarLabelStyle} className="gallery-toolbar-label">Filter by:</span>
+            <div style={toolbarButtonsStyle} className="gallery-toolbar-buttons">
               <button
                 type="button"
+                className="gallery-toolbar-button"
                 aria-label="Show only favorited puzzles"
                 title={isFavoritesFilterEnabled ? 'Show all puzzles' : 'Show only starred puzzles'}
                 aria-pressed={isFavoritesFilterEnabled}
                 onClick={() => setIsFavoritesFilterEnabled((current) => !current)}
                 style={isFavoritesFilterEnabled ? filterButtonActiveStyle : filterButtonStyle}>
-                <svg viewBox="0 0 24 24" aria-hidden="true" style={filterIconStyle}>
+                <svg viewBox="0 0 24 24" aria-hidden="true" style={filterIconStyle} className="gallery-toolbar-icon">
                   <path
                     d="M12 2.6L14.9 8.4L21.2 9.3L16.6 13.7L17.7 20L12 17L6.3 20L7.4 13.7L2.8 9.3L9.1 8.4L12 2.6Z"
                     fill={isFavoritesFilterEnabled ? 'currentColor' : 'transparent'}
@@ -474,11 +475,12 @@ export default function PuzzlesPage(): ReactNode {
               </button>
               <button
                 type="button"
+                className="gallery-toolbar-button"
                 aria-label="Show only completed puzzles (coming soon)"
                 aria-disabled="true"
                 title="Completed filter coming soon"
                 style={filterButtonDisabledStyle}>
-                <svg viewBox="0 0 24 24" aria-hidden="true" style={filterIconStyle} fill="none">
+                <svg viewBox="0 0 24 24" aria-hidden="true" style={filterIconStyle} className="gallery-toolbar-icon" fill="none">
                   <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.8" />
                   <path
                     d="M8.2 12.4L10.9 15L15.8 9.9"
@@ -491,11 +493,12 @@ export default function PuzzlesPage(): ReactNode {
               </button>
             </div>
           </div>
-          <div style={toolbarSortGroupStyle}>
-            <span style={toolbarLabelStyle}>Sort by:</span>
-            <div style={toolbarButtonsStyle}>
+          <div style={toolbarSortGroupStyle} className="gallery-toolbar-group gallery-toolbar-group--sort">
+            <span style={toolbarLabelStyle} className="gallery-toolbar-label">Sort by:</span>
+            <div style={toolbarButtonsStyle} className="gallery-toolbar-buttons">
             <button
               type="button"
+              className="gallery-toolbar-button"
               aria-label="Sort by time created"
               title="Time Created"
               onClick={() => setSortMode('created')}
@@ -503,6 +506,7 @@ export default function PuzzlesPage(): ReactNode {
               <svg
                 viewBox="0 0 24 24"
                 aria-hidden="true"
+                className="gallery-toolbar-icon"
                 style={{
                   ...sortIconStyle,
                   transform: isSortReversed ? 'scaleX(-1)' : undefined,
@@ -520,6 +524,7 @@ export default function PuzzlesPage(): ReactNode {
             </button>
             <button
               type="button"
+              className="gallery-toolbar-button"
               aria-label="Sort by complexity"
               title="Complexity order"
               onClick={() => setSortMode('complexity')}
@@ -527,6 +532,7 @@ export default function PuzzlesPage(): ReactNode {
               <svg
                 viewBox="0 0 24 24"
                 aria-hidden="true"
+                className="gallery-toolbar-icon"
                 style={{
                   ...sortIconStyle,
                   transform: isSortReversed ? 'scaleX(-1)' : undefined,
@@ -539,11 +545,12 @@ export default function PuzzlesPage(): ReactNode {
             </button>
             <button
               type="button"
+              className="gallery-toolbar-button"
               aria-label="Sort by alphabetical order"
               title="Alphabetical order"
               onClick={() => setSortMode('alphabetical')}
               style={sortMode === 'alphabetical' ? sortButtonActiveStyle : sortButtonStyle}>
-              <svg viewBox="0 0 24 24" aria-hidden="true" style={sortIconStyle} fill="none">
+              <svg viewBox="0 0 24 24" aria-hidden="true" style={sortIconStyle} className="gallery-toolbar-icon" fill="none">
                 <text
                   x="13"
                   y="18.2"
@@ -559,11 +566,12 @@ export default function PuzzlesPage(): ReactNode {
             </button>
             <button
               type="button"
+              className="gallery-toolbar-button"
               aria-label="Reverse sort order"
               title="Reverse order"
               onClick={() => setIsSortReversed((current) => !current)}
               style={isSortReversed ? reverseSortButtonActiveStyle : reverseSortButtonStyle}>
-              <svg viewBox="0 0 24 24" aria-hidden="true" style={sortIconStyle} fill="none">
+              <svg viewBox="0 0 24 24" aria-hidden="true" style={sortIconStyle} className="gallery-toolbar-icon" fill="none">
                 <path
                   d={
                     isSortReversed
@@ -582,28 +590,28 @@ export default function PuzzlesPage(): ReactNode {
         </div>
         <section style={puzzlesGalleryStyle} aria-label="Puzzles gallery">
           {visiblePuzzleCards.map((puzzle) => (
-            <article key={puzzle.id} style={puzzleCardStyle}>
+            <article key={puzzle.id} style={puzzleCardStyle} className="gallery-card">
               <Link
                 to={puzzle.to}
                 style={{
                   ...puzzleCardImageLinkStyle,
                   ...(shouldApplyPreviewPadding ? puzzleCardImageLinkWidePaddingStyle : undefined),
                 }}
-                className="instruction-lesson-card-link"
+                className="instruction-lesson-card-link gallery-card-image-link"
                 aria-label={`Open ${puzzle.title} puzzle`}>
-                <span style={puzzleCardPreviewImageStyle}>
+                <span style={puzzleCardPreviewImageStyle} className="gallery-card-preview-image">
                   <PuzzlePiecesThumbnail
                     boardPreset={puzzle.boardPreset}
                     label={puzzle.previewLabel}
                   />
                 </span>
               </Link>
-              <span style={puzzleCardDividerColumnStyle} aria-hidden="true">
+              <span style={puzzleCardDividerColumnStyle} className="gallery-card-divider" aria-hidden="true">
                 <span style={puzzleCardDividerLineStyle} />
               </span>
-              <div style={puzzleCardTextColumnStyle}>
+              <div style={puzzleCardTextColumnStyle} className="gallery-card-text-column">
                 <div style={puzzleCardTitleBlockStyle}>
-                  <div style={puzzleCardTitleRowStyle}>
+                  <div style={puzzleCardTitleRowStyle} className="gallery-card-title-row">
                     <Link
                       to={puzzle.to}
                       style={puzzleCardTitleLinkStyle}
@@ -620,7 +628,8 @@ export default function PuzzlesPage(): ReactNode {
                         puzzle.id === 'bombproof'
                           ? puzzleCardTitleStarOffsetBombproofStyle
                           : puzzleCardTitleStarOffsetStyle
-                      }>
+                      }
+                      className="gallery-card-title-star">
                       <PuzzleFavoriteStar puzzleId={puzzle.id} size="1.28rem" />
                     </span>
                   </div>

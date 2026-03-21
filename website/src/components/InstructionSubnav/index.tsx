@@ -83,6 +83,7 @@ const basicRulesLabel: ReactNode = (
       viewBox="0 0 24 24"
       aria-hidden="true"
       style={labelIconStyle}
+      className="section-subnav__label-icon"
       fill="none"
       stroke="currentColor"
       strokeWidth="1.25"
@@ -100,7 +101,7 @@ const basicRulesLabel: ReactNode = (
       <rect x="2" y="15.33" width="6.67" height="6.67" fill="currentColor" stroke="none" />
       <rect x="15.33" y="15.33" width="6.67" height="6.67" fill="currentColor" stroke="none" />
     </svg>
-    Basic Rules
+    <span className="section-subnav__label-text">Basic Rules</span>
   </span>
 );
 
@@ -110,6 +111,7 @@ const videoTutorialLabel: ReactNode = (
       viewBox="0 0 24 24"
       aria-hidden="true"
       style={videoIconStyle}
+      className="section-subnav__label-icon"
       fill="none"
       stroke="currentColor"
       strokeWidth="2"
@@ -118,7 +120,7 @@ const videoTutorialLabel: ReactNode = (
       <circle cx="12" cy="12" r="9.2" />
       <path d="M8.4 6.9v10.2L17 12z" fill="currentColor" stroke="none" />
     </svg>
-    Video Tutorials
+    <span className="section-subnav__label-text">Video Tutorials</span>
   </span>
 );
 
@@ -131,6 +133,7 @@ const lessonsLabel = (isActive: boolean): ReactNode => {
         viewBox="0 0 24 24"
         aria-hidden="true"
         style={lessonsIconStyle}
+        className="section-subnav__label-icon"
         fill="none"
         stroke="none"
         strokeLinecap="round"
@@ -141,7 +144,7 @@ const lessonsLabel = (isActive: boolean): ReactNode => {
         <path d="m13.9 13.3 4.8-4.8 2.2 2.2-4.8 4.8-3.1.8z" fill={detailColor} />
         <path d="m18.7 8.5 1.1-1.1 2.2 2.2-1.1 1.1z" fill={pageColor} />
       </svg>
-      Lessons
+      <span className="section-subnav__label-text">Lessons</span>
     </span>
   );
 };
@@ -152,12 +155,13 @@ const manualLabel = (isActive: boolean): ReactNode => (
       src="/assets/171322.png"
       alt=""
       aria-hidden="true"
+      className="section-subnav__label-icon"
       style={{
         ...manualIconStyle,
         filter: isActive ? 'invert(1)' : 'none',
       }}
     />
-    Manual
+    <span className="section-subnav__label-text">Manual</span>
   </span>
 );
 
@@ -172,23 +176,25 @@ export default function InstructionSubnav({active}: InstructionSubnavProps): Rea
   const [pressedItem, setPressedItem] = useState<InstructionSection | null>(null);
 
   return (
-    <nav aria-label="Instruction sections" style={wrapStyle}>
+    <nav aria-label="Instruction sections" style={wrapStyle} className="section-subnav">
       {items.map((item) => {
         const isPressed = pressedItem === item.key;
+        const isActive = item.key === active;
         return (
           <Link
             key={item.key}
             to={item.to}
+            className={`section-subnav__tab${isActive ? ' section-subnav__tab--active' : ''}`}
             onMouseDown={() => setPressedItem(item.key)}
             onMouseUp={() => setPressedItem(null)}
             onMouseLeave={() => setPressedItem(null)}
             onTouchStart={() => setPressedItem(item.key)}
             onTouchEnd={() => setPressedItem(null)}
             style={{
-              ...(item.key === active ? activeButtonStyle : inactiveButtonStyle),
+              ...(isActive ? activeButtonStyle : inactiveButtonStyle),
               ...(isPressed ? pressedButtonStyle : undefined),
             }}>
-            {item.label(item.key === active)}
+            {item.label(isActive)}
           </Link>
         );
       })}

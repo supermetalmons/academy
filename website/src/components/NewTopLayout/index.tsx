@@ -944,7 +944,9 @@ export default function NewTopLayout({children}: NewTopLayoutProps): ReactNode {
   );
 
   return (
-    <main style={pageStyle} className="mons-shell">
+    <main
+      style={pageStyle}
+      className={`mons-shell${showNavBelowRow ? ' mons-shell--nav-below' : ''}`}>
       {cloudEnabled ? (
         <div
           className={`cloud-shadows${showCloudIntro ? ' cloud-shadows--intro' : ''}`}

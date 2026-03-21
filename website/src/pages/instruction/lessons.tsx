@@ -290,18 +290,19 @@ export default function InstructionLessonsPage(): ReactNode {
     <BlankSectionPage title="Instruction">
       <InstructionSubnav active="lessons" />
       <section style={lessonsWrapStyle}>
-        <div style={toolbarStyle} aria-label="Lessons sort toolbar">
-          <div style={toolbarGroupStyle}>
-            <span style={toolbarLabelStyle}>Filter by:</span>
-            <div style={toolbarButtonsStyle}>
+        <div style={toolbarStyle} className="gallery-toolbar" aria-label="Lessons sort toolbar">
+          <div style={toolbarGroupStyle} className="gallery-toolbar-group gallery-toolbar-group--filter">
+            <span style={toolbarLabelStyle} className="gallery-toolbar-label">Filter by:</span>
+            <div style={toolbarButtonsStyle} className="gallery-toolbar-buttons">
               <button
                 type="button"
+                className="gallery-toolbar-button"
                 aria-label="Show only favorited lessons"
                 title={isFavoritesFilterEnabled ? 'Show all lessons' : 'Show only starred lessons'}
                 aria-pressed={isFavoritesFilterEnabled}
                 onClick={() => setIsFavoritesFilterEnabled((current) => !current)}
                 style={isFavoritesFilterEnabled ? filterButtonActiveStyle : filterButtonStyle}>
-                <svg viewBox="0 0 24 24" aria-hidden="true" style={filterIconStyle}>
+                <svg viewBox="0 0 24 24" aria-hidden="true" style={filterIconStyle} className="gallery-toolbar-icon">
                   <path
                     d="M12 2.6L14.9 8.4L21.2 9.3L16.6 13.7L17.7 20L12 17L6.3 20L7.4 13.7L2.8 9.3L9.1 8.4L12 2.6Z"
                     fill={isFavoritesFilterEnabled ? 'currentColor' : 'transparent'}
@@ -313,11 +314,12 @@ export default function InstructionLessonsPage(): ReactNode {
               </button>
               <button
                 type="button"
+                className="gallery-toolbar-button"
                 aria-label="Show only completed lessons (coming soon)"
                 title="Completed filter coming soon"
                 style={filterButtonDisabledStyle}
                 disabled>
-                <svg viewBox="0 0 24 24" aria-hidden="true" style={filterIconStyle} fill="none">
+                <svg viewBox="0 0 24 24" aria-hidden="true" style={filterIconStyle} className="gallery-toolbar-icon" fill="none">
                   <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.8" />
                   <path
                     d="M8.2 12.4L10.9 15L15.8 9.9"
@@ -330,11 +332,12 @@ export default function InstructionLessonsPage(): ReactNode {
               </button>
             </div>
           </div>
-          <div style={toolbarSortGroupStyle}>
-            <span style={toolbarLabelStyle}>Sort by:</span>
-            <div style={toolbarButtonsStyle}>
+          <div style={toolbarSortGroupStyle} className="gallery-toolbar-group gallery-toolbar-group--sort">
+            <span style={toolbarLabelStyle} className="gallery-toolbar-label">Sort by:</span>
+            <div style={toolbarButtonsStyle} className="gallery-toolbar-buttons">
               <button
                 type="button"
+                className="gallery-toolbar-button"
                 aria-label="Sort by time created"
                 title="Time Created"
                 onClick={() => setSortMode('created')}
@@ -342,6 +345,7 @@ export default function InstructionLessonsPage(): ReactNode {
                 <svg
                   viewBox="0 0 24 24"
                   aria-hidden="true"
+                  className="gallery-toolbar-icon"
                   style={{
                     ...sortIconStyle,
                     transform: isSortReversed ? 'scaleX(-1)' : undefined,
@@ -359,6 +363,7 @@ export default function InstructionLessonsPage(): ReactNode {
               </button>
               <button
                 type="button"
+                className="gallery-toolbar-button"
                 aria-label="Sort by complexity"
                 title="Complexity order"
                 onClick={() => setSortMode('complexity')}
@@ -366,6 +371,7 @@ export default function InstructionLessonsPage(): ReactNode {
                 <svg
                   viewBox="0 0 24 24"
                   aria-hidden="true"
+                  className="gallery-toolbar-icon"
                   style={{
                     ...sortIconStyle,
                     transform: isSortReversed ? 'scaleX(-1)' : undefined,
@@ -378,11 +384,12 @@ export default function InstructionLessonsPage(): ReactNode {
               </button>
               <button
                 type="button"
+                className="gallery-toolbar-button"
                 aria-label="Sort by alphabetical order"
                 title="Alphabetical order"
                 onClick={() => setSortMode('alphabetical')}
                 style={sortMode === 'alphabetical' ? sortButtonActiveStyle : sortButtonStyle}>
-                <svg viewBox="0 0 24 24" aria-hidden="true" style={sortIconStyle} fill="none">
+                <svg viewBox="0 0 24 24" aria-hidden="true" style={sortIconStyle} className="gallery-toolbar-icon" fill="none">
                   <text
                     x="13"
                     y="18.2"
@@ -398,11 +405,12 @@ export default function InstructionLessonsPage(): ReactNode {
               </button>
               <button
                 type="button"
+                className="gallery-toolbar-button"
                 aria-label="Reverse sort order"
                 title="Reverse order"
                 onClick={() => setIsSortReversed((current) => !current)}
                 style={isSortReversed ? reverseSortButtonActiveStyle : reverseSortButtonStyle}>
-                <svg viewBox="0 0 24 24" aria-hidden="true" style={sortIconStyle} fill="none">
+                <svg viewBox="0 0 24 24" aria-hidden="true" style={sortIconStyle} className="gallery-toolbar-icon" fill="none">
                   <path
                     d={
                       isSortReversed
@@ -421,20 +429,21 @@ export default function InstructionLessonsPage(): ReactNode {
         </div>
         <section style={lessonsGalleryStyle} aria-label="Lessons gallery">
           {visibleLessonCards.map((lesson) => (
-            <article key={lesson.id} style={lessonCardStyle}>
+            <article key={lesson.id} style={lessonCardStyle} className="gallery-card">
               <Link
                 to={lesson.to}
                 style={lessonCardImageLinkStyle}
-                className="instruction-lesson-card-link"
+                className="instruction-lesson-card-link gallery-card-image-link"
                 aria-label={`Open ${lesson.title} lesson`}>
                 <img
                   src={lesson.previewImageSrc}
                   alt={lesson.previewImageAlt}
                   style={lessonCardPreviewImageStyle}
+                  className="gallery-card-preview-image"
                 />
               </Link>
-              <div style={lessonCardTextColumnStyle}>
-                <div style={lessonCardTitleRowStyle}>
+              <div style={lessonCardTextColumnStyle} className="gallery-card-text-column">
+                <div style={lessonCardTitleRowStyle} className="gallery-card-title-row">
                   <Link
                     to={lesson.to}
                     style={lessonCardTitleLinkStyle}
@@ -446,7 +455,7 @@ export default function InstructionLessonsPage(): ReactNode {
                       {lesson.title}
                     </span>
                   </Link>
-                  <span style={lessonCardTitleStarOffsetStyle}>
+                  <span style={lessonCardTitleStarOffsetStyle} className="gallery-card-title-star">
                     <LessonFavoriteStar lessonId={lesson.id} size="1.28rem" />
                   </span>
                 </div>
