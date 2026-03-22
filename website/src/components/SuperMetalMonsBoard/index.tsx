@@ -2180,6 +2180,22 @@ export default function SuperMetalMonsBoard({
     }
     return !isSandboxFreeMoveBoard || faintedMonIdSet.has(mon.id);
   };
+  const isAbilityUserBlockedOnOwnSpawn = (
+    mon: BoardEntity & {
+      kind: 'mon';
+      side: 'black' | 'white';
+      monType: MonType;
+    },
+  ): boolean =>
+    (mon.monType === 'spirit' ||
+      mon.monType === 'demon' ||
+      mon.monType === 'mystic') &&
+    isMonOnOwnSpawn({
+      col: mon.col,
+      row: mon.row,
+      type: mon.monType,
+      side: mon.side,
+    });
   const activeMonPositions = useMemo(
     () => ({
       black: visibleBoardEntities
@@ -2689,12 +2705,17 @@ export default function SuperMetalMonsBoard({
     ) {
       return [];
     }
+    const isSelectedAbilityBlockedOnOwnSpawn =
+      isAbilityUserBlockedOnOwnSpawn(selectedEntity);
 
     const isTargetProtectedByAngel = (
       targetEntity: BoardEntity & {kind: 'mon'; side: 'black' | 'white'; monType: MonType},
     ) => getProtectingAngelsForTarget(targetEntity).length > 0;
 
     if (selectedEntity.monType === 'spirit') {
+      if (isSelectedAbilityBlockedOnOwnSpawn) {
+        return [];
+      }
       return visibleBoardEntities
         .filter((entity) => entity.id !== selectedEntity.id)
         .filter((targetEntity) => {
@@ -2743,6 +2764,9 @@ export default function SuperMetalMonsBoard({
       .filter((targetEntity) => !isMonCurrentlyFainted(targetEntity))
       .filter((targetEntity) => {
         if (selectedEntity.monType === 'mystic' && selectedEntity.heldItemKind !== 'bomb') {
+          if (isSelectedAbilityBlockedOnOwnSpawn) {
+            return false;
+          }
           if (isTargetProtectedByAngel(targetEntity)) {
             return false;
           }
@@ -2768,6 +2792,9 @@ export default function SuperMetalMonsBoard({
         }
 
         if (selectedEntity.monType === 'demon' && selectedEntity.heldItemKind !== 'bomb') {
+          if (isSelectedAbilityBlockedOnOwnSpawn) {
+            return false;
+          }
           if (isTargetProtectedByAngel(targetEntity)) {
             return false;
           }
@@ -2944,6 +2971,9 @@ export default function SuperMetalMonsBoard({
     ) {
       return [];
     }
+    if (isAbilityUserBlockedOnOwnSpawn(selectedEntity)) {
+      return [];
+    }
 
     const occupiedTileKeySet = new Set(
       visibleBoardEntities.map((entity) => toTileKey(entity.col, entity.row)),
@@ -3093,6 +3123,13 @@ export default function SuperMetalMonsBoard({
           height: maxRow - minRow,
         },
       ];
+    }
+    if (
+      (selectedEntity.monType === 'mystic' ||
+        selectedEntity.monType === 'demon') &&
+      isAbilityUserBlockedOnOwnSpawn(selectedEntity)
+    ) {
+      return [];
     }
     if (selectedEntity.monType !== 'mystic' && selectedEntity.monType !== 'demon') {
       return [];
@@ -5021,6 +5058,11 @@ export default function SuperMetalMonsBoard({
                 targetEntity.side !== undefined &&
                 targetEntity.monType !== undefined &&
                 isMonCurrentlyFainted(targetEntity);
+              const isSelectedAbilityBlockedOnOwnSpawn =
+                selectedEntity.kind === 'mon' &&
+                selectedEntity.side !== undefined &&
+                selectedEntity.monType !== undefined &&
+                isAbilityUserBlockedOnOwnSpawn(selectedEntity);
               const targetItemEntity =
                 targetEntity !== undefined && targetEntity.kind === 'item'
                   ? targetEntity
@@ -5031,6 +5073,7 @@ export default function SuperMetalMonsBoard({
                 selectedEntity.monType === 'spirit' &&
                 targetEntity !== undefined &&
                 targetEntity.id !== selectedEntity.id &&
+                !isSelectedAbilityBlockedOnOwnSpawn &&
                 !isTargetMonFainted &&
                 isSpiritPushTargetDistance(sourceCol, sourceRow, col, row);
               if (canSpiritPushTargetEntity) {
@@ -5319,6 +5362,7 @@ export default function SuperMetalMonsBoard({
                 targetEntity.kind === 'mon' &&
                 targetEntity.side !== undefined &&
                 targetEntity.monType !== undefined &&
+                !isSelectedAbilityBlockedOnOwnSpawn &&
                 !isTargetMonFainted &&
                 !isTargetProtectedByAngel &&
                 selectedEntity.side !== targetEntity.side &&
@@ -5446,6 +5490,7 @@ export default function SuperMetalMonsBoard({
                 targetEntity.kind === 'mon' &&
                 targetEntity.side !== undefined &&
                 targetEntity.monType !== undefined &&
+                !isSelectedAbilityBlockedOnOwnSpawn &&
                 !isTargetMonFainted &&
                 !isTargetProtectedByAngel &&
                 selectedEntity.side !== targetEntity.side &&
