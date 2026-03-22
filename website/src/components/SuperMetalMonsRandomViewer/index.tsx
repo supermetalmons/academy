@@ -23,6 +23,7 @@ type PersistedViewerState = {
   lockedType: string | null;
   undoSnapshots: UndoSnapshot[];
 };
+type FolderGalleryMode = 'favorites' | 'all';
 
 const TILT_MAX_DEG = 13;
 const NAME_CYCLE_DURATION_MS = 240;
@@ -32,6 +33,7 @@ const FAVORITES_STORAGE_KEY = 'mons-academy-favorites-folder';
 const VIEWER_STATE_STORAGE_KEY = 'mons-academy-viewer-state';
 const VIEWER_STATE_VERSION = 1;
 const UNDO_HISTORY_LIMIT = 5;
+const FAVORITES_PAGE_SIZE = 42;
 const FAVORITE_PULSE_DURATION_MS = 620;
 const SHUFFLE_BUTTON_LABEL = 'Shuffle';
 const SHUFFLE_HOVER_CYCLE_DURATION_MS = 230;
@@ -41,9 +43,9 @@ const THIN_LAYOUT_BREAKPOINT_PX = 860;
 const NAV_BELOW_VIEWER_BREAKPOINT_PX = 620;
 const SUPER_THIN_NAV_BREAKPOINT_PX = 520;
 const FOLDER_INLINE_NARROW_BREAKPOINT_PX = 700;
-const VIEWER_WIDTH_FALLBACK_OFFSET_PX = 120;
 const VIEWER_BOTTOM_TRIM_PX = 23;
 const MAIN_IMAGE_EDGE_INSET_PX = 10;
+const FOLDER_HEADER_CONTROL_HEIGHT_PX = 22;
 
 function getGenForCollection(collection: 'Super Metal Mons!' | 'Super Metal Mons!!'): GenKey {
   return collection === 'Super Metal Mons!' ? 'gen1' : 'gen2';
@@ -95,6 +97,14 @@ function getScrambledName(targetName: string): string {
       return NAME_CYCLE_CHARS[Math.floor(Math.random() * NAME_CYCLE_CHARS.length)] ?? char;
     })
     .join('');
+}
+
+function normalizeSearchText(value: string): string {
+  return value
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
 }
 
 const wrapBaseStyle: CSSProperties = {
@@ -174,9 +184,83 @@ const favoritesTitleStyle: CSSProperties = {
   gap: '0.28rem',
 };
 
+const favoritesTitleTextStyle: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '0.2rem',
+};
+
+const favoritesTitleGenStyle: CSSProperties = {
+  color: '#666',
+  fontSize: '0.82rem',
+  fontStyle: 'italic',
+  fontWeight: 400,
+  lineHeight: 1,
+};
+
+const favoritesHeaderStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: '0.5rem',
+};
+
+const favoritesModeToggleStyle: CSSProperties = {
+  border: 'none',
+  background: 'transparent',
+  margin: 0,
+  padding: 0,
+  height: `${FOLDER_HEADER_CONTROL_HEIGHT_PX}px`,
+  boxSizing: 'border-box',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  font: 'inherit',
+  fontSize: '0.9rem',
+  lineHeight: 1.2,
+  color: '#000',
+  textDecoration: 'underline',
+  cursor: 'pointer',
+};
+
+const favoritesSearchInputStyle: CSSProperties = {
+  border: '1px solid #000',
+  borderRadius: 0,
+  backgroundColor: '#fff',
+  color: '#000',
+  margin: 0,
+  padding: '0 0.36rem',
+  height: `${FOLDER_HEADER_CONTROL_HEIGHT_PX}px`,
+  boxSizing: 'border-box',
+  font: 'inherit',
+  fontSize: '0.8rem',
+  lineHeight: 1.2,
+  width: '148px',
+  maxWidth: '44vw',
+};
+
+const favoritesTitleStarButtonStyle: CSSProperties = {
+  border: 'none',
+  background: 'transparent',
+  margin: 0,
+  padding: 0,
+  width: '1.08rem',
+  height: '1.08rem',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  lineHeight: 1,
+  cursor: 'pointer',
+};
+
+const favoritesTitleStarButtonDisabledStyle: CSSProperties = {
+  ...favoritesTitleStarButtonStyle,
+  cursor: 'default',
+};
+
 const favoritesTitleStarStyle: CSSProperties = {
-  width: '0.94rem',
-  height: '0.94rem',
+  width: '1.08rem',
+  height: '1.08rem',
   display: 'block',
   color: '#f2ca3f',
   transform: 'translateY(-1px)',
@@ -218,12 +302,64 @@ const favoritesTileActiveStyle: CSSProperties = {
   backgroundColor: '#f3f3f3',
 };
 
-const favoritesImageStyle: CSSProperties = {
+const favoritesImageWrapStyle: CSSProperties = {
+  position: 'relative',
   width: '100%',
   aspectRatio: '1 / 1',
+  border: '1px solid #000',
+  overflow: 'hidden',
+};
+
+const favoritesImageWrapActiveStyle: CSSProperties = {
+  ...favoritesImageWrapStyle,
+  border: '1.5px solid #000',
+};
+
+const favoritesImageStyle: CSSProperties = {
+  width: '100%',
+  height: '100%',
   objectFit: 'cover',
   display: 'block',
-  border: '1px solid #000',
+};
+
+const favoritesPreviewStarBaseStyle: CSSProperties = {
+  position: 'absolute',
+  right: '3px',
+  top: '3px',
+  width: '0.94rem',
+  height: '0.94rem',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  borderRadius: '999px',
+  lineHeight: 1,
+  zIndex: 1,
+};
+
+const favoritesPreviewStarGoldStyle: CSSProperties = {
+  ...favoritesPreviewStarBaseStyle,
+  color: '#f2ca3f',
+  filter: 'drop-shadow(0 0 2px rgba(242, 202, 63, 0.62))',
+};
+
+const favoritesPreviewStarPendingStyle: CSSProperties = {
+  ...favoritesPreviewStarBaseStyle,
+  color: '#8f8f8f',
+};
+
+const favoritesPreviewStarClickableStyle: CSSProperties = {
+  cursor: 'pointer',
+  pointerEvents: 'auto',
+};
+
+const favoritesPreviewStarStaticStyle: CSSProperties = {
+  pointerEvents: 'none',
+};
+
+const favoritesPreviewStarIconStyle: CSSProperties = {
+  width: '100%',
+  height: '100%',
+  display: 'block',
 };
 
 const favoritesLabelStyle: CSSProperties = {
@@ -245,6 +381,11 @@ const favoritesLabelTextStyle: CSSProperties = {
   lineHeight: 1.15,
 };
 
+const favoritesLabelTextActiveStyle: CSSProperties = {
+  ...favoritesLabelTextStyle,
+  fontWeight: 700,
+};
+
 const favoritesTypeIconStyle: CSSProperties = {
   width: '0.82rem',
   height: '0.82rem',
@@ -260,6 +401,48 @@ const favoritesEmptyStyle: CSSProperties = {
   fontSize: '0.78rem',
   lineHeight: 1.2,
   opacity: 0.72,
+};
+
+const favoritesEmptyWithBottomSpacingStyle: CSSProperties = {
+  ...favoritesEmptyStyle,
+  marginBottom: '20px',
+};
+
+const favoritesPaginationStyle: CSSProperties = {
+  marginTop: '0.22rem',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: '0.42rem',
+};
+
+const favoritesPageButtonStyle: CSSProperties = {
+  border: '1px solid #000',
+  borderRadius: 0,
+  background: '#fff',
+  color: '#000',
+  margin: 0,
+  padding: '0.08rem 0.36rem',
+  font: 'inherit',
+  fontSize: '0.74rem',
+  lineHeight: 1.1,
+  cursor: 'pointer',
+};
+
+const favoritesPageButtonDisabledStyle: CSSProperties = {
+  ...favoritesPageButtonStyle,
+  opacity: 0.35,
+  cursor: 'default',
+};
+
+const favoritesPageLabelStyle: CSSProperties = {
+  margin: 0,
+  fontSize: '0.7rem',
+  lineHeight: 1.1,
+  color: '#000',
+  opacity: 0.8,
+  minWidth: '4rem',
+  textAlign: 'center',
 };
 
 const folderToggleButtonStyle: CSSProperties = {
@@ -619,7 +802,7 @@ const shuffleButtonWrapStyle: CSSProperties = {
 
 const shuffleButtonWrapSuperThinStyle: CSSProperties = {
   ...shuffleButtonWrapStyle,
-  position: 'static',
+  position: 'relative',
   gap: '0.26rem',
 };
 
@@ -643,8 +826,42 @@ const shuffleButtonStyle: CSSProperties = {
   fontFamily: 'inherit',
 };
 
-const linkStyle: CSSProperties = {
-  ...buttonStyle,
+const shuffleButtonThinStyle: CSSProperties = {
+  padding: '0.38rem 0.94rem',
+  fontSize: '1.08rem',
+};
+
+const openSeaButtonStyle: CSSProperties = {
+  position: 'absolute',
+  left: 'calc(100% + 0.5rem + 5px)',
+  top: '50%',
+  transform: 'translateY(-50%)',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: '1.22rem',
+  height: '1.22rem',
+  color: '#000',
+  textDecoration: 'none',
+  border: 'none',
+  background: 'transparent',
+  padding: 0,
+  margin: 0,
+  lineHeight: 1,
+  cursor: 'pointer',
+  transition: 'transform 140ms ease, filter 140ms ease',
+};
+
+const openSeaButtonSuperThinStyle: CSSProperties = {
+  ...openSeaButtonStyle,
+  left: 'calc(100% + 0.38rem)',
+};
+
+const openSeaLogoStyle: CSSProperties = {
+  width: 'calc(1.08rem + 1px)',
+  height: 'calc(1.08rem + 1px)',
+  display: 'block',
+  imageRendering: 'auto',
 };
 
 const undoButtonStyle: CSSProperties = {
@@ -781,6 +998,23 @@ function getFavoriteButtonStateStyle(
   return {
     ...baseStyle,
     transform: isHovered ? 'translate(0, -50%) scale(1.16)' : 'translate(0, -50%) scale(1)',
+  };
+}
+
+function getFavoriteButtonOverlayStateStyle(
+  isActive: boolean,
+  isHovered: boolean,
+): CSSProperties {
+  const baseStyle = isActive ? favoriteButtonActiveStyle : favoriteButtonStyle;
+  return {
+    ...baseStyle,
+    position: 'absolute',
+    left: 'auto',
+    top: 'auto',
+    right: '0.46rem',
+    bottom: '0.44rem',
+    zIndex: 6,
+    transform: isHovered ? 'scale(1.16)' : 'scale(1)',
   };
 }
 
@@ -998,14 +1232,19 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
   const [viewportWidth, setViewportWidth] = useState<number>(
     typeof window === 'undefined' ? 0 : window.innerWidth,
   );
-  const [viewerLayoutWidth, setViewerLayoutWidth] = useState(0);
   const [wideClosedHeightPx, setWideClosedHeightPx] = useState<number | null>(null);
   const [shuffleButtonLabel, setShuffleButtonLabel] = useState<string>(SHUFFLE_BUTTON_LABEL);
+  const [isOpenSeaOnSeparateRow, setIsOpenSeaOnSeparateRow] = useState(false);
   const [mainImageSrc, setMainImageSrc] = useState<string>(
     () => superMetalMonsNfts[index]?.image ?? '',
   );
   const [ghostImageSrc, setGhostImageSrc] = useState<string | null>(null);
   const [favoriteMons, setFavoriteMons] = useState<Set<string>>(new Set());
+  const [pendingFavoriteRemovals, setPendingFavoriteRemovals] = useState<Set<string>>(new Set());
+  const [folderGalleryMode, setFolderGalleryMode] = useState<FolderGalleryMode>('favorites');
+  const [favoritesGalleryPage, setFavoritesGalleryPage] = useState(0);
+  const [allMonsGalleryPage, setAllMonsGalleryPage] = useState(0);
+  const [allMonsSearchQuery, setAllMonsSearchQuery] = useState('');
   const nameCycleIntervalRef = useRef<number | null>(null);
   const nameCycleTimeoutRef = useRef<number | null>(null);
   const shuffleHoverIntervalRef = useRef<number | null>(null);
@@ -1019,6 +1258,9 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
   const mainImageRef = useRef<HTMLImageElement | null>(null);
   const ghostImageRef = useRef<HTMLImageElement | null>(null);
   const viewerSectionRef = useRef<HTMLElement | null>(null);
+  const controlsRowRef = useRef<HTMLDivElement | null>(null);
+  const shuffleButtonRef = useRef<HTMLButtonElement | null>(null);
+  const openSeaButtonRef = useRef<HTMLAnchorElement | null>(null);
   const [tilt, setTilt] = useState<TiltState>({
     rotateX: 0,
     rotateY: 0,
@@ -1066,33 +1308,16 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
     if (typeof window === 'undefined') {
       return;
     }
-
-    let frameId = 0;
-    const syncLayoutState = (): void => {
+    const syncViewportWidth = (): void => {
       const nextViewportWidth = window.innerWidth;
       setViewportWidth((current) =>
         current === nextViewportWidth ? current : nextViewportWidth,
       );
-
-      const sectionNode = viewerSectionRef.current;
-      if (sectionNode !== null) {
-        const parentNode = sectionNode.parentElement;
-        const measuredLayoutWidth =
-          parentNode?.getBoundingClientRect().width ?? sectionNode.getBoundingClientRect().width;
-        const viewportFallbackWidth = Math.max(0, nextViewportWidth - VIEWER_WIDTH_FALLBACK_OFFSET_PX);
-        const effectiveLayoutWidth = Math.max(measuredLayoutWidth, viewportFallbackWidth);
-        const normalizedWidth = Math.round(effectiveLayoutWidth);
-        setViewerLayoutWidth((current) => (current === normalizedWidth ? current : normalizedWidth));
-      }
-
-      frameId = window.requestAnimationFrame(syncLayoutState);
     };
-
-    frameId = window.requestAnimationFrame(syncLayoutState);
+    syncViewportWidth();
+    window.addEventListener('resize', syncViewportWidth);
     return () => {
-      if (frameId !== 0) {
-        window.cancelAnimationFrame(frameId);
-      }
+      window.removeEventListener('resize', syncViewportWidth);
     };
   }, []);
 
@@ -1102,6 +1327,21 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
     }
     setFavoriteMons(parseFavoriteMons(window.localStorage.getItem(FAVORITES_STORAGE_KEY)));
   }, []);
+
+  useEffect(() => {
+    setPendingFavoriteRemovals((current) => {
+      if (current.size === 0) {
+        return current;
+      }
+      const next = new Set<string>();
+      current.forEach((href) => {
+        if (favoriteMons.has(href)) {
+          next.add(href);
+        }
+      });
+      return next.size === current.size ? current : next;
+    });
+  }, [favoriteMons]);
 
   useEffect(() => {
     persistViewerState({
@@ -1137,6 +1377,111 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
         .filter((nft): nft is SuperMetalMonsNft => nft !== undefined),
     [favoriteMons, favoriteMonsByHref],
   );
+  const favoritePreviewMonsFilteredByEnabledGens = useMemo(
+    () =>
+      favoritePreviewMons.filter(
+        (nft) => enabledGens[getGenForCollection(nft.collection)],
+      ),
+    [favoritePreviewMons, enabledGens],
+  );
+  const allMonsAlphabetical = useMemo(
+    () =>
+      [...superMetalMonsNfts].sort((left, right) => {
+        const leftNormalized = left.name.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').trim();
+        const rightNormalized = right.name
+          .normalize('NFKD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .trim();
+        const leftIsAlphanumericStart = /^[A-Za-z0-9]/.test(leftNormalized);
+        const rightIsAlphanumericStart = /^[A-Za-z0-9]/.test(rightNormalized);
+        if (leftIsAlphanumericStart !== rightIsAlphanumericStart) {
+          return leftIsAlphanumericStart ? -1 : 1;
+        }
+        const leftCompareKey = leftNormalized.replace(/^[^A-Za-z0-9]+/, '');
+        const rightCompareKey = rightNormalized.replace(/^[^A-Za-z0-9]+/, '');
+        const nameComparison = leftCompareKey.localeCompare(rightCompareKey, undefined, {
+          sensitivity: 'base',
+          numeric: true,
+        });
+        if (nameComparison !== 0) {
+          return nameComparison;
+        }
+        return left.href.localeCompare(right.href);
+      }),
+    [],
+  );
+  const allMonsAlphabeticalFilteredByEnabledGens = useMemo(
+    () =>
+      allMonsAlphabetical.filter(
+        (nft) => enabledGens[getGenForCollection(nft.collection)],
+      ),
+    [allMonsAlphabetical, enabledGens],
+  );
+  const normalizedAllMonsSearchQuery = useMemo(
+    () => normalizeSearchText(allMonsSearchQuery),
+    [allMonsSearchQuery],
+  );
+  const allMonsFilteredByEnabledGensAndSearch = useMemo(() => {
+    if (normalizedAllMonsSearchQuery.length === 0) {
+      return allMonsAlphabeticalFilteredByEnabledGens;
+    }
+    return allMonsAlphabeticalFilteredByEnabledGens.filter((nft) => {
+      const searchableText = `${normalizeSearchText(nft.name)} ${normalizeSearchText(nft.type)}`;
+      return searchableText.includes(normalizedAllMonsSearchQuery);
+    });
+  }, [allMonsAlphabeticalFilteredByEnabledGens, normalizedAllMonsSearchQuery]);
+  const activeFolderMons =
+    folderGalleryMode === 'all'
+      ? allMonsFilteredByEnabledGensAndSearch
+      : favoritePreviewMonsFilteredByEnabledGens;
+  const activeFolderPageRaw =
+    folderGalleryMode === 'all' ? allMonsGalleryPage : favoritesGalleryPage;
+  const activeFolderTotalPages = Math.max(
+    1,
+    Math.ceil(activeFolderMons.length / FAVORITES_PAGE_SIZE),
+  );
+  const activeFolderPage = Math.min(activeFolderPageRaw, activeFolderTotalPages - 1);
+  const activeFolderPageMons = activeFolderMons.slice(
+    activeFolderPage * FAVORITES_PAGE_SIZE,
+    (activeFolderPage + 1) * FAVORITES_PAGE_SIZE,
+  );
+  const activeFolderCount =
+    folderGalleryMode === 'all'
+      ? allMonsFilteredByEnabledGensAndSearch.length
+      : favoritePreviewMonsFilteredByEnabledGens.length;
+  const activeFolderLabel = folderGalleryMode === 'all' ? 'Mons:' : 'Favorites:';
+  const activeFolderGenQualifier =
+    enabledGens.gen1 && !enabledGens.gen2
+      ? '(gen 1)'
+      : enabledGens.gen2 && !enabledGens.gen1
+        ? '(gen 2)'
+        : null;
+  const activeFolderEmptyLabel =
+    folderGalleryMode === 'all'
+      ? normalizedAllMonsSearchQuery.length > 0
+        ? 'No mons match this search.'
+        : 'No mons available for selected generations.'
+      : 'No favorited mons yet for selected generations.';
+
+  useEffect(() => {
+    const maxPageIndex = Math.max(
+      0,
+      Math.ceil(favoritePreviewMonsFilteredByEnabledGens.length / FAVORITES_PAGE_SIZE) - 1,
+    );
+    setFavoritesGalleryPage((current) => (current <= maxPageIndex ? current : maxPageIndex));
+  }, [favoritePreviewMonsFilteredByEnabledGens.length]);
+
+  useEffect(() => {
+    const maxPageIndex = Math.max(
+      0,
+      Math.ceil(allMonsFilteredByEnabledGensAndSearch.length / FAVORITES_PAGE_SIZE) - 1,
+    );
+    setAllMonsGalleryPage((current) => (current <= maxPageIndex ? current : maxPageIndex));
+  }, [allMonsFilteredByEnabledGensAndSearch.length]);
+
+  useEffect(() => {
+    setAllMonsGalleryPage(0);
+  }, [allMonsSearchQuery]);
 
   const selected = superMetalMonsNfts[index] ?? null;
 
@@ -1221,6 +1566,62 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
     setDisplayedName(targetNft.name);
     setIndex(targetIndex);
   };
+  const commitPendingFavoriteRemovals = () => {
+    if (pendingFavoriteRemovals.size === 0) {
+      return;
+    }
+    setFavoriteMons((current) => {
+      const next = new Set(current);
+      pendingFavoriteRemovals.forEach((href) => {
+        next.delete(href);
+      });
+      persistFavoriteMons(next);
+      return next;
+    });
+    setPendingFavoriteRemovals(new Set<string>());
+  };
+  const togglePendingFavoriteFromGallery = (favoriteHref: string) => {
+    if (folderGalleryMode !== 'favorites' || !favoriteMons.has(favoriteHref)) {
+      return;
+    }
+    setPendingFavoriteRemovals((current) => {
+      const next = new Set(current);
+      if (next.has(favoriteHref)) {
+        next.delete(favoriteHref);
+      } else {
+        next.add(favoriteHref);
+      }
+      return next;
+    });
+  };
+  const isAllFolderMode = folderGalleryMode === 'all';
+  const openAllFolderMode = () => {
+    if (isAllFolderMode) {
+      return;
+    }
+    commitPendingFavoriteRemovals();
+    setFolderGalleryMode('all');
+  };
+  const openFavoritesFolderMode = () => {
+    if (!isAllFolderMode) {
+      return;
+    }
+    setFolderGalleryMode('favorites');
+  };
+  const goToPreviousFolderPage = () => {
+    if (folderGalleryMode === 'all') {
+      setAllMonsGalleryPage((current) => Math.max(0, current - 1));
+      return;
+    }
+    setFavoritesGalleryPage((current) => Math.max(0, current - 1));
+  };
+  const goToNextFolderPage = () => {
+    if (folderGalleryMode === 'all') {
+      setAllMonsGalleryPage((current) => Math.min(activeFolderTotalPages - 1, current + 1));
+      return;
+    }
+    setFavoritesGalleryPage((current) => Math.min(activeFolderTotalPages - 1, current + 1));
+  };
   const collectionHref =
     selected.collection === 'Super Metal Mons!'
       ? 'https://opensea.io/collection/supermetalmons'
@@ -1229,15 +1630,24 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
   const selectedMonFavoriteKey = selected.href;
   const isSelectedMonFavorite = favoriteMons.has(selectedMonFavoriteKey);
   const isTypeLocked = lockedType === selected.type;
+  const disableTiltForThinView =
+    viewportWidth > 0 && viewportWidth <= NAV_BELOW_VIEWER_BREAKPOINT_PX;
   const tiltedImageFrameStyle: CSSProperties = {
     ...imageFrameStyle,
-    transform: `perspective(920px) rotateX(${tilt.rotateX}deg) rotateY(${tilt.rotateY}deg)`,
+    transform: disableTiltForThinView
+      ? 'none'
+      : `perspective(920px) rotateX(${tilt.rotateX}deg) rotateY(${tilt.rotateY}deg)`,
     transformOrigin: 'center center',
-    transition: tilt.active
-      ? 'transform 70ms linear, box-shadow 160ms ease'
-      : 'transform 260ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 260ms ease',
-    boxShadow: tilt.active ? '0 8px 20px rgba(0, 0, 0, 0.14)' : 'none',
-    willChange: 'transform',
+    transition: disableTiltForThinView
+      ? 'none'
+      : tilt.active
+        ? 'transform 70ms linear, box-shadow 160ms ease'
+        : 'transform 260ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 260ms ease',
+    boxShadow:
+      disableTiltForThinView || !tilt.active
+        ? 'none'
+        : '0 8px 20px rgba(0, 0, 0, 0.14)',
+    willChange: disableTiltForThinView ? 'auto' : 'transform',
   };
   const toggleGen = (key: GenKey) => {
     setEnabledGens((current) => {
@@ -1480,11 +1890,10 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
     };
   }, []);
 
-  const viewportFallbackWidth = Math.max(0, viewportWidth - VIEWER_WIDTH_FALLBACK_OFFSET_PX);
-  const effectiveViewerWidth = Math.max(viewerLayoutWidth, viewportFallbackWidth);
+  const effectiveViewerWidth = viewportWidth;
   const isThinLayoutActive = effectiveViewerWidth <= THIN_LAYOUT_BREAKPOINT_PX;
-  const isNavBelowModeForViewer =
-    viewportWidth > 0 && viewportWidth <= NAV_BELOW_VIEWER_BREAKPOINT_PX;
+  const hideOpenSeaLogo = effectiveViewerWidth <= NAV_BELOW_VIEWER_BREAKPOINT_PX;
+  const isNavBelowModeForViewer = disableTiltForThinView;
   const isSuperThinNavMode =
     viewportWidth > 0 && viewportWidth <= SUPER_THIN_NAV_BREAKPOINT_PX;
   const shouldUseInlineFolderForNarrowWidth =
@@ -1498,6 +1907,54 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
     (effectiveViewerWidth > 0 && effectiveViewerWidth <= 640);
   const showGenTogglesOnRow =
     isNavBelowModeForViewer || shouldForceGenToggleRowToAvoidFolderOverlap;
+
+  useEffect(() => {
+    if (!isNavBelowModeForViewer) {
+      return;
+    }
+    setTilt({rotateX: 0, rotateY: 0, active: false});
+  }, [isNavBelowModeForViewer]);
+
+  useEffect(() => {
+    const controlsNode = controlsRowRef.current;
+    const shuffleNode = shuffleButtonRef.current;
+    const openSeaNode = openSeaButtonRef.current;
+    if (controlsNode === null || shuffleNode === null || openSeaNode === null) {
+      setIsOpenSeaOnSeparateRow(false);
+      return;
+    }
+
+    const updateOpenSeaRowState = () => {
+      const openSeaPosition = window.getComputedStyle(openSeaNode).position;
+      const separateRow =
+        openSeaPosition === 'absolute'
+          ? false
+          : Math.abs(shuffleNode.offsetTop - openSeaNode.offsetTop) > 2;
+      setIsOpenSeaOnSeparateRow((current) =>
+        current === separateRow ? current : separateRow,
+      );
+    };
+
+    updateOpenSeaRowState();
+
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => {
+        updateOpenSeaRowState();
+      });
+      resizeObserver.observe(controlsNode);
+      resizeObserver.observe(shuffleNode);
+      resizeObserver.observe(openSeaNode);
+    }
+
+    window.addEventListener('resize', updateOpenSeaRowState);
+    return () => {
+      if (resizeObserver !== null) {
+        resizeObserver.disconnect();
+      }
+      window.removeEventListener('resize', updateOpenSeaRowState);
+    };
+  }, [viewportWidth, isFavoritesSidebarOpen, showGenTogglesOnRow]);
   useEffect(() => {
     if (isThinLayoutActive || isFavoritesSidebarOpen) {
       return;
@@ -1511,7 +1968,7 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
       return;
     }
     setWideClosedHeightPx((current) => (current === nextHeight ? current : nextHeight));
-  }, [isThinLayoutActive, isFavoritesSidebarOpen, viewerLayoutWidth]);
+  }, [isThinLayoutActive, isFavoritesSidebarOpen, viewportWidth]);
 
   const shouldLockWideOpenHeight =
     isFavoritesSidebarOpen &&
@@ -1547,7 +2004,15 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
             : folderToggleButtonStyle
       }
       onClick={() => {
-        setIsFavoritesSidebarOpen((current) => !current);
+        setIsFavoritesSidebarOpen((current) => {
+          if (current) {
+            commitPendingFavoriteRemovals();
+            setFolderGalleryMode('favorites');
+            setFavoritesGalleryPage(0);
+            setAllMonsSearchQuery('');
+          }
+          return !current;
+        });
       }}>
       <svg viewBox="0 0 24 24" aria-hidden="true" style={folderIconStyle}>
         <path
@@ -1626,20 +2091,22 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
       <div style={isThinLayoutActive ? viewerLayoutThinStyle : viewerLayoutStyle}>
         <div style={viewerMainStyle}>
           <div style={tiltRegionStyle}>
-            <div
-              style={tiltHitAreaStyle}
-              onMouseMove={(event) => {
-                const rect = event.currentTarget.getBoundingClientRect();
-                const x = (event.clientX - rect.left) / rect.width;
-                const y = (event.clientY - rect.top) / rect.height;
-                const rotateY = (x - 0.5) * 2 * TILT_MAX_DEG;
-                const rotateX = (0.5 - y) * 2 * TILT_MAX_DEG;
-                setTilt({rotateX, rotateY, active: true});
-              }}
-              onMouseLeave={() => {
-                setTilt({rotateX: 0, rotateY: 0, active: false});
-              }}
-            />
+            {!isNavBelowModeForViewer ? (
+              <div
+                style={tiltHitAreaStyle}
+                onMouseMove={(event) => {
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  const x = (event.clientX - rect.left) / rect.width;
+                  const y = (event.clientY - rect.top) / rect.height;
+                  const rotateY = (x - 0.5) * 2 * TILT_MAX_DEG;
+                  const rotateX = (0.5 - y) * 2 * TILT_MAX_DEG;
+                  setTilt({rotateX, rotateY, active: true});
+                }}
+                onMouseLeave={() => {
+                  setTilt({rotateX: 0, rotateY: 0, active: false});
+                }}
+              />
+            ) : null}
             <div style={tiltedImageFrameStyle}>
               <div style={imageStageStyle}>
                 {ghostImageSrc !== null ? (
@@ -1665,12 +2132,52 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
                 />
               </div>
             </div>
+            {isNavBelowModeForViewer ? (
+              <button
+                type="button"
+                aria-label={
+                  isSelectedMonFavorite ? 'Remove mon from favorites' : 'Save mon to favorites'
+                }
+                aria-pressed={isSelectedMonFavorite}
+                style={getFavoriteButtonOverlayStateStyle(
+                  isSelectedMonFavorite,
+                  isFavoriteHovered,
+                )}
+                onMouseEnter={() => {
+                  setIsFavoriteHovered(true);
+                }}
+                onMouseLeave={() => {
+                  setIsFavoriteHovered(false);
+                }}
+                onClick={toggleSelectedMonFavorite}>
+                <svg ref={favoriteIconRef} viewBox="0 0 24 24" aria-hidden="true" style={favoriteIconStyle}>
+                  <path
+                    d="M12 2.6L14.9 8.4L21.2 9.3L16.6 13.7L17.7 20L12 17L6.3 20L7.4 13.7L2.8 9.3L9.1 8.4L12 2.6Z"
+                    fill={isSelectedMonFavorite ? 'currentColor' : 'transparent'}
+                    stroke="currentColor"
+                    strokeWidth="1.9"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                <span style={favoritePulseWrapStyle} aria-hidden="true">
+                  <svg ref={favoritePulseRef} viewBox="0 0 24 24" style={favoritePulseIconStyle}>
+                    <path
+                      d="M12 2.6L14.9 8.4L21.2 9.3L16.6 13.7L17.7 20L12 17L6.3 20L7.4 13.7L2.8 9.3L9.1 8.4L12 2.6Z"
+                      fill="none"
+                      stroke="#ffe26a"
+                      strokeWidth="2.1"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </span>
+              </button>
+            ) : null}
           </div>
           <div style={detailsOffsetStyle}>
             <div style={nameRowStyle}>
               <div style={isSuperThinNavMode ? nameWrapSuperThinStyle : nameWrapStyle}>
                 <h3 style={nameStyle}>{displayedName}</h3>
-                {!isSuperThinNavMode ? (
+                {!isNavBelowModeForViewer ? (
                   <button
                     type="button"
                     aria-label={
@@ -1709,45 +2216,6 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
                 ) : null}
               </div>
             </div>
-            {isSuperThinNavMode ? (
-              <div style={favoriteRowSuperThinStyle}>
-                <button
-                  type="button"
-                  aria-label={
-                    isSelectedMonFavorite ? 'Remove mon from favorites' : 'Save mon to favorites'
-                  }
-                  aria-pressed={isSelectedMonFavorite}
-                  style={getFavoriteButtonStateStyle(isSelectedMonFavorite, isFavoriteHovered, true)}
-                  onMouseEnter={() => {
-                    setIsFavoriteHovered(true);
-                  }}
-                  onMouseLeave={() => {
-                    setIsFavoriteHovered(false);
-                  }}
-                  onClick={toggleSelectedMonFavorite}>
-                  <svg ref={favoriteIconRef} viewBox="0 0 24 24" aria-hidden="true" style={favoriteIconStyle}>
-                    <path
-                      d="M12 2.6L14.9 8.4L21.2 9.3L16.6 13.7L17.7 20L12 17L6.3 20L7.4 13.7L2.8 9.3L9.1 8.4L12 2.6Z"
-                      fill={isSelectedMonFavorite ? 'currentColor' : 'transparent'}
-                      stroke="currentColor"
-                      strokeWidth="1.9"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                  <span style={favoritePulseWrapStyle} aria-hidden="true">
-                    <svg ref={favoritePulseRef} viewBox="0 0 24 24" style={favoritePulseIconStyle}>
-                      <path
-                        d="M12 2.6L14.9 8.4L21.2 9.3L16.6 13.7L17.7 20L12 17L6.3 20L7.4 13.7L2.8 9.3L9.1 8.4L12 2.6Z"
-                        fill="none"
-                        stroke="#ffe26a"
-                        strokeWidth="2.1"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </span>
-                </button>
-              </div>
-            ) : null}
             <p style={typeStyle}>
               <span style={typeRowStyle}>
                 <span style={typeTildeStyle}>~</span>
@@ -1773,58 +2241,60 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
                 <span style={typeTildeStyle}>~</span>
               </span>
             </p>
-            <p style={collectionStyle}>
-              <span style={collectionLinkWrapStyle}>
-                <span
-                  aria-hidden="true"
-                  style={getCollectionArrowStateStyle(isCollectionLinkHovered, 'left')}>
-                  <svg viewBox="0 0 12 12" style={collectionArrowIconStyle}>
-                    <path
-                      d="M4 2.5L8 6L4 9.5"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
+            {!isNavBelowModeForViewer ? (
+              <p style={collectionStyle}>
+                <span style={collectionLinkWrapStyle}>
+                  <span
+                    aria-hidden="true"
+                    style={getCollectionArrowStateStyle(isCollectionLinkHovered, 'left')}>
+                    <svg viewBox="0 0 12 12" style={collectionArrowIconStyle}>
+                      <path
+                        d="M4 2.5L8 6L4 9.5"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </span>
+                  <a
+                    href={collectionHref}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={collectionLinkStyle}
+                    onMouseEnter={() => {
+                      setIsCollectionLinkHovered(true);
+                    }}
+                    onMouseLeave={() => {
+                      setIsCollectionLinkHovered(false);
+                    }}
+                    onFocus={() => {
+                      setIsCollectionLinkHovered(true);
+                    }}
+                    onBlur={() => {
+                      setIsCollectionLinkHovered(false);
+                    }}>
+                    {selected.collection}
+                  </a>
+                  <span
+                    aria-hidden="true"
+                    style={getCollectionArrowStateStyle(isCollectionLinkHovered, 'right')}>
+                    <svg viewBox="0 0 12 12" style={collectionArrowIconStyle}>
+                      <path
+                        d="M8 2.5L4 6L8 9.5"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </span>
                 </span>
-                <a
-                  href={collectionHref}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={collectionLinkStyle}
-                  onMouseEnter={() => {
-                    setIsCollectionLinkHovered(true);
-                  }}
-                  onMouseLeave={() => {
-                    setIsCollectionLinkHovered(false);
-                  }}
-                  onFocus={() => {
-                    setIsCollectionLinkHovered(true);
-                  }}
-                  onBlur={() => {
-                    setIsCollectionLinkHovered(false);
-                  }}>
-                  {selected.collection}
-                </a>
-                <span
-                  aria-hidden="true"
-                  style={getCollectionArrowStateStyle(isCollectionLinkHovered, 'right')}>
-                  <svg viewBox="0 0 12 12" style={collectionArrowIconStyle}>
-                    <path
-                      d="M8 2.5L4 6L8 9.5"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </span>
-              </span>
-            </p>
-            <div style={controlsStyle}>
+              </p>
+            ) : null}
+            <div ref={controlsRowRef} style={controlsStyle}>
               <div style={isSuperThinNavMode ? shuffleButtonWrapSuperThinStyle : shuffleButtonWrapStyle}>
                 <button
                   type="button"
@@ -1848,8 +2318,16 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
                   </svg>
                 </button>
                 <button
+                  ref={shuffleButtonRef}
                   type="button"
-                  style={shuffleButtonStyle}
+                  style={
+                    isOpenSeaOnSeparateRow
+                      ? {
+                          ...shuffleButtonStyle,
+                          ...shuffleButtonThinStyle,
+                        }
+                      : shuffleButtonStyle
+                  }
                   onMouseEnter={() => {
                     if (shuffleHoverHasPlayedRef.current) {
                       return;
@@ -1876,10 +2354,23 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
                     <span style={shuffleLabelOverlayStyle}>{shuffleButtonLabel}</span>
                   </span>
                 </button>
+                {!hideOpenSeaLogo ? (
+                  <a
+                    ref={openSeaButtonRef}
+                    href={selected.href}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label="OpenSea"
+                    style={isSuperThinNavMode ? openSeaButtonSuperThinStyle : openSeaButtonStyle}>
+                    <img
+                      src="/assets/icons/opensea-logo.svg"
+                      alt=""
+                      aria-hidden="true"
+                      style={openSeaLogoStyle}
+                    />
+                  </a>
+                ) : null}
               </div>
-              <a href={selected.href} target="_blank" rel="noreferrer" style={linkStyle}>
-                OpenSea
-              </a>
             </div>
           </div>
           {showGenTogglesOnRow ? (
@@ -1893,54 +2384,226 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
           <aside
             style={isThinLayoutActive ? favoritesSidebarThinStyle : favoritesSidebarStyle}
             aria-label="Favorited mons sidebar">
-            <h4 style={favoritesTitleStyle}>
-              <svg viewBox="0 0 24 24" aria-hidden="true" style={favoritesTitleStarStyle}>
-                <path
-                  d="M12 2.6L14.9 8.4L21.2 9.3L16.6 13.7L17.7 20L12 17L6.3 20L7.4 13.7L2.8 9.3L9.1 8.4L12 2.6Z"
-                  fill="currentColor"
-                  stroke="currentColor"
-                  strokeWidth="1.9"
-                  strokeLinejoin="round"
+            <div style={favoritesHeaderStyle}>
+              <h4 style={favoritesTitleStyle}>
+                <button
+                  type="button"
+                  aria-label={isAllFolderMode ? 'Show favorites gallery' : 'Favorites gallery selected'}
+                  disabled={!isAllFolderMode}
+                  style={
+                    isAllFolderMode
+                      ? favoritesTitleStarButtonStyle
+                      : favoritesTitleStarButtonDisabledStyle
+                  }
+                  onClick={openFavoritesFolderMode}>
+                  <svg
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    style={
+                      isAllFolderMode
+                        ? {
+                            ...favoritesTitleStarStyle,
+                            color: '#8f8f8f',
+                            filter: 'none',
+                          }
+                        : favoritesTitleStarStyle
+                    }>
+                    <path
+                      d="M12 2.6L14.9 8.4L21.2 9.3L16.6 13.7L17.7 20L12 17L6.3 20L7.4 13.7L2.8 9.3L9.1 8.4L12 2.6Z"
+                      fill={isAllFolderMode ? 'transparent' : 'currentColor'}
+                      stroke="currentColor"
+                      strokeWidth="1.9"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </button>
+                <span style={favoritesTitleTextStyle}>
+                  <span>{activeFolderCount}</span>
+                  <span>{activeFolderLabel}</span>
+                  {activeFolderGenQualifier !== null ? (
+                    <span style={favoritesTitleGenStyle}>{activeFolderGenQualifier}</span>
+                  ) : null}
+                </span>
+              </h4>
+              {isAllFolderMode ? (
+                <input
+                  type="search"
+                  aria-label="Search mons by name or type"
+                  placeholder="Search name/type"
+                  value={allMonsSearchQuery}
+                  onChange={(event) => {
+                    setAllMonsSearchQuery(event.currentTarget.value);
+                  }}
+                  style={favoritesSearchInputStyle}
                 />
-              </svg>
-              {favoritePreviewMons.length} Favorites:
-            </h4>
-            {favoritePreviewMons.length === 0 ? (
-              <p style={favoritesEmptyStyle}>No favorited mons yet.</p>
+              ) : (
+                <button
+                  type="button"
+                  aria-pressed={false}
+                  aria-label="Show all mons"
+                  style={favoritesModeToggleStyle}
+                  onClick={openAllFolderMode}>
+                  All
+                </button>
+              )}
+            </div>
+            {activeFolderMons.length === 0 ? (
+              <p
+                style={
+                  folderGalleryMode === 'favorites'
+                    ? favoritesEmptyWithBottomSpacingStyle
+                    : favoritesEmptyStyle
+                }>
+                {activeFolderEmptyLabel}
+              </p>
             ) : (
-              <div style={isThinLayoutActive ? favoritesGridThinStyle : favoritesGridStyle}>
-                {favoritePreviewMons.map((favoriteNft) => {
-                  const favoriteTypeIconHref = getTypeSpriteHref(favoriteNft.type);
-                  return (
-                    <button
-                      key={favoriteNft.href}
-                      type="button"
-                      aria-label={`Load ${favoriteNft.name}`}
-                      style={favoriteNft.href === selected.href ? favoritesTileActiveStyle : favoritesTileStyle}
-                      onClick={() => {
-                        handleFavoritePreviewSelect(favoriteNft.href);
-                      }}>
-                      <img
-                        src={favoriteNft.image}
-                        alt={favoriteNft.name}
-                        loading="lazy"
-                        style={favoritesImageStyle}
-                      />
-                      <p style={favoritesLabelStyle}>
-                        {favoriteTypeIconHref !== null ? (
+              <>
+                <div style={isThinLayoutActive ? favoritesGridThinStyle : favoritesGridStyle}>
+                  {activeFolderPageMons.map((favoriteNft) => {
+                    const favoriteTypeIconHref = getTypeSpriteHref(favoriteNft.type);
+                    const isSelectedPreviewMon = favoriteNft.href === selected.href;
+                    const isPreviewFavorited = favoriteMons.has(favoriteNft.href);
+                    const isPendingRemoval = pendingFavoriteRemovals.has(favoriteNft.href);
+                    const showPreviewStar =
+                      folderGalleryMode === 'favorites' ? true : isPreviewFavorited;
+                    const isPreviewStarClickable = folderGalleryMode === 'favorites';
+                    return (
+                      <button
+                        key={favoriteNft.href}
+                        type="button"
+                        aria-label={`Load ${favoriteNft.name}`}
+                        style={isSelectedPreviewMon ? favoritesTileActiveStyle : favoritesTileStyle}
+                        onClick={() => {
+                          handleFavoritePreviewSelect(favoriteNft.href);
+                        }}>
+                        <span
+                          style={
+                            isSelectedPreviewMon
+                              ? favoritesImageWrapActiveStyle
+                              : favoritesImageWrapStyle
+                          }>
                           <img
-                            src={favoriteTypeIconHref}
-                            alt=""
-                            aria-hidden="true"
-                            style={favoritesTypeIconStyle}
+                            src={favoriteNft.image}
+                            alt={favoriteNft.name}
+                            loading="lazy"
+                            style={favoritesImageStyle}
                           />
-                        ) : null}
-                        <span style={favoritesLabelTextStyle}>{favoriteNft.name}</span>
-                      </p>
+                          {showPreviewStar ? (
+                            <span
+                              role={isPreviewStarClickable ? 'button' : undefined}
+                              aria-label={
+                                isPreviewStarClickable
+                                  ? isPendingRemoval
+                                    ? `Keep ${favoriteNft.name} in favorites`
+                                    : `Remove ${favoriteNft.name} from favorites`
+                                  : undefined
+                              }
+                              aria-hidden={!isPreviewStarClickable}
+                              tabIndex={isPreviewStarClickable ? 0 : undefined}
+                              style={{
+                                ...(isPendingRemoval
+                                  ? favoritesPreviewStarPendingStyle
+                                  : favoritesPreviewStarGoldStyle),
+                                ...(isPreviewStarClickable
+                                  ? favoritesPreviewStarClickableStyle
+                                  : favoritesPreviewStarStaticStyle),
+                              }}
+                              onMouseDown={
+                                isPreviewStarClickable
+                                  ? (event) => {
+                                      event.preventDefault();
+                                    }
+                                  : undefined
+                              }
+                              onClick={
+                                isPreviewStarClickable
+                                  ? (event) => {
+                                      event.preventDefault();
+                                      event.stopPropagation();
+                                      togglePendingFavoriteFromGallery(favoriteNft.href);
+                                    }
+                                  : undefined
+                              }
+                              onKeyDown={
+                                isPreviewStarClickable
+                                  ? (event) => {
+                                      if (event.key === 'Enter' || event.key === ' ') {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        togglePendingFavoriteFromGallery(favoriteNft.href);
+                                      }
+                                    }
+                                  : undefined
+                              }>
+                              <svg
+                                viewBox="0 0 24 24"
+                                aria-hidden="true"
+                                style={favoritesPreviewStarIconStyle}>
+                                <path
+                                  d="M12 2.6L14.9 8.4L21.2 9.3L16.6 13.7L17.7 20L12 17L6.3 20L7.4 13.7L2.8 9.3L9.1 8.4L12 2.6Z"
+                                  fill={isPendingRemoval ? 'transparent' : 'currentColor'}
+                                  stroke="currentColor"
+                                  strokeWidth="1.9"
+                                  strokeLinejoin="round"
+                                />
+                              </svg>
+                            </span>
+                          ) : null}
+                        </span>
+                        <p style={favoritesLabelStyle}>
+                          {favoriteTypeIconHref !== null ? (
+                            <img
+                              src={favoriteTypeIconHref}
+                              alt=""
+                              aria-hidden="true"
+                              style={favoritesTypeIconStyle}
+                            />
+                          ) : null}
+                          <span
+                            style={
+                              isSelectedPreviewMon
+                                ? favoritesLabelTextActiveStyle
+                                : favoritesLabelTextStyle
+                            }>
+                            {favoriteNft.name}
+                          </span>
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+                {activeFolderTotalPages > 1 ? (
+                  <div style={favoritesPaginationStyle}>
+                    <button
+                      type="button"
+                      aria-label="Previous favorites page"
+                      style={
+                        activeFolderPage > 0
+                          ? favoritesPageButtonStyle
+                          : favoritesPageButtonDisabledStyle
+                      }
+                      disabled={activeFolderPage <= 0}
+                      onClick={goToPreviousFolderPage}>
+                      ←
                     </button>
-                  );
-                })}
-              </div>
+                    <p style={favoritesPageLabelStyle}>
+                      {activeFolderPage + 1}/{activeFolderTotalPages}
+                    </p>
+                    <button
+                      type="button"
+                      aria-label="Next favorites page"
+                      style={
+                        activeFolderPage < activeFolderTotalPages - 1
+                          ? favoritesPageButtonStyle
+                          : favoritesPageButtonDisabledStyle
+                      }
+                      disabled={activeFolderPage >= activeFolderTotalPages - 1}
+                      onClick={goToNextFolderPage}>
+                      →
+                    </button>
+                  </div>
+                ) : null}
+              </>
             )}
           </aside>
         ) : null}

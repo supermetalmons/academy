@@ -272,7 +272,7 @@ const mobileSidebarPanelBaseStyle: CSSProperties = {
   padding: '1rem 0.9rem',
   display: 'flex',
   flexDirection: 'column',
-  gap: '0.8rem',
+  gap: '0.46rem',
   transition: 'transform 220ms ease',
 };
 
@@ -283,12 +283,26 @@ const mobileSidebarHeaderStyle: CSSProperties = {
   gap: '0.5rem',
 };
 
+const mobileSidebarTitleLinkStyle: CSSProperties = {
+  textDecoration: 'none',
+  color: 'inherit',
+  minWidth: 0,
+};
+
 const mobileSidebarTitleStyle: CSSProperties = {
   margin: 0,
   fontSize: '1.35rem',
   lineHeight: 1.1,
   color: '#000',
-  fontWeight: 700,
+  fontWeight: 900,
+};
+
+const mobileSidebarHeaderDividerStyle: CSSProperties = {
+  width: 'calc(100% + 1.8rem)',
+  marginLeft: '-0.9rem',
+  marginTop: '10px',
+  marginBottom: '10px',
+  borderTop: '1px solid #000',
 };
 
 const mobileSidebarCloseStyle: CSSProperties = {
@@ -309,19 +323,21 @@ const mobileSidebarCloseStyle: CSSProperties = {
 const mobileSidebarNavStyle: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
-  gap: '0.55rem',
+  gap: '0.38rem',
 };
 
 const mobileSidebarSocialRowStyle: CSSProperties = {
   ...titleIconRowStyle,
-  marginTop: '0.1rem',
+  marginTop: '0.04rem',
   gap: '0.55rem',
 };
 
 const mobileSidebarTickerViewportStyle: CSSProperties = {
   ...titleTickerViewportStyle,
+  flex: '0 0 auto',
   width: '100%',
-  marginTop: '0.12rem',
+  marginTop: '0',
+  marginBottom: '0.04rem',
 };
 
 const mobileSidebarIconLinkStyle: CSSProperties = {
@@ -367,6 +383,26 @@ const mobileSidebarButtonStyle: CSSProperties = {
   justifyContent: 'flex-start',
   width: '100%',
   fontSize: '1rem',
+  minHeight: '2.2rem',
+  paddingTop: '0.34rem',
+  paddingBottom: '0.34rem',
+};
+
+const mobileSidebarSettingsWrapStyle: CSSProperties = {
+  marginTop: 'auto',
+  paddingTop: '0.2rem',
+  display: 'flex',
+  justifyContent: 'flex-start',
+};
+
+const mobileSidebarSettingsShortcutStyle: CSSProperties = {
+  color: '#000',
+  fontSize: '1.1rem',
+  lineHeight: 1,
+  textDecoration: 'none',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
 };
 
 const activeButtonStyle: CSSProperties = {
@@ -586,7 +622,8 @@ function isMenuItemActive(pathname: string, to: string): boolean {
     return (
       pathname === '/instruction' ||
       pathname.startsWith('/instruction/') ||
-      pathname === '/piece-details'
+      pathname === '/piece-details' ||
+      pathname.startsWith('/piece-details/')
     );
   }
   return pathname === to || pathname.startsWith(`${to}/`);
@@ -606,7 +643,10 @@ function isPuzzlesRoute(pathname: string): boolean {
 
 function isInstructionContext(pathname: string): boolean {
   return (
-    pathname === '/instruction' || pathname.startsWith('/instruction/') || pathname === '/piece-details'
+    pathname === '/instruction' ||
+    pathname.startsWith('/instruction/') ||
+    pathname === '/piece-details' ||
+    pathname.startsWith('/piece-details/')
   );
 }
 
@@ -1557,6 +1597,10 @@ export default function NewTopLayout({
                         <span>Swag is Eternal</span>
                         <span>~</span>
                       </span>
+                      <span style={titleTickerChunkStyle}>
+                        <span>Swag is Eternal</span>
+                        <span>~</span>
+                      </span>
                     </span>
                   </div>
                 </div>
@@ -1585,7 +1629,12 @@ export default function NewTopLayout({
             ) : null}
             <aside aria-label="Site menu" style={mobileSidebarPanelStyle}>
               <div style={mobileSidebarHeaderStyle}>
-                <h2 style={mobileSidebarTitleStyle}>❀ Mons Academy ⋆⋆⋆</h2>
+                <Link
+                  to="/"
+                  style={mobileSidebarTitleLinkStyle}
+                  onClick={() => setIsMobileSidebarOpen(false)}>
+                  <h2 style={mobileSidebarTitleStyle}>❀ Mons Academy ⋆⋆⋆</h2>
+                </Link>
                 <button
                   type="button"
                   aria-label="Close site menu"
@@ -1594,6 +1643,7 @@ export default function NewTopLayout({
                   ×
                 </button>
               </div>
+              <div aria-hidden="true" style={mobileSidebarHeaderDividerStyle} />
               <nav style={mobileSidebarNavStyle} aria-label="Mobile primary navigation">
                 {menuItems.map((item) => {
                   const isActive = isMenuItemActive(pathname, item.to);
@@ -1690,15 +1740,30 @@ export default function NewTopLayout({
                     <span>Swag is Eternal</span>
                     <span>~</span>
                   </span>
+                  <span style={titleTickerChunkStyle}>
+                    <span>Swag is Eternal</span>
+                    <span>~</span>
+                  </span>
                 </span>
+              </div>
+              <div style={mobileSidebarSettingsWrapStyle}>
+                <Link
+                  to="/settings"
+                  aria-label="Go to settings"
+                  style={mobileSidebarSettingsShortcutStyle}
+                  onClick={() => setIsMobileSidebarOpen(false)}>
+                  ⚙️
+                </Link>
               </div>
             </aside>
           </>
         ) : null}
         {children}
-        <Link to="/settings" aria-label="Go to settings" style={settingsShortcutStyle}>
-          ⚙️
-        </Link>
+        {!isMobileSidebarMode ? (
+          <Link to="/settings" aria-label="Go to settings" style={settingsShortcutStyle}>
+            ⚙️
+          </Link>
+        ) : null}
       </div>
     </main>
   );

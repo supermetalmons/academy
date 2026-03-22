@@ -6,6 +6,13 @@ type Point = {
   y: number;
 };
 
+type HomeSpriteKey = 'bosch' | 'omom';
+
+const BOSCH_SPRITE_SRC = '/assets/bosch-pixel.png';
+const OMOM_SPRITE_SRC = '/assets/omom-pixel.png';
+const HOME_SPRITE_RETRY_COUNT = 1;
+const loadedHomeSpriteSrcSet = new Set<string>();
+
 const homeWelcomeLayerStyle = {
   position: 'fixed' as const,
   left: '50%',
@@ -103,6 +110,8 @@ const SPRITE_TARGET_PADDING_Y = 90;
 const MAX_TRAIL_DISTANCE_PX = 2200;
 const TARGET_DOT_FADE_DISTANCE_PX = 220;
 const MOBILE_WELCOME_GUARD_BREAKPOINT_PX = 780;
+const HOME_WELCOME_TOP_CLEARANCE_PX = 18;
+const DEFAULT_WELCOME_BOX_HEIGHT_PX = 92;
 
 const targetDotStyle: CSSProperties = {
   position: 'absolute',
@@ -144,12 +153,16 @@ function getWelcomeTopPx(
   viewportWidth: number,
   viewportHeight: number,
   headerHeight: number,
+  welcomeBoxHeight: number,
 ): number {
   const baseTop = viewportHeight * 0.4 - 110;
+  const resolvedWelcomeBoxHeight =
+    welcomeBoxHeight > 0 ? welcomeBoxHeight : DEFAULT_WELCOME_BOX_HEIGHT_PX;
+  const minTop = headerHeight + HOME_WELCOME_TOP_CLEARANCE_PX + resolvedWelcomeBoxHeight / 2;
   if (viewportWidth > MOBILE_WELCOME_GUARD_BREAKPOINT_PX) {
-    return baseTop;
+    return Math.max(baseTop, minTop);
   }
-  return Math.max(headerHeight + 28, baseTop);
+  return Math.max(baseTop, minTop);
 }
 
 function getCurrentHeaderHeight(): number {
@@ -365,16 +378,31 @@ export default function Home(): ReactNode {
   const [omomScale, setOmomScale] = useState(1);
   const [targetDotPosition, setTargetDotPosition] = useState<Point | null>(null);
   const [targetDotOpacity, setTargetDotOpacity] = useState(0);
+  const [homeWelcomeBoxHeight, setHomeWelcomeBoxHeight] = useState<number>(
+    DEFAULT_WELCOME_BOX_HEIGHT_PX,
+  );
+  const [homeSpriteLoadedByKey, setHomeSpriteLoadedByKey] = useState<
+    Record<HomeSpriteKey, boolean>
+  >(() => ({
+    bosch: loadedHomeSpriteSrcSet.has(BOSCH_SPRITE_SRC),
+    omom: loadedHomeSpriteSrcSet.has(OMOM_SPRITE_SRC),
+  }));
   const [homeWelcomeTopPx, setHomeWelcomeTopPx] = useState<number>(() =>
     getWelcomeTopPx(
       typeof window === 'undefined' ? DEFAULT_VIEWPORT_WIDTH : window.innerWidth,
       typeof window === 'undefined' ? DEFAULT_VIEWPORT_HEIGHT : window.innerHeight,
       typeof window === 'undefined' ? 56 : getCurrentHeaderHeight(),
+      DEFAULT_WELCOME_BOX_HEIGHT_PX,
     ),
   );
+  const areHomeSpritesReady =
+    homeSpriteLoadedByKey.bosch && homeSpriteLoadedByKey.omom;
 
   const boschPositionRef = useRef<Point>(initialPositions.bosch);
   const omomPositionRef = useRef<Point>(initialPositions.omom);
+  const homeWelcomeBoxRef = useRef<HTMLDivElement | null>(null);
+  const boschImageRef = useRef<HTMLImageElement | null>(null);
+  const omomImageRef = useRef<HTMLImageElement | null>(null);
   const boschScaleRef = useRef(1);
   const omomScaleRef = useRef(1);
   const followDistanceRef = useRef<number>(
@@ -396,6 +424,104 @@ export default function Home(): ReactNode {
   const bounceStartedAtRef = useRef<number | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const lastFrameTimestampRef = useRef<number | null>(null);
+
+  const markHomeSpriteLoaded = (key: HomeSpriteKey, src: string): void => {
+    loadedHomeSpriteSrcSet.add(src);
+    setHomeSpriteLoadedByKey((current) =>
+      current[key] ? current : {...current, [key]: true},
+    );
+  };
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const maybeMarkFromElement = (
+      key: HomeSpriteKey,
+      src: string,
+      element: HTMLImageElement | null,
+    ): void => {
+      if (element !== null && element.complete && element.naturalWidth > 0) {
+        markHomeSpriteLoaded(key, src);
+      }
+    };
+
+    maybeMarkFromElement('bosch', BOSCH_SPRITE_SRC, boschImageRef.current);
+    maybeMarkFromElement('omom', OMOM_SPRITE_SRC, omomImageRef.current);
+
+    let disposed = false;
+    const cleanups: Array<() => void> = [];
+    const preloadSprite = (
+      key: HomeSpriteKey,
+      src: string,
+      alreadyLoaded: boolean,
+    ) => {
+      if (alreadyLoaded) {
+        return;
+      }
+      let image: HTMLImageElement | null = null;
+      let attempt = 0;
+
+      const clearImageListeners = () => {
+        if (image === null) {
+          return;
+        }
+        image.onload = null;
+        image.onerror = null;
+      };
+
+      const handleLoaded = () => {
+        if (disposed) {
+          return;
+        }
+        markHomeSpriteLoaded(key, src);
+      };
+
+      const loadAttempt = () => {
+        if (disposed) {
+          return;
+        }
+        clearImageListeners();
+        const requestedSrc =
+          attempt === 0
+            ? src
+            : `${src}?homeSpriteRetry=${Date.now()}-${attempt}`;
+        image = new window.Image();
+        image.decoding = 'async';
+        image.loading = 'eager';
+        image.onload = () => {
+          handleLoaded();
+        };
+        image.onerror = () => {
+          if (disposed) {
+            return;
+          }
+          if (attempt < HOME_SPRITE_RETRY_COUNT) {
+            attempt += 1;
+            loadAttempt();
+          }
+        };
+        image.src = requestedSrc;
+        if (image.complete && image.naturalWidth > 0) {
+          handleLoaded();
+        }
+      };
+
+      loadAttempt();
+      cleanups.push(() => {
+        clearImageListeners();
+      });
+    };
+
+    preloadSprite('bosch', BOSCH_SPRITE_SRC, homeSpriteLoadedByKey.bosch);
+    preloadSprite('omom', OMOM_SPRITE_SRC, homeSpriteLoadedByKey.omom);
+
+    return () => {
+      disposed = true;
+      cleanups.forEach((cleanup) => cleanup());
+    };
+  }, [homeSpriteLoadedByKey.bosch, homeSpriteLoadedByKey.omom]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -425,6 +551,7 @@ export default function Home(): ReactNode {
           window.innerWidth,
           window.innerHeight,
           getCurrentHeaderHeight(),
+          homeWelcomeBoxHeight,
         ),
       );
     };
@@ -439,6 +566,20 @@ export default function Home(): ReactNode {
       });
       observer.observe(headerNode);
     }
+    let welcomeObserver: ResizeObserver | null = null;
+    const welcomeNode = homeWelcomeBoxRef.current;
+    if (typeof ResizeObserver !== 'undefined' && welcomeNode instanceof HTMLElement) {
+      welcomeObserver = new ResizeObserver((entries) => {
+        const nextHeight = Math.round(entries[0]?.contentRect.height ?? 0);
+        if (nextHeight > 0) {
+          setHomeWelcomeBoxHeight((current) =>
+            current === nextHeight ? current : nextHeight,
+          );
+        }
+        updateWelcomeTop();
+      });
+      welcomeObserver.observe(welcomeNode);
+    }
 
     window.addEventListener('resize', updateWelcomeTop);
     window.addEventListener('orientationchange', updateWelcomeTop);
@@ -449,6 +590,38 @@ export default function Home(): ReactNode {
       if (observer) {
         observer.disconnect();
       }
+      if (welcomeObserver) {
+        welcomeObserver.disconnect();
+      }
+    };
+  }, [homeWelcomeBoxHeight]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') {
+      return;
+    }
+    const htmlStyle = document.documentElement.style;
+    const bodyStyle = document.body.style;
+    const previous = {
+      htmlOverflow: htmlStyle.overflow,
+      htmlOverscrollBehavior: htmlStyle.overscrollBehavior,
+      bodyOverflow: bodyStyle.overflow,
+      bodyOverscrollBehavior: bodyStyle.overscrollBehavior,
+      bodyHeight: bodyStyle.height,
+    };
+
+    htmlStyle.overflow = 'hidden';
+    htmlStyle.overscrollBehavior = 'none';
+    bodyStyle.overflow = 'hidden';
+    bodyStyle.overscrollBehavior = 'none';
+    bodyStyle.height = '100vh';
+
+    return () => {
+      htmlStyle.overflow = previous.htmlOverflow;
+      htmlStyle.overscrollBehavior = previous.htmlOverscrollBehavior;
+      bodyStyle.overflow = previous.bodyOverflow;
+      bodyStyle.overscrollBehavior = previous.bodyOverscrollBehavior;
+      bodyStyle.height = previous.bodyHeight;
     };
   }, []);
 
@@ -665,31 +838,61 @@ export default function Home(): ReactNode {
           ) : null}
           <div
             style={{
-              ...boschStackStyle,
-              left: `${boschPosition.x}px`,
-              top: `${boschPosition.y}px`,
-              transform: `translate(-50%, -50%) scale(${boschScale})`,
-              zIndex: Math.round(boschPosition.y),
+              opacity: areHomeSpritesReady ? 1 : 0,
+              transition: 'opacity 140ms ease-out',
             }}>
-            <img src="/assets/bosch-pixel.png" alt="Bosch pixel art" style={homePixelImageStyle} />
-            <span aria-hidden="true" style={boschShadowStyle} />
-          </div>
-          <div
-            style={{
-              ...omomStackStyle,
-              left: `${omomPosition.x}px`,
-              top: `${omomPosition.y}px`,
-              transform: `translate(-50%, -50%) scale(${omomScale})`,
-              zIndex: Math.round(omomPosition.y),
-            }}>
-            <img src="/assets/omom-pixel.png" alt="Omom pixel art" style={homePixelImageStyle} />
-            <span aria-hidden="true" style={omomShadowStyle} />
+            <div
+              style={{
+                ...boschStackStyle,
+                left: `${boschPosition.x}px`,
+                top: `${boschPosition.y}px`,
+                transform: `translate(-50%, -50%) scale(${boschScale})`,
+                zIndex: Math.round(boschPosition.y),
+              }}>
+              <img
+                ref={boschImageRef}
+                src={BOSCH_SPRITE_SRC}
+                alt="Bosch pixel art"
+                style={homePixelImageStyle}
+                loading="eager"
+                decoding="async"
+                fetchPriority="high"
+                draggable={false}
+                onLoad={() => {
+                  markHomeSpriteLoaded('bosch', BOSCH_SPRITE_SRC);
+                }}
+              />
+              <span aria-hidden="true" style={boschShadowStyle} />
+            </div>
+            <div
+              style={{
+                ...omomStackStyle,
+                left: `${omomPosition.x}px`,
+                top: `${omomPosition.y}px`,
+                transform: `translate(-50%, -50%) scale(${omomScale})`,
+                zIndex: Math.round(omomPosition.y),
+              }}>
+              <img
+                ref={omomImageRef}
+                src={OMOM_SPRITE_SRC}
+                alt="Omom pixel art"
+                style={homePixelImageStyle}
+                loading="eager"
+                decoding="async"
+                fetchPriority="high"
+                draggable={false}
+                onLoad={() => {
+                  markHomeSpriteLoaded('omom', OMOM_SPRITE_SRC);
+                }}
+              />
+              <span aria-hidden="true" style={omomShadowStyle} />
+            </div>
           </div>
         </div>
       }>
       <div style={{...homeWelcomeLayerStyle, top: `${homeWelcomeTopPx}px`}}>
-        <div style={homeWelcomeBoxStyle}>
-          Welcome to Mons Academy, this world's #1 learning hub for all things Super Metal Mons!
+        <div ref={homeWelcomeBoxRef} style={homeWelcomeBoxStyle}>
+          Welcome to <strong>Mons Academy</strong>, this world's #1 learning hub for all things <strong>Super Metal Mons</strong>!
         </div>
       </div>
     </NewTopLayout>

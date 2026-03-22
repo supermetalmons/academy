@@ -95,7 +95,7 @@ export default function InstructionLessonOnePage(): ReactNode {
   return (
     <BlankSectionPage title="Instruction">
       <InstructionSubnav active="lessons" />
-      <section style={contentWrapStyle}>
+      <section className="instruction-lesson-detail-content" style={contentWrapStyle}>
         <div style={lessonTitleRowStyle}>
           <h2 style={lessonTitleStyle}>~ 3 White Openings to Get Started ~</h2>
           <span style={lessonTitleStarOffsetWrapStyle}>

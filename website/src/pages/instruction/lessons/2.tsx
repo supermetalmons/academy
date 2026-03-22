@@ -121,7 +121,7 @@ export default function InstructionLessonTwoPage(): ReactNode {
   return (
     <BlankSectionPage title="Instruction">
       <InstructionSubnav active="lessons" />
-      <section style={contentWrapStyle}>
+      <section className="instruction-lesson-detail-content" style={contentWrapStyle}>
         <div style={lessonTitleRowStyle}>
           <h2 style={lessonTitleStyle}>~ 3 Strong Techniques to Look Out For ~</h2>
           <span style={lessonTitleStarOffsetWrapStyle}>

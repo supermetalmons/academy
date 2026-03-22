@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import Link from '@docusaurus/Link';
+import {getPieceDetailPathByTitle} from '@site/src/data/pieceDetails';
 
 const BOARD_SIZE = 11;
 const files = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K'];
@@ -69,7 +70,16 @@ const FULLSCREEN_HUD_VERTICAL_OFFSET_PX = 10;
 const FULLSCREEN_THIN_HUD_MAX_WIDTH_PX = 860;
 const FULLSCREEN_THIN_TOP_HUD_EXTRA_OFFSET_PX = -20;
 const FULLSCREEN_THIN_BOTTOM_HUD_EXTRA_OFFSET_PX = 15;
+const FULLSCREEN_THIN_OVERSCAN_PX = 40;
 const FULLSCREEN_BUTTON_HITBOX_EXTRA_PX = 10;
+const THIN_HUD_SIDE_SAFE_INSET_PX = 18;
+const THIN_HUD_FULLSCREEN_SIDE_EXTRA_INSET_PX = 12;
+const THIN_HUD_ACTION_BUTTON_SCALE = 1.32;
+const THIN_HUD_ACTION_BUTTON_MIN_PX = 10;
+const THIN_HUD_ACTION_RIGHT_INSET_PX = 14;
+const THIN_HUD_ACTION_HITBOX_EXTRA_PX = 10;
+const THIN_HUD_ACTION_RIGHT_INSET_MIN_PX = 4;
+const HUD_FULLSCREEN_BUTTON_GAP_TO_RESET_PX = 10;
 
 const colors = {
   darkSquare: '#BEBEBE',
@@ -510,6 +520,7 @@ type PreviewContent = {
   title: string;
   text: string;
   href?: string;
+  detailPath?: string;
 };
 
 type BoardEntityKind = 'mon' | 'whiteMana' | 'blackMana' | 'superMana' | 'item';
@@ -1852,11 +1863,24 @@ export default function SuperMetalMonsBoard({
         setFullscreenScale(1);
         return;
       }
-      const maxWidth = Math.max(1, window.innerWidth - 32);
-      const maxHeight = Math.max(1, window.innerHeight - 32);
+      const horizontalInsetPx = isFullscreenThinHudMode ? 0 : 32;
+      const verticalInsetPx = isFullscreenThinHudMode ? 0 : 32;
+      const thinOverscanPx = isFullscreenThinHudMode ? FULLSCREEN_THIN_OVERSCAN_PX : 0;
+      const maxWidth = Math.max(1, window.innerWidth - horizontalInsetPx + thinOverscanPx);
+      const maxHeight = Math.max(1, window.innerHeight - verticalInsetPx + thinOverscanPx);
+      const widthReference = isFullscreenThinHudMode
+        ? Math.max(1, renderWidth)
+        : naturalWidth;
+      const fullscreenScaleMargin = isFullscreenThinHudMode
+        ? 1
+        : FULLSCREEN_SCALE_MARGIN;
+      const rawScale = Math.min(
+        maxWidth / widthReference,
+        maxHeight / naturalHeight,
+      );
       const nextScale =
-        Math.min(1, maxWidth / naturalWidth, maxHeight / naturalHeight) *
-        FULLSCREEN_SCALE_MARGIN;
+        (isFullscreenThinHudMode ? rawScale : Math.min(1, rawScale)) *
+        fullscreenScaleMargin;
       setFullscreenScale((current) =>
         Math.abs(current - nextScale) < 0.001 ? current : nextScale,
       );
@@ -1880,7 +1904,7 @@ export default function SuperMetalMonsBoard({
     return () => {
       window.removeEventListener('resize', updateFullscreenScale);
     };
-  }, [fullscreenScale, isBoardFullscreen, renderWidth]);
+  }, [fullscreenScale, isBoardFullscreen, isFullscreenThinHudMode, renderWidth]);
 
   useLayoutEffect(() => {
     const node = wrapRef.current;
@@ -2065,7 +2089,7 @@ export default function SuperMetalMonsBoard({
           zIndex: 12050,
           backgroundColor: '#fff',
           boxSizing: 'border-box',
-          padding: '16px',
+          padding: isFullscreenThinHudMode ? '0px' : '16px',
           alignItems: 'center',
           overflow: 'hidden',
         }
@@ -2385,6 +2409,8 @@ export default function SuperMetalMonsBoard({
     () => createCornerWaveLines(waveSeedNonce + 424242),
     [waveSeedNonce],
   );
+  const getPreviewDetailPath = (title: string): string | undefined =>
+    getPieceDetailPathByTitle(title) ?? undefined;
 
   activeMonPositions.black.forEach((mon) => {
     pieceByTile[`${mon.row}-${mon.col}`] = {
@@ -2392,6 +2418,7 @@ export default function SuperMetalMonsBoard({
       href: mon.href,
       title: explanationText[mon.type].title,
       text: explanationText[mon.type].text,
+      detailPath: getPreviewDetailPath(explanationText[mon.type].title),
     };
   });
   activeMonPositions.white.forEach((mon) => {
@@ -2400,6 +2427,7 @@ export default function SuperMetalMonsBoard({
       href: mon.href,
       title: explanationText[mon.type].title,
       text: explanationText[mon.type].text,
+      detailPath: getPreviewDetailPath(explanationText[mon.type].title),
     };
   });
   activeBlackManaPositions.forEach(([col, row]) => {
@@ -2408,6 +2436,7 @@ export default function SuperMetalMonsBoard({
       href: boardAssets.manaB,
       title: explanationText.blackMana.title,
       text: explanationText.blackMana.text,
+      detailPath: getPreviewDetailPath(explanationText.blackMana.title),
     };
   });
   activeWhiteManaPositions.forEach(([col, row]) => {
@@ -2416,6 +2445,7 @@ export default function SuperMetalMonsBoard({
       href: boardAssets.mana,
       title: explanationText.whiteMana.title,
       text: explanationText.whiteMana.text,
+      detailPath: getPreviewDetailPath(explanationText.whiteMana.title),
     };
   });
   activePickupItems.forEach((item) => {
@@ -2424,6 +2454,7 @@ export default function SuperMetalMonsBoard({
       href: item.href,
       title: explanationText.item.title,
       text: explanationText.item.text,
+      detailPath: getPreviewDetailPath(explanationText.item.title),
     };
   });
   activeSuperManaPositions.forEach(([col, row]) => {
@@ -2432,6 +2463,7 @@ export default function SuperMetalMonsBoard({
       href: boardAssets.supermana,
       title: explanationText.supermana.title,
       text: explanationText.supermana.text,
+      detailPath: getPreviewDetailPath(explanationText.supermana.title),
     };
   });
   cornerManaPoolPositions.forEach(([col, row]) => {
@@ -2443,6 +2475,7 @@ export default function SuperMetalMonsBoard({
       kind: 'manaPool',
       title: 'Mana Pool',
       text: 'Bring mana here to score points. 5 wins the game!',
+      detailPath: getPreviewDetailPath('Mana Pool'),
     };
   });
   moveResourceItems.forEach((resource) => {
@@ -2452,6 +2485,7 @@ export default function SuperMetalMonsBoard({
       href: moveResourceAssets[resource.kind],
       title: info.title,
       text: info.text,
+      detailPath: getPreviewDetailPath(info.title),
     };
   });
 
@@ -3656,9 +3690,57 @@ export default function SuperMetalMonsBoard({
   const puzzleHudOffsetScale = enableFreeTileMove
     ? Math.max(0, Math.min(1, (puzzleHudOverlapScale - 0.35) / 0.65))
     : 1;
+  const isNarrowHudMode = enableFreeTileMove && isFullscreenThinHudMode;
+  const hudActionButtonSizePx = Math.max(
+    hudStatusIconSize,
+    isNarrowHudMode ? THIN_HUD_ACTION_BUTTON_MIN_PX : 0,
+    Math.round(
+      hudStatusIconSize * (isNarrowHudMode ? THIN_HUD_ACTION_BUTTON_SCALE : 1),
+    ),
+  );
+  const hudActionButtonRightInsetPx = isNarrowHudMode
+    ? Math.min(
+        THIN_HUD_ACTION_RIGHT_INSET_PX,
+        Math.max(
+          THIN_HUD_ACTION_RIGHT_INSET_MIN_PX,
+          Math.round(renderWidth * (isBoardFullscreen ? 0.04 : 0.035)),
+        ),
+      )
+    : 0;
+  const wideHudActionButtonSpacingPx = isNarrowHudMode ? 0 : 10;
+  const hudActionButtonGapPx =
+    (isBoardFullscreen ? 50 : 30) +
+    hudActionButtonRightInsetPx +
+    wideHudActionButtonSpacingPx;
+  const hudFullscreenButtonHitboxExtraPx =
+    FULLSCREEN_BUTTON_HITBOX_EXTRA_PX +
+    (isNarrowHudMode ? THIN_HUD_ACTION_HITBOX_EXTRA_PX : 0);
+  const hudFullscreenButtonWidthPx =
+    hudActionButtonSizePx + hudFullscreenButtonHitboxExtraPx;
+  const hudFullscreenButtonRightPx = isNarrowHudMode
+    ? hudNarrowFullscreenButtonRightPx
+    : -Math.round(hudFullscreenButtonHitboxExtraPx / 2);
+  const hudNarrowFullscreenButtonRightPx =
+    -Math.round(hudFullscreenButtonHitboxExtraPx / 2) +
+    Math.round(hudActionButtonRightInsetPx * 0.25);
+  const narrowHudSideInsetPx = isNarrowHudMode
+    ? Math.min(
+        THIN_HUD_SIDE_SAFE_INSET_PX +
+          (isBoardFullscreen ? THIN_HUD_FULLSCREEN_SIDE_EXTRA_INSET_PX : 0),
+        Math.max(
+          Math.round(tilePixels * 0.75),
+          Math.round(renderWidth * (isBoardFullscreen ? 0.1 : 0.08)),
+        ),
+      )
+    : 0;
   const topHudOverlapPx = Math.round(40 * puzzleHudOverlapScale);
   const bottomHudOverlapPx = Math.round(30 * puzzleHudOverlapScale);
-  const hudHorizontalInsetPx = tilePixels;
+  const hudHorizontalInsetPx = isNarrowHudMode
+    ? Math.max(
+        Math.round(tilePixels * 0.72),
+        narrowHudSideInsetPx,
+      )
+    : tilePixels;
   const hudRowWidthPx = Math.max(0, renderWidth - hudHorizontalInsetPx * 2);
   const hudRowBaseStyle: CSSProperties = {
     width: `${hudRowWidthPx}px`,
@@ -3756,8 +3838,8 @@ export default function SuperMetalMonsBoard({
   };
   const hudResetButtonStyle: CSSProperties = {
     marginTop: '15px',
-    width: `${hudStatusIconSize}px`,
-    height: `${hudStatusIconSize}px`,
+    width: `${hudActionButtonSizePx}px`,
+    height: `${hudActionButtonSizePx}px`,
     border: 'none',
     background: 'transparent',
     padding: 0,
@@ -3772,8 +3854,8 @@ export default function SuperMetalMonsBoard({
   };
   const hudActionButtonsWrapStyle: CSSProperties = {
     marginTop: '15px',
-    width: `${hudStatusIconSize + (isBoardFullscreen ? 50 : 30)}px`,
-    height: `${hudStatusIconSize}px`,
+    width: `${hudActionButtonSizePx + hudActionButtonGapPx}px`,
+    height: `${hudActionButtonSizePx}px`,
     position: 'relative',
     alignSelf: 'flex-end',
   };
@@ -3785,8 +3867,18 @@ export default function SuperMetalMonsBoard({
     transition: 'color 220ms ease, opacity 220ms ease',
   });
   const getHudResetButtonOffsetStyle = (isFullscreen: boolean): CSSProperties => ({
+    right: isFullscreen
+      ? `${
+          hudFullscreenButtonRightPx +
+          hudFullscreenButtonWidthPx +
+          HUD_FULLSCREEN_BUTTON_GAP_TO_RESET_PX
+        }px`
+      : `${
+          30 +
+          hudActionButtonRightInsetPx +
+          wideHudActionButtonSpacingPx
+        }px`,
     position: 'absolute',
-    right: isFullscreen ? '50px' : '30px',
     top: 0,
     marginTop: 0,
   });
@@ -3794,11 +3886,13 @@ export default function SuperMetalMonsBoard({
     ...hudResetButtonStyle,
     marginTop: 0,
     position: 'absolute',
-    right: `${-Math.round(FULLSCREEN_BUTTON_HITBOX_EXTRA_PX / 2)}px`,
-    top: `${-Math.round(FULLSCREEN_BUTTON_HITBOX_EXTRA_PX / 2)}px`,
-    width: `${hudStatusIconSize + FULLSCREEN_BUTTON_HITBOX_EXTRA_PX}px`,
-    height: `${hudStatusIconSize + FULLSCREEN_BUTTON_HITBOX_EXTRA_PX}px`,
-    padding: `${Math.round(FULLSCREEN_BUTTON_HITBOX_EXTRA_PX / 2)}px`,
+    right: `${
+      hudFullscreenButtonRightPx
+    }px`,
+    top: `${-Math.round(hudFullscreenButtonHitboxExtraPx / 2)}px`,
+    width: `${hudFullscreenButtonWidthPx}px`,
+    height: `${hudFullscreenButtonWidthPx}px`,
+    padding: `${Math.round(hudFullscreenButtonHitboxExtraPx / 2)}px`,
     boxSizing: 'border-box',
     color: isFullscreenButtonHovered ? '#fff' : isActive ? '#000' : '#6f6f6f',
     backgroundColor: isFullscreenButtonHovered ? '#000' : 'transparent',
@@ -4105,6 +4199,11 @@ export default function SuperMetalMonsBoard({
     textAlign: 'center',
     fontWeight: 900,
     textDecoration: 'underline',
+  };
+  const previewTitleLinkStyle: CSSProperties = {
+    color: '#0000EE',
+    textDecoration: 'underline',
+    pointerEvents: 'auto',
   };
   const previewHintStyle: CSSProperties = {
     margin: 0,
@@ -6596,7 +6695,15 @@ export default function SuperMetalMonsBoard({
                   />
                 ) : null}
               </div>
-              <h4 style={previewTitleStyle}>{activePiece?.title ?? ''}</h4>
+              <h4 style={previewTitleStyle}>
+                {activePiece?.detailPath ? (
+                  <Link to={activePiece.detailPath} style={previewTitleLinkStyle}>
+                    {activePiece.title}
+                  </Link>
+                ) : (
+                  activePiece?.title ?? ''
+                )}
+              </h4>
               <p style={previewTextStyle}>
                 {activePiece?.text ?? ''}
               </p>
@@ -6861,7 +6968,15 @@ export default function SuperMetalMonsBoard({
                   />
                 ) : null}
               </div>
-              <h4 style={previewTitleStyle}>{activePiece?.title ?? ''}</h4>
+              <h4 style={previewTitleStyle}>
+                {activePiece?.detailPath ? (
+                  <Link to={activePiece.detailPath} style={previewTitleLinkStyle}>
+                    {activePiece.title}
+                  </Link>
+                ) : (
+                  activePiece?.title ?? ''
+                )}
+              </h4>
               <p style={previewTextStyle}>
                 {activePiece?.text ?? ''}
               </p>

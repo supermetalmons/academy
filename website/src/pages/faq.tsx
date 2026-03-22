@@ -133,6 +133,8 @@ const faqWindowRockIconStyle: CSSProperties = {
   filter: 'saturate(0.9) contrast(0.95)',
 };
 
+const FAQ_THIN_LAYOUT_BREAKPOINT_PX = 860;
+
 const faqWindowLinkLabelOverlayVisibleStyle: CSSProperties = {
   opacity: 1,
 };
@@ -153,6 +155,120 @@ const questionChevronStyle: CSSProperties = {
 const questionTextStyle: CSSProperties = {
   fontSize: '1.06rem',
   lineHeight: 1.2,
+};
+
+const lswWideQuestionRowStyle: CSSProperties = {
+  ...questionRowStyle,
+  marginLeft:
+    'calc(min(99px, 22.5vw) + min(75px, 18vw) + 0.55rem + 0.95rem)',
+};
+
+const wherePlayWideLayoutStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'flex-start',
+  justifyContent: 'space-between',
+  gap: '0.95rem',
+};
+
+const wherePlayTextColumnStyle: CSSProperties = {
+  flex: '1 1 auto',
+  minWidth: 0,
+};
+
+const wherePlayImageBaseStyle: CSSProperties = {
+  width: '120px',
+  maxWidth: '21vw',
+  height: 'auto',
+  display: 'block',
+  objectFit: 'contain',
+  imageRendering: 'auto',
+  flex: '0 0 auto',
+};
+
+const wherePlayImageStyle: CSSProperties = {
+  ...wherePlayImageBaseStyle,
+  transform: 'translate(-12px, -44px)',
+};
+
+const wherePlayItemStyle: CSSProperties = {
+  ...faqItemStyle,
+  marginBottom: '-50px',
+};
+
+const wherePlayThinImageWrapStyle: CSSProperties = {
+  display: 'flex',
+  width: '100%',
+  justifyContent: 'center',
+  alignItems: 'center',
+  marginTop: '0.42rem',
+};
+
+const wherePlayThinImageStyle: CSSProperties = {
+  ...wherePlayImageBaseStyle,
+  maxWidth: 'min(56vw, 220px)',
+  margin: '0 auto',
+  transform: 'translateY(-3px)',
+};
+
+const lswWideLayoutStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'flex-start',
+  justifyContent: 'space-between',
+  gap: '0.95rem',
+};
+
+const lswTextColumnStyle: CSSProperties = {
+  flex: '1 1 auto',
+  minWidth: 0,
+};
+
+const lswImageRowStyle: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'flex-start',
+  gap: '0.55rem',
+  flex: '0 0 auto',
+  marginLeft: 'auto',
+};
+
+const lswImageRowWideStyle: CSSProperties = {
+  ...lswImageRowStyle,
+  marginLeft: 0,
+  transform: 'translateY(-15px)',
+  marginBottom: 0,
+};
+
+const lswImageRowThinStyle: CSSProperties = {
+  ...lswImageRowStyle,
+  display: 'flex',
+  justifyContent: 'center',
+  width: '100%',
+  transform: 'none',
+  marginLeft: 0,
+  marginBottom: '0.42rem',
+};
+
+const lswMainImageStyle: CSSProperties = {
+  width: '99px',
+  maxWidth: '22.5vw',
+  height: 'auto',
+  display: 'block',
+  objectFit: 'contain',
+  imageRendering: 'auto',
+  transform: 'translateY(-20px)',
+};
+
+const lswMainImageWideStyle: CSSProperties = {
+  ...lswMainImageStyle,
+  transform: 'translateY(-20px)',
+};
+
+const lswOmomImageStyle: CSSProperties = {
+  width: '75px',
+  maxWidth: '18vw',
+  height: 'auto',
+  display: 'block',
+  objectFit: 'contain',
+  imageRendering: 'auto',
 };
 
 const personLinkWrapStyle: CSSProperties = {
@@ -319,6 +435,9 @@ export default function FaqPage(): ReactNode {
   const [isWindowHovered, setIsWindowHovered] = useState(false);
   const [isNavBelowRowMode, setIsNavBelowRowMode] = useState(false);
   const [isNavBelowButtonsWrapped, setIsNavBelowButtonsWrapped] = useState(false);
+  const [viewportWidth, setViewportWidth] = useState<number>(
+    typeof window === 'undefined' ? Number.POSITIVE_INFINITY : window.innerWidth,
+  );
   const [windowLabelScale, setWindowLabelScale] = useState(1);
   const windowLinkRef = useRef<HTMLAnchorElement | null>(null);
   const windowLabelRef = useRef<HTMLSpanElement | null>(null);
@@ -439,25 +558,134 @@ export default function FaqPage(): ReactNode {
     };
   }, []);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const updateViewportWidth = (): void => {
+      const next = window.innerWidth;
+      setViewportWidth((current) => (current === next ? current : next));
+    };
+    updateViewportWidth();
+    window.addEventListener('resize', updateViewportWidth);
+    return () => {
+      window.removeEventListener('resize', updateViewportWidth);
+    };
+  }, []);
+
   const faqWindowOverlayOffsetPx =
     isNavBelowRowMode && !isNavBelowButtonsWrapped ? 15 : 0;
+  const isThinFaqLayout = isNavBelowRowMode || viewportWidth <= FAQ_THIN_LAYOUT_BREAKPOINT_PX;
+  const whoMadeSiteEntryIndex = faqEntries.findIndex(
+    (entry) => entry.question === 'Who made this site?',
+  );
 
   return (
     <BlankSectionPage title="FAQ">
       <div style={faqWrapStyle}>
         <img src="/assets/smmlogo.png" alt="Super Metal Mons logo" style={faqTopLogoStyle} />
-        {faqEntries.map((entry) => (
-          <p key={entry.question} style={faqItemStyle}>
-            <span style={questionRowStyle}>
-              <span style={questionChevronStyle} aria-hidden="true">
-                ›
+        {faqEntries.map((entry, entryIndex) => {
+          const shouldLiftWideEntry =
+            !isThinFaqLayout && whoMadeSiteEntryIndex !== -1 && entryIndex >= whoMadeSiteEntryIndex;
+          if (entry.question === 'What is Little Swag World?') {
+            const lswImageRowNode = (
+              <div
+                style={isThinFaqLayout ? lswImageRowThinStyle : lswImageRowWideStyle}
+                aria-hidden="true">
+                <img
+                  src="/assets/lsw.png"
+                  alt=""
+                  style={isThinFaqLayout ? lswMainImageStyle : lswMainImageWideStyle}
+                />
+                <img src="/assets/ceramic/drainer-omom.png" alt="" style={lswOmomImageStyle} />
+              </div>
+            );
+
+            return (
+              <div
+                key={entry.question}
+                style={
+                  shouldLiftWideEntry
+                    ? {...faqItemStyle, transform: 'translateY(-23px)'}
+                    : faqItemStyle
+                }>
+                {isThinFaqLayout ? lswImageRowNode : null}
+                <span style={isThinFaqLayout ? questionRowStyle : lswWideQuestionRowStyle}>
+                  <span style={questionChevronStyle} aria-hidden="true">
+                    ›
+                  </span>
+                  <b style={questionTextStyle}>{entry.question}</b>
+                </span>
+                {isThinFaqLayout ? (
+                  entry.answer
+                ) : (
+                  <div style={lswWideLayoutStyle}>
+                    {lswImageRowNode}
+                    <span style={lswTextColumnStyle}>{entry.answer}</span>
+                  </div>
+                )}
+              </div>
+            );
+          }
+
+          if (entry.question === 'Where can I play?') {
+            return (
+              <div
+                key={entry.question}
+                style={
+                  shouldLiftWideEntry
+                    ? {...wherePlayItemStyle, transform: 'translateY(-23px)'}
+                    : isThinFaqLayout
+                      ? faqItemStyle
+                      : wherePlayItemStyle
+                }>
+                <span style={questionRowStyle}>
+                  <span style={questionChevronStyle} aria-hidden="true">
+                    ›
+                  </span>
+                  <b style={questionTextStyle}>{entry.question}</b>
+                </span>
+                {isThinFaqLayout ? (
+                  <>
+                    {entry.answer}
+                    <div style={wherePlayThinImageWrapStyle}>
+                      <img src="/assets/id.png" alt="" aria-hidden="true" style={wherePlayThinImageStyle} />
+                    </div>
+                  </>
+                ) : (
+                  <div style={wherePlayWideLayoutStyle}>
+                    <span style={wherePlayTextColumnStyle}>{entry.answer}</span>
+                    <img src="/assets/id.png" alt="" aria-hidden="true" style={wherePlayImageStyle} />
+                  </div>
+                )}
+              </div>
+            );
+          }
+
+          return (
+            <p
+              key={entry.question}
+              style={
+                shouldLiftWideEntry
+                  ? {...faqItemStyle, transform: 'translateY(-23px)'}
+                  : faqItemStyle
+              }>
+              <span style={questionRowStyle}>
+                <span style={questionChevronStyle} aria-hidden="true">
+                  ›
+                </span>
+                <b style={questionTextStyle}>{entry.question}</b>
               </span>
-              <b style={questionTextStyle}>{entry.question}</b>
-            </span>
-            {entry.answer}
-          </p>
-        ))}
-        <div style={faqWindowLinkWrapStyle}>
+              {entry.answer}
+            </p>
+          );
+        })}
+        <div
+          style={
+            isThinFaqLayout
+              ? faqWindowLinkWrapStyle
+              : {...faqWindowLinkWrapStyle, transform: 'translateY(-23px)'}
+          }>
           <a
             ref={windowLinkRef}
             href="https://mons.link/"

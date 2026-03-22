@@ -298,7 +298,7 @@ export default function InstructionLessonsPage(): ReactNode {
   return (
     <BlankSectionPage title="Instruction">
       <InstructionSubnav active="lessons" />
-      <section style={lessonsWrapStyle}>
+      <section className="instruction-lessons-content" style={lessonsWrapStyle}>
         <div style={toolbarStyle} className="gallery-toolbar" aria-label="Lessons sort toolbar">
           <div style={toolbarGroupStyle} className="gallery-toolbar-group gallery-toolbar-group--filter">
             <span style={toolbarLabelStyle} className="gallery-toolbar-label">Filter by:</span>

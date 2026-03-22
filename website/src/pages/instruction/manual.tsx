@@ -482,6 +482,10 @@ const FULLSCREEN_MAX_CANVAS_AREA_PX = 24_000_000;
 const FULLSCREEN_OFFSCREEN_CANVAS_AREA_THRESHOLD_PX = 18_000_000;
 const MANUAL_CANVAS_WIDTH_GUARD_PX = 6;
 const FULLSCREEN_WIDTH_GUARD_PX = 8;
+const FULLSCREEN_MIN_ZOOM_PERCENT = 75;
+const FULLSCREEN_MAX_ZOOM_PERCENT = 300;
+const FULLSCREEN_WHEEL_ZOOM_MIN_STEP = 3;
+const FULLSCREEN_WHEEL_ZOOM_MAX_STEP = 26;
 
 function parseCssPixelValue(value: string | null | undefined): number {
   if (!value) {
@@ -632,6 +636,14 @@ function ManualPdfViewer(): ReactNode {
   const fullscreenTextLayerRef = useRef<HTMLDivElement | null>(null);
   const pdfjsRef = useRef<PdfJsLikeModule | null>(null);
   const pdfDocRef = useRef<PdfDocumentProxy | null>(null);
+  const fullscreenZoomPercentRef = useRef<number>(100);
+  const fullscreenPinchStartDistanceRef = useRef<number | null>(null);
+  const fullscreenPinchStartZoomRef = useRef<number>(100);
+  const fullscreenWheelZoomAnchorRef = useRef<{
+    scrollLeft: number;
+    scrollTop: number;
+    zoomPercent: number;
+  } | null>(null);
   const renderCycleRef = useRef<number>(0);
   const fullscreenRenderCycleRef = useRef<number>(0);
   const navLockRef = useRef<boolean>(false);
@@ -963,9 +975,17 @@ function ManualPdfViewer(): ReactNode {
   }, [numPages, visiblePages]);
 
   const clampedFullscreenZoomPercent = useMemo(
-    () => Math.min(300, Math.max(75, Math.round(fullscreenZoomPercent))),
+    () =>
+      Math.min(
+        FULLSCREEN_MAX_ZOOM_PERCENT,
+        Math.max(FULLSCREEN_MIN_ZOOM_PERCENT, Math.round(fullscreenZoomPercent)),
+      ),
     [fullscreenZoomPercent],
   );
+
+  useEffect(() => {
+    fullscreenZoomPercentRef.current = clampedFullscreenZoomPercent;
+  }, [clampedFullscreenZoomPercent]);
 
   const canGoPrev = spreadStart > 1;
   const canGoNext =
@@ -1074,6 +1094,256 @@ function ManualPdfViewer(): ReactNode {
       window.removeEventListener('keydown', handleEscape);
     };
   }, [closeFullscreen, fullscreenPageNumber]);
+
+  useEffect(() => {
+    if (!fullscreenPageNumber) {
+      fullscreenWheelZoomAnchorRef.current = null;
+      return;
+    }
+    const viewportNode = fullscreenViewportRef.current;
+    const anchor = fullscreenWheelZoomAnchorRef.current;
+    if (!viewportNode || !anchor) {
+      return;
+    }
+    if (Math.abs(clampedFullscreenZoomPercent - anchor.zoomPercent) > 0.5) {
+      return;
+    }
+
+    let frameId = 0;
+    frameId = window.requestAnimationFrame(() => {
+      const maxScrollLeft = Math.max(0, viewportNode.scrollWidth - viewportNode.clientWidth);
+      const maxScrollTop = Math.max(0, viewportNode.scrollHeight - viewportNode.clientHeight);
+      viewportNode.scrollLeft = Math.min(
+        maxScrollLeft,
+        Math.max(0, anchor.scrollLeft),
+      );
+      viewportNode.scrollTop = Math.min(
+        maxScrollTop,
+        Math.max(0, anchor.scrollTop),
+      );
+      fullscreenWheelZoomAnchorRef.current = null;
+    });
+
+    return () => {
+      if (frameId !== 0) {
+        window.cancelAnimationFrame(frameId);
+      }
+    };
+  }, [clampedFullscreenZoomPercent, fullscreenPageNumber, fullscreenSurfaceSize]);
+
+  useEffect(() => {
+    if (!fullscreenPageNumber) {
+      return;
+    }
+    const viewportNode = fullscreenViewportRef.current;
+    if (!viewportNode) {
+      return;
+    }
+
+    const clampZoomPercent = (value: number): number =>
+      Math.min(FULLSCREEN_MAX_ZOOM_PERCENT, Math.max(FULLSCREEN_MIN_ZOOM_PERCENT, Math.round(value)));
+
+    const applyZoomDelta = (delta: number): void => {
+      setFullscreenZoomPercent((current) => {
+        const next = clampZoomPercent(current + delta);
+        return next === current ? current : next;
+      });
+    };
+
+    const handleWheel = (event: WheelEvent): void => {
+      if (event.deltaY === 0 || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) {
+        return;
+      }
+      event.preventDefault();
+
+      const deltaModeMultiplier =
+        event.deltaMode === 1 ? 6 : event.deltaMode === 2 ? 28 : 0.12;
+      const scaledStep = Math.abs(event.deltaY) * deltaModeMultiplier;
+      const zoomStep = Math.max(
+        FULLSCREEN_WHEEL_ZOOM_MIN_STEP,
+        Math.min(FULLSCREEN_WHEEL_ZOOM_MAX_STEP, scaledStep),
+      );
+      const currentZoom = fullscreenZoomPercentRef.current;
+      const nextZoom = clampZoomPercent(
+        currentZoom + (event.deltaY < 0 ? zoomStep : -zoomStep),
+      );
+      if (nextZoom === currentZoom) {
+        return;
+      }
+      const viewportRect = viewportNode.getBoundingClientRect();
+      const anchorX = event.clientX - viewportRect.left;
+      const anchorY = event.clientY - viewportRect.top;
+      const zoomRatio = nextZoom / Math.max(1, currentZoom);
+      fullscreenWheelZoomAnchorRef.current = {
+        scrollLeft: (viewportNode.scrollLeft + anchorX) * zoomRatio - anchorX,
+        scrollTop: (viewportNode.scrollTop + anchorY) * zoomRatio - anchorY,
+        zoomPercent: nextZoom,
+      };
+      applyZoomDelta(event.deltaY < 0 ? zoomStep : -zoomStep);
+    };
+
+    const getTouchDistance = (touches: TouchList): number | null => {
+      if (touches.length < 2) {
+        return null;
+      }
+      const firstTouch = touches[0];
+      const secondTouch = touches[1];
+      if (!firstTouch || !secondTouch) {
+        return null;
+      }
+      const dx = secondTouch.clientX - firstTouch.clientX;
+      const dy = secondTouch.clientY - firstTouch.clientY;
+      return Math.hypot(dx, dy);
+    };
+
+    const handleTouchStart = (event: TouchEvent): void => {
+      const distance = getTouchDistance(event.touches);
+      if (distance === null) {
+        return;
+      }
+      fullscreenPinchStartDistanceRef.current = distance;
+      fullscreenPinchStartZoomRef.current = fullscreenZoomPercentRef.current;
+      event.preventDefault();
+    };
+
+    const handleTouchMove = (event: TouchEvent): void => {
+      const startDistance = fullscreenPinchStartDistanceRef.current;
+      if (startDistance === null) {
+        return;
+      }
+      const currentDistance = getTouchDistance(event.touches);
+      if (currentDistance === null) {
+        return;
+      }
+      event.preventDefault();
+      const zoomRatio = currentDistance / Math.max(1, startDistance);
+      const nextZoom = clampZoomPercent(fullscreenPinchStartZoomRef.current * zoomRatio);
+      setFullscreenZoomPercent((current) => (current === nextZoom ? current : nextZoom));
+    };
+
+    const resetPinchState = (event: TouchEvent): void => {
+      if (event.touches.length < 2) {
+        fullscreenPinchStartDistanceRef.current = null;
+      }
+    };
+
+    viewportNode.addEventListener('wheel', handleWheel, {passive: false});
+    viewportNode.addEventListener('touchstart', handleTouchStart, {passive: false});
+    viewportNode.addEventListener('touchmove', handleTouchMove, {passive: false});
+    viewportNode.addEventListener('touchend', resetPinchState);
+    viewportNode.addEventListener('touchcancel', resetPinchState);
+
+    return () => {
+      viewportNode.removeEventListener('wheel', handleWheel);
+      viewportNode.removeEventListener('touchstart', handleTouchStart);
+      viewportNode.removeEventListener('touchmove', handleTouchMove);
+      viewportNode.removeEventListener('touchend', resetPinchState);
+      viewportNode.removeEventListener('touchcancel', resetPinchState);
+      fullscreenPinchStartDistanceRef.current = null;
+    };
+  }, [fullscreenPageNumber]);
+
+  useEffect(() => {
+    if (!fullscreenPageNumber) {
+      return;
+    }
+    const viewportNode = fullscreenViewportRef.current;
+    if (!viewportNode) {
+      return;
+    }
+
+    type PanStart = {
+      x: number;
+      y: number;
+      scrollLeft: number;
+      scrollTop: number;
+    };
+    let activePointerId: number | null = null;
+    let panStart: PanStart | null = null;
+
+    const resetPanState = (): void => {
+      if (activePointerId !== null) {
+        try {
+          viewportNode.releasePointerCapture(activePointerId);
+        } catch {
+          // Ignore capture release errors for stale pointers.
+        }
+      }
+      activePointerId = null;
+      panStart = null;
+      viewportNode.style.cursor = 'grab';
+    };
+
+    const isPanBlockedTarget = (target: EventTarget | null): boolean => {
+      if (!(target instanceof HTMLElement)) {
+        return false;
+      }
+      return Boolean(
+        target.closest(
+          'button, a, input, textarea, select, label, [role="button"], [data-no-pan="true"]',
+        ),
+      );
+    };
+
+    const handlePointerDown = (event: PointerEvent): void => {
+      if (event.pointerType !== 'mouse') {
+        return;
+      }
+      if (event.button !== 0 || event.ctrlKey || event.metaKey || event.altKey) {
+        return;
+      }
+      if (isPanBlockedTarget(event.target)) {
+        return;
+      }
+      activePointerId = event.pointerId;
+      panStart = {
+        x: event.clientX,
+        y: event.clientY,
+        scrollLeft: viewportNode.scrollLeft,
+        scrollTop: viewportNode.scrollTop,
+      };
+      viewportNode.style.cursor = 'grabbing';
+      viewportNode.setPointerCapture(event.pointerId);
+      event.preventDefault();
+    };
+
+    const handlePointerMove = (event: PointerEvent): void => {
+      if (
+        activePointerId === null ||
+        panStart === null ||
+        event.pointerId !== activePointerId
+      ) {
+        return;
+      }
+      const deltaX = event.clientX - panStart.x;
+      const deltaY = event.clientY - panStart.y;
+      viewportNode.scrollLeft = panStart.scrollLeft - deltaX;
+      viewportNode.scrollTop = panStart.scrollTop - deltaY;
+      event.preventDefault();
+    };
+
+    const handlePointerEnd = (event: PointerEvent): void => {
+      if (event.pointerId !== activePointerId) {
+        return;
+      }
+      resetPanState();
+    };
+
+    viewportNode.style.cursor = 'grab';
+    viewportNode.addEventListener('pointerdown', handlePointerDown);
+    viewportNode.addEventListener('pointermove', handlePointerMove);
+    viewportNode.addEventListener('pointerup', handlePointerEnd);
+    viewportNode.addEventListener('pointercancel', handlePointerEnd);
+
+    return () => {
+      viewportNode.removeEventListener('pointerdown', handlePointerDown);
+      viewportNode.removeEventListener('pointermove', handlePointerMove);
+      viewportNode.removeEventListener('pointerup', handlePointerEnd);
+      viewportNode.removeEventListener('pointercancel', handlePointerEnd);
+      resetPanState();
+      viewportNode.style.cursor = '';
+    };
+  }, [fullscreenPageNumber]);
 
   useEffect(() => {
     const doc = pdfDocRef.current;
@@ -1382,12 +1652,17 @@ function ManualPdfViewer(): ReactNode {
         setIsRendering(true);
         setLoadError(null);
 
-        const spreadGap = 16;
-        const measuredRowWidth = canvasRowRef.current?.getBoundingClientRect().width ?? viewerWidth;
-        const availableWidth = Math.max(220, measuredRowWidth - MANUAL_CANVAS_WIDTH_GUARD_PX);
+        const rowNode = canvasRowRef.current;
+        const measuredRowWidth = rowNode?.getBoundingClientRect().width ?? viewerWidth;
+        const rowStyles = rowNode ? window.getComputedStyle(rowNode) : null;
+        const spreadGap = rowStyles
+          ? parseCssPixelValue(rowStyles.columnGap || rowStyles.gap)
+          : 16;
+        const resolvedSpreadGap = Number.isFinite(spreadGap) ? spreadGap : 16;
+        const availableWidth = Math.max(1, measuredRowWidth - MANUAL_CANVAS_WIDTH_GUARD_PX);
         const targetWidth = isSinglePageMode
           ? Math.max(150, availableWidth - 2)
-          : Math.max(150, (availableWidth - spreadGap - 4) / 2);
+          : Math.max(1, (availableWidth - resolvedSpreadGap - 4) / 2);
 
         await renderPageToCanvas(doc, visiblePages[0], leftCanvas, targetWidth);
 
@@ -1589,8 +1864,8 @@ function ManualPdfViewer(): ReactNode {
             <p style={fullscreenZoomLabelStyle}>Zoom</p>
             <input
               type="range"
-              min={75}
-              max={300}
+              min={FULLSCREEN_MIN_ZOOM_PERCENT}
+              max={FULLSCREEN_MAX_ZOOM_PERCENT}
               step={5}
               value={clampedFullscreenZoomPercent}
               onChange={(event) => {

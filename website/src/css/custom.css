@@ -598,6 +598,15 @@ image[href*='/assets/mons/'] {
   justify-content: center !important;
 }
 
+.mons-shell--nav-below .instruction-lessons-content,
+.mons-shell--mobile-sidebar .instruction-lessons-content,
+.mons-shell--nav-below .instruction-lesson-detail-content,
+.mons-shell--mobile-sidebar .instruction-lesson-detail-content {
+  padding-left: clamp(16px, 4.5vw, 50px) !important;
+  padding-right: clamp(16px, 4.5vw, 50px) !important;
+  box-sizing: border-box;
+}
+
 .mons-shell--nav-below .gallery-toolbar,
 .mons-shell--mobile-gallery-thin .gallery-toolbar {
   gap: 0.42rem !important;
@@ -944,6 +953,8 @@ image[href*='/assets/mons/'] {
 }
 
 .topbar-marquee__track {
+  transform: translateX(0);
+  will-change: transform;
   animation: monsTopbarMarqueeScroll 18s linear infinite;
 }
 
@@ -952,7 +963,7 @@ image[href*='/assets/mons/'] {
     transform: translateX(0);
   }
   to {
-    transform: translateX(-50%);
+    transform: translateX(-33.333333%);
   }
 }
 
@@ -1053,5 +1064,26 @@ image[href*='/assets/mons/'] {
 
   .legacy-frame__content iframe {
     min-height: 260px;
+  }
+}
+
+.piece-details-gallery-card {
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.piece-details-gallery-card-link:hover .piece-details-gallery-card,
+.piece-details-gallery-card-link:focus-visible .piece-details-gallery-card {
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.16);
+  border-color: #111;
+}
+
+.piece-details-gallery-card-link:focus-visible {
+  outline: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .piece-details-gallery-card {
+    transition: none;
   }
 }
