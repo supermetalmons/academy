@@ -156,7 +156,7 @@ const puzzleCardStyle: CSSProperties = {
   minHeight: '156px',
   padding: 0,
   display: 'grid',
-  gridTemplateColumns: 'clamp(110px, 24%, 165px) 50px minmax(0, 1fr)',
+  gridTemplateColumns: 'clamp(110px, 24%, 165px) 50px minmax(0, 1fr) 56px',
   alignItems: 'stretch',
   color: '#000',
   overflow: 'hidden',
@@ -189,6 +189,14 @@ const puzzleCardTextColumnStyle: CSSProperties = {
   alignItems: 'center',
   justifyContent: 'center',
   padding: '0.95rem 1rem',
+};
+
+const puzzleCardStarRailStyle: CSSProperties = {
+  gridColumn: '4',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  borderLeft: '1px solid #000',
 };
 
 const puzzleCardImageLinkStyle: CSSProperties = {
@@ -590,7 +598,10 @@ export default function PuzzlesPage(): ReactNode {
         </div>
         <section style={puzzlesGalleryStyle} aria-label="Puzzles gallery">
           {visiblePuzzleCards.map((puzzle) => (
-            <article key={puzzle.id} style={puzzleCardStyle} className="gallery-card">
+            <article
+              key={puzzle.id}
+              style={puzzleCardStyle}
+              className="gallery-card puzzle-gallery-card">
               <Link
                 to={puzzle.to}
                 style={{
@@ -620,7 +631,7 @@ export default function PuzzlesPage(): ReactNode {
                       <span
                         style={puzzleCardTitleStyle}
                         className="instruction-lesson-card-title">
-                        {puzzle.title}
+                        "{puzzle.title}"
                       </span>
                     </Link>
                     <span
@@ -633,7 +644,7 @@ export default function PuzzlesPage(): ReactNode {
                       <PuzzleFavoriteStar puzzleId={puzzle.id} size="1.28rem" />
                     </span>
                   </div>
-                  <span style={puzzleCardMetaRowStyle}>
+                  <span style={puzzleCardMetaRowStyle} className="puzzle-gallery-meta-row">
                     <span>{`${puzzle.startingScoreWhite} - ${puzzle.startingScoreBlack}`}</span>
                     <span
                       style={puzzleCardPotionIconsStyle}
@@ -649,7 +660,13 @@ export default function PuzzlesPage(): ReactNode {
                       ))}
                     </span>
                   </span>
+                  <span className="puzzle-gallery-meta-star">
+                    <PuzzleFavoriteStar puzzleId={puzzle.id} size="1.28rem" />
+                  </span>
                 </div>
+              </div>
+              <div style={puzzleCardStarRailStyle} className="gallery-card-star-rail">
+                <PuzzleFavoriteStar puzzleId={puzzle.id} size="1.28rem" />
               </div>
             </article>
           ))}

@@ -33,6 +33,16 @@ const faqItemStyle: CSSProperties = {
   lineHeight: 1.45,
 };
 
+const faqTopLogoStyle: CSSProperties = {
+  display: 'block',
+  width: 'auto',
+  maxWidth: 'min(100%, 620px)',
+  height: 'auto',
+  margin: 'calc(-0.1rem - 55px) auto -0.95rem',
+  imageRendering: 'auto',
+  objectFit: 'contain',
+};
+
 const faqWindowImageStyle: CSSProperties = {
   display: 'block',
   width: 'auto',
@@ -435,6 +445,7 @@ export default function FaqPage(): ReactNode {
   return (
     <BlankSectionPage title="FAQ">
       <div style={faqWrapStyle}>
+        <img src="/assets/smmlogo.png" alt="Super Metal Mons logo" style={faqTopLogoStyle} />
         {faqEntries.map((entry) => (
           <p key={entry.question} style={faqItemStyle}>
             <span style={questionRowStyle}>

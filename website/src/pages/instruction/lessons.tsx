@@ -152,7 +152,7 @@ const lessonCardStyle: CSSProperties = {
   minHeight: '156px',
   padding: 0,
   display: 'grid',
-  gridTemplateColumns: 'clamp(110px, 24%, 165px) minmax(0, 1fr)',
+  gridTemplateColumns: 'clamp(110px, 24%, 165px) minmax(0, 1fr) 56px',
   alignItems: 'stretch',
   color: '#000',
   overflow: 'hidden',
@@ -191,11 +191,20 @@ const lessonCardTitleStyle: CSSProperties = {
 };
 
 const lessonCardTextColumnStyle: CSSProperties = {
+  gridColumn: '2',
   minWidth: 0,
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
   padding: '0.95rem 1rem',
+};
+
+const lessonCardStarRailStyle: CSSProperties = {
+  gridColumn: '3',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  borderLeft: '1px solid #000',
 };
 
 const lessonCardTitleRowStyle: CSSProperties = {
@@ -429,7 +438,7 @@ export default function InstructionLessonsPage(): ReactNode {
         </div>
         <section style={lessonsGalleryStyle} aria-label="Lessons gallery">
           {visibleLessonCards.map((lesson) => (
-            <article key={lesson.id} style={lessonCardStyle} className="gallery-card">
+            <article key={lesson.id} style={lessonCardStyle} className="gallery-card lesson-gallery-card">
               <Link
                 to={lesson.to}
                 style={lessonCardImageLinkStyle}
@@ -459,6 +468,9 @@ export default function InstructionLessonsPage(): ReactNode {
                     <LessonFavoriteStar lessonId={lesson.id} size="1.28rem" />
                   </span>
                 </div>
+              </div>
+              <div style={lessonCardStarRailStyle} className="gallery-card-star-rail">
+                <LessonFavoriteStar lessonId={lesson.id} size="1.28rem" />
               </div>
             </article>
           ))}

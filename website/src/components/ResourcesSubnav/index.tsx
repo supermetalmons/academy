@@ -2,7 +2,7 @@ import type {CSSProperties, ReactNode} from 'react';
 import {useState} from 'react';
 import Link from '@docusaurus/Link';
 
-type ResourcesSection = 'super-metal-mons' | 'gallery' | 'other';
+type ResourcesSection = 'super-metal-mons' | 'sandbox' | 'gallery' | 'other';
 
 type ResourcesSubnavProps = {
   active: ResourcesSection;
@@ -59,21 +59,13 @@ const mobileLabelIconStyle: CSSProperties = {
 
 const monsLabel: ReactNode = (
   <span style={labelWithIconStyle}>
-    <svg
-      viewBox="0 0 24 24"
+    <img
+      src="/assets/mons/drainer.png"
+      alt=""
       aria-hidden="true"
-      className="section-subnav__label-icon section-subnav__label-icon--mobile"
+      className="section-subnav__label-icon section-subnav__label-icon--mobile section-subnav__drainer-icon"
       style={mobileLabelIconStyle}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.7"
-      strokeLinecap="round"
-      strokeLinejoin="round">
-      <circle cx="12" cy="12.4" r="7.3" />
-      <circle cx="9.1" cy="11.3" r="0.8" fill="currentColor" stroke="none" />
-      <circle cx="14.9" cy="11.3" r="0.8" fill="currentColor" stroke="none" />
-      <path d="M8.6 15.1c1 .9 2.1 1.4 3.4 1.4s2.4-.5 3.4-1.4" />
-    </svg>
+    />
     <span className="section-subnav__label-text">Mons</span>
   </span>
 );
@@ -98,6 +90,29 @@ const galleryLabel: ReactNode = (
   </span>
 );
 
+const sandboxLabel: ReactNode = (
+  <span style={labelWithIconStyle}>
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className="section-subnav__label-icon section-subnav__label-icon--mobile"
+      style={mobileLabelIconStyle}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.35"
+      strokeLinecap="square"
+      strokeLinejoin="miter">
+      <rect x="2.5" y="2.5" width="19" height="19" />
+      <line x1="8.83" y1="2.5" x2="8.83" y2="21.5" />
+      <line x1="15.17" y1="2.5" x2="15.17" y2="21.5" />
+      <line x1="2.5" y1="8.83" x2="21.5" y2="8.83" />
+      <line x1="2.5" y1="15.17" x2="21.5" y2="15.17" />
+      <rect x="8.83" y="8.83" width="6.34" height="6.34" fill="currentColor" stroke="none" />
+    </svg>
+    <span className="section-subnav__label-text">Sandbox</span>
+  </span>
+);
+
 const linksLabel: ReactNode = (
   <span style={labelWithIconStyle}>
     <svg
@@ -119,6 +134,7 @@ const linksLabel: ReactNode = (
 
 const items: Array<{key: ResourcesSection; label: ReactNode; to: string}> = [
   {key: 'super-metal-mons', label: monsLabel, to: '/resources'},
+  {key: 'sandbox', label: sandboxLabel, to: '/resources/sandbox'},
   {key: 'gallery', label: galleryLabel, to: '/resources/gallery'},
   {key: 'other', label: linksLabel, to: '/resources/links'},
 ];

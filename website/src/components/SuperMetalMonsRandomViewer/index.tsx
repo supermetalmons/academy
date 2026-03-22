@@ -16,12 +16,22 @@ type FavoritesFolderPayload = {
   folder: 'favorites';
   mons: string[];
 };
+type PersistedViewerState = {
+  version: 1;
+  index: number;
+  enabledGens: Record<GenKey, boolean>;
+  lockedType: string | null;
+  undoSnapshots: UndoSnapshot[];
+};
 
 const TILT_MAX_DEG = 13;
 const NAME_CYCLE_DURATION_MS = 240;
 const NAME_CYCLE_STEP_MS = 62;
 const NAME_CYCLE_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 const FAVORITES_STORAGE_KEY = 'mons-academy-favorites-folder';
+const VIEWER_STATE_STORAGE_KEY = 'mons-academy-viewer-state';
+const VIEWER_STATE_VERSION = 1;
+const UNDO_HISTORY_LIMIT = 5;
 const FAVORITE_PULSE_DURATION_MS = 620;
 const SHUFFLE_BUTTON_LABEL = 'Shuffle';
 const SHUFFLE_HOVER_CYCLE_DURATION_MS = 230;
@@ -833,12 +843,125 @@ function persistFavoriteMons(favorites: Set<string>): void {
   window.localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(payload));
 }
 
+function parsePersistedEnabledGens(raw: unknown): Record<GenKey, boolean> | null {
+  if (typeof raw !== 'object' || raw === null) {
+    return null;
+  }
+  const source = raw as Partial<Record<GenKey, unknown>>;
+  const gen1 = typeof source.gen1 === 'boolean' ? source.gen1 : null;
+  const gen2 = typeof source.gen2 === 'boolean' ? source.gen2 : null;
+  if (gen1 === null || gen2 === null) {
+    return null;
+  }
+  if (!gen1 && !gen2) {
+    return {
+      gen1: true,
+      gen2: true,
+    };
+  }
+  return {
+    gen1,
+    gen2,
+  };
+}
+
+function parsePersistedUndoSnapshot(raw: unknown): UndoSnapshot | null {
+  if (typeof raw !== 'object' || raw === null) {
+    return null;
+  }
+  const source = raw as Partial<UndoSnapshot>;
+  const index =
+    typeof source.index === 'number' && Number.isInteger(source.index)
+      ? source.index
+      : null;
+  const enabledGens = parsePersistedEnabledGens(source.enabledGens);
+  const lockedType =
+    typeof source.lockedType === 'string' && source.lockedType.trim().length > 0
+      ? source.lockedType
+      : null;
+  if (index === null || enabledGens === null) {
+    return null;
+  }
+  if (index < 0 || index >= superMetalMonsNfts.length) {
+    return null;
+  }
+  return {
+    index,
+    enabledGens,
+    lockedType,
+  };
+}
+
+function parsePersistedViewerState(raw: string | null): PersistedViewerState | null {
+  if (raw === null) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (typeof parsed !== 'object' || parsed === null) {
+      return null;
+    }
+    const source = parsed as Partial<PersistedViewerState>;
+    if (
+      source.version !== VIEWER_STATE_VERSION ||
+      typeof source.index !== 'number' ||
+      !Number.isInteger(source.index)
+    ) {
+      return null;
+    }
+    if (source.index < 0 || source.index >= superMetalMonsNfts.length) {
+      return null;
+    }
+    const enabledGens = parsePersistedEnabledGens(source.enabledGens);
+    if (enabledGens === null) {
+      return null;
+    }
+    const lockedType =
+      typeof source.lockedType === 'string' && source.lockedType.trim().length > 0
+        ? source.lockedType
+        : null;
+    const undoSnapshots = Array.isArray(source.undoSnapshots)
+      ? source.undoSnapshots
+          .map(parsePersistedUndoSnapshot)
+          .filter((snapshot): snapshot is UndoSnapshot => snapshot !== null)
+          .slice(0, UNDO_HISTORY_LIMIT)
+      : [];
+    return {
+      version: VIEWER_STATE_VERSION,
+      index: source.index,
+      enabledGens,
+      lockedType,
+      undoSnapshots,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function persistViewerState(state: PersistedViewerState): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  window.localStorage.setItem(VIEWER_STATE_STORAGE_KEY, JSON.stringify(state));
+}
+
 export default function SuperMetalMonsRandomViewer(): ReactNode {
-  const [enabledGens, setEnabledGens] = useState<Record<GenKey, boolean>>({
-    gen1: true,
-    gen2: true,
-  });
-  const [lockedType, setLockedType] = useState<string | null>(null);
+  const initialViewerState = useMemo(() => {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+    return parsePersistedViewerState(window.localStorage.getItem(VIEWER_STATE_STORAGE_KEY));
+  }, []);
+  const [enabledGens, setEnabledGens] = useState<Record<GenKey, boolean>>(
+    () =>
+      initialViewerState?.enabledGens ?? {
+        gen1: true,
+        gen2: true,
+      },
+  );
+  const [lockedType, setLockedType] = useState<string | null>(
+    () => initialViewerState?.lockedType ?? null,
+  );
   const genCandidateIndices = useMemo(
     () =>
       superMetalMonsNfts
@@ -856,13 +979,17 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
           ),
     [genCandidateIndices, lockedType],
   );
-  const [index, setIndex] = useState<number>(() =>
-    getRandomIndexFromList(
-      superMetalMonsNfts.map((_, nftIndex) => nftIndex),
-      null,
-    ),
+  const [index, setIndex] = useState<number>(
+    () =>
+      initialViewerState?.index ??
+      getRandomIndexFromList(
+        superMetalMonsNfts.map((_, nftIndex) => nftIndex),
+        null,
+      ),
   );
-  const [undoSnapshots, setUndoSnapshots] = useState<UndoSnapshot[]>([]);
+  const [undoSnapshots, setUndoSnapshots] = useState<UndoSnapshot[]>(
+    () => initialViewerState?.undoSnapshots ?? [],
+  );
   const [displayedName, setDisplayedName] = useState<string>('');
   const [isNameCycling, setIsNameCycling] = useState(false);
   const [isFavoriteHovered, setIsFavoriteHovered] = useState(false);
@@ -872,6 +999,7 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
     typeof window === 'undefined' ? 0 : window.innerWidth,
   );
   const [viewerLayoutWidth, setViewerLayoutWidth] = useState(0);
+  const [wideClosedHeightPx, setWideClosedHeightPx] = useState<number | null>(null);
   const [shuffleButtonLabel, setShuffleButtonLabel] = useState<string>(SHUFFLE_BUTTON_LABEL);
   const [mainImageSrc, setMainImageSrc] = useState<string>(
     () => superMetalMonsNfts[index]?.image ?? '',
@@ -921,7 +1049,7 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
       ) {
         return current;
       }
-      return [nextSnapshot, ...current].slice(0, 5);
+      return [nextSnapshot, ...current].slice(0, UNDO_HISTORY_LIMIT);
     });
   };
 
@@ -974,6 +1102,16 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
     }
     setFavoriteMons(parseFavoriteMons(window.localStorage.getItem(FAVORITES_STORAGE_KEY)));
   }, []);
+
+  useEffect(() => {
+    persistViewerState({
+      version: VIEWER_STATE_VERSION,
+      index,
+      enabledGens,
+      lockedType,
+      undoSnapshots,
+    });
+  }, [index, enabledGens, lockedType, undoSnapshots]);
 
   const favoriteMonsByHref = useMemo(() => {
     const map = new Map<string, SuperMetalMonsNft>();
@@ -1360,12 +1498,40 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
     (effectiveViewerWidth > 0 && effectiveViewerWidth <= 640);
   const showGenTogglesOnRow =
     isNavBelowModeForViewer || shouldForceGenToggleRowToAvoidFolderOverlap;
-  const resolvedWrapStyle =
-    isFavoritesSidebarOpen
+  useEffect(() => {
+    if (isThinLayoutActive || isFavoritesSidebarOpen) {
+      return;
+    }
+    const sectionNode = viewerSectionRef.current;
+    if (sectionNode === null) {
+      return;
+    }
+    const nextHeight = Math.ceil(sectionNode.getBoundingClientRect().height);
+    if (nextHeight <= 0) {
+      return;
+    }
+    setWideClosedHeightPx((current) => (current === nextHeight ? current : nextHeight));
+  }, [isThinLayoutActive, isFavoritesSidebarOpen, viewerLayoutWidth]);
+
+  const shouldLockWideOpenHeight =
+    isFavoritesSidebarOpen &&
+    !isThinLayoutActive &&
+    wideClosedHeightPx !== null;
+
+  const resolvedWrapStyle: CSSProperties = {
+    ...(isFavoritesSidebarOpen
       ? wrapExpandedStyle
       : isFolderInlineThin
         ? wrapInlineFolderClosedStyle
-        : wrapCompactStyle;
+        : wrapCompactStyle),
+    ...(shouldLockWideOpenHeight
+      ? {
+          height: `${wideClosedHeightPx}px`,
+          minHeight: `${wideClosedHeightPx}px`,
+          overflow: 'hidden',
+        }
+      : {}),
+  };
   const folderToggleButtonNode = (
     <button
       type="button"

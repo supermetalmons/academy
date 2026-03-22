@@ -384,6 +384,15 @@ image[href*='/assets/mons/'] {
   display: none;
 }
 
+.section-subnav__drainer-icon {
+  image-rendering: pixelated;
+  filter: none;
+}
+
+.section-subnav__tab--active .section-subnav__drainer-icon {
+  filter: invert(1);
+}
+
 .mons-shell--nav-below .section-subnav__tab {
   display: inline-flex !important;
   align-items: center !important;
@@ -396,10 +405,25 @@ image[href*='/assets/mons/'] {
 .mons-shell--nav-below .section-subnav__tab:not(.section-subnav__tab--active) {
   padding-left: 0.42rem !important;
   padding-right: 0.42rem !important;
+  transition: transform 150ms cubic-bezier(0.22, 1, 0.36, 1), filter 140ms ease !important;
+}
+
+.mons-shell--nav-below .section-subnav__tab:not(.section-subnav__tab--active):hover,
+.mons-shell--nav-below .section-subnav__tab:not(.section-subnav__tab--active):focus-visible {
+  transform: scale(1.08) !important;
+}
+
+.mons-shell--nav-below .section-subnav__tab:not(.section-subnav__tab--active):active {
+  transform: translateY(1px) scale(1.03) !important;
 }
 
 .mons-shell--nav-below .section-subnav__label-icon--mobile {
   display: block;
+}
+
+.lesson-gallery-card .gallery-card-title-star,
+.puzzle-gallery-card .gallery-card-title-star {
+  display: none !important;
 }
 
 .mons-shell--nav-below .gallery-card-title-row {
@@ -408,7 +432,46 @@ image[href*='/assets/mons/'] {
 }
 
 .mons-shell--nav-below .gallery-card-title-star {
+  display: inline-flex !important;
   transform: none !important;
+}
+
+.puzzle-gallery-meta-star {
+  display: none;
+}
+
+.mons-shell--nav-below .gallery-card-star-rail {
+  display: none !important;
+}
+
+.mons-shell--nav-below .puzzle-gallery-card .gallery-card-title-star {
+  display: none !important;
+}
+
+.mons-shell--nav-below .puzzle-gallery-card .puzzle-gallery-meta-row {
+  transform: translateY(0.5px) !important;
+}
+
+.mons-shell--nav-below .puzzle-gallery-card .puzzle-gallery-meta-star {
+  display: inline-flex;
+  margin-top: 0.18rem;
+  transform: translateY(-1px);
+}
+
+.mons-shell--nav-below .super-mons-board--puzzle .board-coordinate-label {
+  display: none !important;
+}
+
+.mons-shell--nav-below .super-mons-board--puzzle .player-hud-cluster {
+  translate: 0 -15px;
+}
+
+.mons-shell--nav-below .super-mons-board--puzzle .player-hud-status-row {
+  translate: 0 -5px;
+}
+
+.mons-shell--nav-below .super-mons-board--puzzle .player-hud-reset-button {
+  translate: 0 -10px;
 }
 
 .mons-shell--nav-below .gallery-card {
@@ -475,6 +538,19 @@ image[href*='/assets/mons/'] {
 
 .mons-shell--nav-below .gallery-toolbar-label {
   white-space: nowrap;
+}
+
+.mons-shell--nav-below .gallery-toolbar-button {
+  transition: transform 150ms cubic-bezier(0.22, 1, 0.36, 1), filter 140ms ease !important;
+}
+
+.mons-shell--nav-below .gallery-toolbar-button:hover,
+.mons-shell--nav-below .gallery-toolbar-button:focus-visible {
+  transform: scale(1.08);
+}
+
+.mons-shell--nav-below .gallery-toolbar-button:active {
+  transform: translateY(1px) scale(1.03);
 }
 
 @media (max-width: 460px) {
@@ -753,6 +829,31 @@ image[href*='/assets/mons/'] {
   position: absolute;
   display: block;
   background: currentColor;
+}
+
+.topbar-marquee {
+  display: block;
+  overflow: hidden;
+}
+
+.topbar-marquee__track {
+  animation: monsTopbarMarqueeScroll 18s linear infinite;
+}
+
+@keyframes monsTopbarMarqueeScroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .topbar-marquee__track {
+    animation: none;
+    transform: translateX(0);
+  }
 }
 
 @keyframes monsCloudLayerFade {

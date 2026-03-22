@@ -477,6 +477,9 @@ const MAGNIFIER_HEIGHT = 300;
 const MAGNIFIER_ZOOM = 2.75;
 const PDF_RENDER_SUPERSAMPLE = 2;
 const FULLSCREEN_RENDER_SUPERSAMPLE = 2.8;
+const FULLSCREEN_MAX_CANVAS_DIMENSION_PX = 8192;
+const FULLSCREEN_MAX_CANVAS_AREA_PX = 24_000_000;
+const FULLSCREEN_OFFSCREEN_CANVAS_AREA_THRESHOLD_PX = 18_000_000;
 const MANUAL_CANVAS_WIDTH_GUARD_PX = 6;
 const FULLSCREEN_WIDTH_GUARD_PX = 8;
 
@@ -1108,7 +1111,51 @@ function ManualPdfViewer(): ReactNode {
         const baseViewport = page.getViewport({scale: 1});
         const fitScale = availableWidth / Math.max(1, baseViewport.width);
         const cssScale = Math.max(0.08, fitScale * (clampedFullscreenZoomPercent / 100));
-        const renderScale = cssScale * FULLSCREEN_RENDER_SUPERSAMPLE;
+        const devicePixelRatio = window.devicePixelRatio || 1;
+        const zoomFactor = Math.max(1, clampedFullscreenZoomPercent / 100);
+        const dynamicFullscreenSupersample = Math.max(
+          1,
+          FULLSCREEN_RENDER_SUPERSAMPLE / zoomFactor,
+        );
+        let renderScale = cssScale * dynamicFullscreenSupersample;
+        const getCanvasMetricsForScale = (scale: number) => {
+          const width = Math.max(
+            1,
+            Math.floor(baseViewport.width * scale * devicePixelRatio),
+          );
+          const height = Math.max(
+            1,
+            Math.floor(baseViewport.height * scale * devicePixelRatio),
+          );
+          return {
+            width,
+            height,
+            area: width * height,
+          };
+        };
+        const currentMetrics = getCanvasMetricsForScale(renderScale);
+        let renderScaleClampFactor = 1;
+        if (currentMetrics.width > FULLSCREEN_MAX_CANVAS_DIMENSION_PX) {
+          renderScaleClampFactor = Math.min(
+            renderScaleClampFactor,
+            FULLSCREEN_MAX_CANVAS_DIMENSION_PX / currentMetrics.width,
+          );
+        }
+        if (currentMetrics.height > FULLSCREEN_MAX_CANVAS_DIMENSION_PX) {
+          renderScaleClampFactor = Math.min(
+            renderScaleClampFactor,
+            FULLSCREEN_MAX_CANVAS_DIMENSION_PX / currentMetrics.height,
+          );
+        }
+        if (currentMetrics.area > FULLSCREEN_MAX_CANVAS_AREA_PX) {
+          renderScaleClampFactor = Math.min(
+            renderScaleClampFactor,
+            Math.sqrt(FULLSCREEN_MAX_CANVAS_AREA_PX / currentMetrics.area),
+          );
+        }
+        if (renderScaleClampFactor < 1) {
+          renderScale = Math.max(cssScale, renderScale * renderScaleClampFactor);
+        }
         const cssViewport = page.getViewport({scale: cssScale});
         const renderViewport = page.getViewport({scale: renderScale});
         const cssWidth = Math.max(1, Math.floor(cssViewport.width));
@@ -1121,49 +1168,77 @@ function ManualPdfViewer(): ReactNode {
             : {width: cssWidth, height: cssHeight},
         );
 
-        const devicePixelRatio = window.devicePixelRatio || 1;
-        const offscreenCanvas = window.document.createElement('canvas');
-        offscreenCanvas.width = Math.max(1, Math.floor(renderViewport.width * devicePixelRatio));
-        offscreenCanvas.height = Math.max(1, Math.floor(renderViewport.height * devicePixelRatio));
-        const offscreenContext = offscreenCanvas.getContext('2d');
-        if (!offscreenContext) {
-          return;
-        }
-        offscreenContext.imageSmoothingEnabled = true;
-        offscreenContext.imageSmoothingQuality = 'high';
-
-        const renderContext: {
-          canvasContext: CanvasRenderingContext2D;
-          viewport: any;
-          transform?: [number, number, number, number, number, number];
-        } = {
-          canvasContext: offscreenContext,
-          viewport: renderViewport,
-        };
-
-        if (devicePixelRatio !== 1) {
-          renderContext.transform = [devicePixelRatio, 0, 0, devicePixelRatio, 0, 0];
-        }
-
-        await page.render(renderContext).promise;
-        if (cancelled || fullscreenRenderCycleRef.current !== renderCycle) {
-          return;
-        }
-
+        const renderPixelWidth = Math.max(
+          1,
+          Math.floor(renderViewport.width * devicePixelRatio),
+        );
+        const renderPixelHeight = Math.max(
+          1,
+          Math.floor(renderViewport.height * devicePixelRatio),
+        );
+        const renderPixelArea = renderPixelWidth * renderPixelHeight;
+        const useOffscreenBuffer =
+          renderPixelArea <= FULLSCREEN_OFFSCREEN_CANVAS_AREA_THRESHOLD_PX;
         const context = canvasNode.getContext('2d');
         if (!context) {
           return;
         }
-        if (canvasNode.width !== offscreenCanvas.width || canvasNode.height !== offscreenCanvas.height) {
-          canvasNode.width = offscreenCanvas.width;
-          canvasNode.height = offscreenCanvas.height;
+        if (
+          canvasNode.width !== renderPixelWidth ||
+          canvasNode.height !== renderPixelHeight
+        ) {
+          canvasNode.width = renderPixelWidth;
+          canvasNode.height = renderPixelHeight;
         }
         canvasNode.style.width = `${cssWidth}px`;
         canvasNode.style.height = `${cssHeight}px`;
         context.imageSmoothingEnabled = true;
         context.imageSmoothingQuality = 'high';
-        context.clearRect(0, 0, canvasNode.width, canvasNode.height);
-        context.drawImage(offscreenCanvas, 0, 0);
+        if (useOffscreenBuffer) {
+          const offscreenCanvas = window.document.createElement('canvas');
+          offscreenCanvas.width = renderPixelWidth;
+          offscreenCanvas.height = renderPixelHeight;
+          const offscreenContext = offscreenCanvas.getContext('2d');
+          if (!offscreenContext) {
+            return;
+          }
+          offscreenContext.imageSmoothingEnabled = true;
+          offscreenContext.imageSmoothingQuality = 'high';
+          const offscreenRenderContext: {
+            canvasContext: CanvasRenderingContext2D;
+            viewport: any;
+            transform?: [number, number, number, number, number, number];
+          } = {
+            canvasContext: offscreenContext,
+            viewport: renderViewport,
+          };
+          if (devicePixelRatio !== 1) {
+            offscreenRenderContext.transform = [devicePixelRatio, 0, 0, devicePixelRatio, 0, 0];
+          }
+          await page.render(offscreenRenderContext).promise;
+          if (cancelled || fullscreenRenderCycleRef.current !== renderCycle) {
+            return;
+          }
+          context.clearRect(0, 0, canvasNode.width, canvasNode.height);
+          context.drawImage(offscreenCanvas, 0, 0);
+        } else {
+          context.clearRect(0, 0, canvasNode.width, canvasNode.height);
+          const directRenderContext: {
+            canvasContext: CanvasRenderingContext2D;
+            viewport: any;
+            transform?: [number, number, number, number, number, number];
+          } = {
+            canvasContext: context,
+            viewport: renderViewport,
+          };
+          if (devicePixelRatio !== 1) {
+            directRenderContext.transform = [devicePixelRatio, 0, 0, devicePixelRatio, 0, 0];
+          }
+          await page.render(directRenderContext).promise;
+          if (cancelled || fullscreenRenderCycleRef.current !== renderCycle) {
+            return;
+          }
+        }
 
         const textContent = await page.getTextContent();
         if (cancelled || fullscreenRenderCycleRef.current !== renderCycle) {

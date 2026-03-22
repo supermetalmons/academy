@@ -3,6 +3,7 @@ import BlankSectionPage from '@site/src/components/BlankSectionPage';
 import ResourcesSubnav from '@site/src/components/ResourcesSubnav';
 
 type ChainKind = 'ethereum' | 'solana';
+type AlternatePlayIconKind = 'steam' | 'googleDrive';
 
 const externalLinkProps = {
   target: '_blank',
@@ -14,14 +15,37 @@ const emojipackFontDownloadItem = {
   href: 'https://drive.google.com/drive/folders/12z0-LVx_ItZDojkrO6IkDCo40kjx7B2A?usp=sharing',
 } as const;
 
-const alternatePlayItems: Array<{label: string; href: string}> = [
+const alternatePlayItems: Array<{label: string; href: string; iconKind?: AlternatePlayIconKind}> = [
   {
     label: 'Tabletop Simulator Edition',
     href: 'https://steamcommunity.com/sharedfiles/filedetails/?id=3210189942&searchtext=',
+    iconKind: 'steam',
   },
   {
     label: "Google Docs Drag n' Drop Version",
     href: 'https://docs.google.com/document/d/1NlqRdtJ2uzyO67uC2TwPNweSRMmp6Cb7L5PGs-sjhgg/edit?usp=sharing',
+    iconKind: 'googleDrive',
+  },
+];
+
+const pastTournamentItems: Array<{label: string; href: string; winnerText: string; runnerUpText: string}> = [
+  {
+    label: "Fall Challenge Finals '25",
+    href: 'https://x.com/i/broadcasts/1BdGYZgwWrEJX',
+    winnerText: 'Winner: lambchop',
+    runnerUpText: 'Runner-up: Moldy',
+  },
+  {
+    label: 'G40 Invitational',
+    href: 'https://x.com/i/broadcasts/1lPJqvEokZMxb',
+    winnerText: 'Winner: Ivan Grachyov',
+    runnerUpText: 'Runner-up: meinong',
+  },
+  {
+    label: "SMM Inaugural Invitational Tournament '25",
+    href: 'https://x.com/i/broadcasts/1ynKOlQbvDqGR',
+    winnerText: 'Winner: GardenParty85',
+    runnerUpText: 'Runner-up: lambchop',
   },
 ];
 
@@ -99,16 +123,60 @@ const collectionTextStyle: CSSProperties = {
   lineHeight: 1.25,
 };
 
-const trailingMetaTextStyle: CSSProperties = {
-  lineHeight: 1.25,
-  opacity: 0.82,
+const tournamentWinnerTextStyle: CSSProperties = {
+  lineHeight: 1.2,
+  opacity: 0.8,
   fontSize: '0.82em',
+  marginLeft: '1.15rem',
+};
+
+const tournamentRunnerUpTextStyle: CSSProperties = {
+  ...tournamentWinnerTextStyle,
+  opacity: 0.46,
+};
+
+const tournamentWinnerRowStyle: CSSProperties = {
+  ...tournamentWinnerTextStyle,
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '0.3rem',
+};
+
+const tournamentWinnerIconStyle: CSSProperties = {
+  lineHeight: 1,
+  transform: 'translateY(-0.01rem)',
+};
+
+const trailingMetaIconWrapStyle: CSSProperties = {
   marginLeft: '5px',
-  position: 'relative',
-  top: '0',
+  display: 'inline-flex',
+  alignItems: 'center',
+  opacity: 0.9,
+};
+
+const googleDriveIconStyle: CSSProperties = {
+  width: '0.92rem',
+  height: '0.92rem',
+  display: 'block',
+  flex: '0 0 auto',
+  transform: 'translateY(1px)',
+};
+
+const steamIconStyle: CSSProperties = {
+  ...googleDriveIconStyle,
+  transform: 'translateY(0px)',
+  imageRendering: 'auto',
+  filter: 'blur(0.08px)',
 };
 
 const collectionLinkWithIconStyle: CSSProperties = {
+  ...collectionTextStyle,
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '0.35rem',
+};
+
+const collectionLinkWithTrailingIconStyle: CSSProperties = {
   ...collectionTextStyle,
   display: 'inline-flex',
   alignItems: 'center',
@@ -142,11 +210,73 @@ function renderChainIcon(chain: ChainKind): ReactNode {
   );
 }
 
+function renderGoogleDriveIcon(): ReactNode {
+  return (
+    <img
+      src="/assets/google-drive-icon.svg"
+      alt=""
+      aria-hidden="true"
+      draggable={false}
+      style={googleDriveIconStyle}
+    />
+  );
+}
+
+function renderSteamIcon(): ReactNode {
+  return (
+    <img
+      src="/assets/steam-logo.svg"
+      alt=""
+      aria-hidden="true"
+      draggable={false}
+      style={steamIconStyle}
+    />
+  );
+}
+
+function renderAlternatePlayIcon(iconKind: AlternatePlayIconKind): ReactNode {
+  if (iconKind === 'steam') {
+    return renderSteamIcon();
+  }
+  return renderGoogleDriveIcon();
+}
+
 export default function ResourcesLinksPage(): ReactNode {
   return (
     <BlankSectionPage title="Resources">
       <ResourcesSubnav active="other" />
       <section style={collectionsWrapStyle}>
+        <h3 style={collectionsTitleStyle}>Past Tournaments</h3>
+        <ul style={collectionsListStyle}>
+          {pastTournamentItems.map((item) => (
+            <li
+              key={item.label}
+              style={{
+                ...collectionItemStyle,
+                flexDirection: 'column',
+                alignItems: 'flex-start',
+                gap: '0.14rem',
+              }}>
+              <span style={collectionItemStyle}>
+                <span style={collectionChevronStyle} aria-hidden="true">
+                  ›
+                </span>
+                <a href={item.href} {...externalLinkProps} style={collectionTextStyle}>
+                  {item.label}
+                </a>
+              </span>
+              <span style={tournamentWinnerRowStyle}>
+                <span aria-hidden="true" style={tournamentWinnerIconStyle}>
+                  🏆
+                </span>
+                <span>{item.winnerText}</span>
+              </span>
+              <span style={tournamentRunnerUpTextStyle}>{item.runnerUpText}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+      <section style={{...collectionsWrapStyle, ...collectionsBlockStyle}}>
         <h3 style={collectionsTitleStyle}>Alternate ways to play Mons</h3>
         <ul style={collectionsListStyle}>
           {alternatePlayItems.map((item) => (
@@ -154,8 +284,9 @@ export default function ResourcesLinksPage(): ReactNode {
               <span style={collectionChevronStyle} aria-hidden="true">
                 ›
               </span>
-              <a href={item.href} {...externalLinkProps} style={collectionTextStyle}>
-                {item.label}
+              <a href={item.href} {...externalLinkProps} style={collectionLinkWithTrailingIconStyle}>
+                <span>{item.label}</span>
+                {item.iconKind ? renderAlternatePlayIcon(item.iconKind) : null}
               </a>
             </li>
           ))}
@@ -186,7 +317,7 @@ export default function ResourcesLinksPage(): ReactNode {
             <a href={emojipackFontDownloadItem.href} {...externalLinkProps} style={collectionTextStyle}>
               {emojipackFontDownloadItem.label}
             </a>
-            <span style={trailingMetaTextStyle}>(Google Drive)</span>
+            <span style={trailingMetaIconWrapStyle}>{renderGoogleDriveIcon()}</span>
           </li>
         </ul>
       </section>
