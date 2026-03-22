@@ -82,6 +82,10 @@ const submitSolutionButtonStyle: CSSProperties = {
   position: 'relative',
   zIndex: 81,
 };
+const MIN_PUZZLE_ACTION_BUTTON_SCALE = 0.56;
+const MIN_PUZZLE_THIN_ACTION_BUTTON_SCALE = 0.64;
+const MIN_PUZZLE_THIN_TITLE_SCALE = 0.56;
+const PUZZLE_THIN_ACTION_LAYOUT_MAX_WIDTH_PX = 780;
 
 export default function PuzzleTitleRow({
   puzzleId,
@@ -91,7 +95,17 @@ export default function PuzzleTitleRow({
   scale = 1,
   boardWidthPx,
 }: PuzzleTitleRowProps): ReactNode {
+  const [isThinActionLayout, setIsThinActionLayout] = useState(false);
   const clampedScale = Math.max(0.22, Math.min(1, scale));
+  const actionButtonScale = Math.max(
+    MIN_PUZZLE_ACTION_BUTTON_SCALE,
+    clampedScale,
+  );
+  const thinActionButtonScale = Math.max(
+    MIN_PUZZLE_THIN_ACTION_BUTTON_SCALE,
+    actionButtonScale,
+  );
+  const thinTitleScale = Math.max(MIN_PUZZLE_THIN_TITLE_SCALE, clampedScale);
   const resolvedBoardWidthPx =
     boardWidthPx !== undefined
       ? Math.max(80, Math.round(boardWidthPx))
@@ -110,20 +124,150 @@ export default function PuzzleTitleRow({
   };
   const computedBackButtonScaleWrapStyle: CSSProperties = {
     ...backButtonScaleWrapStyle,
-    transform: `scale(${clampedScale})`,
+    transform: `scale(${actionButtonScale})`,
   };
   const computedBackButtonGhostScaleWrapStyle: CSSProperties = {
     ...backButtonGhostScaleWrapStyle,
-    transform: `scale(${clampedScale})`,
+    transform: `scale(${actionButtonScale})`,
   };
-  const sideButtonInsetPx = Math.max(0, Math.round(6 * clampedScale));
+  const sideButtonInsetPx = Math.max(0, Math.round(6 * actionButtonScale));
 
   const [isSubmitComingSoon, setIsSubmitComingSoon] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const mediaQuery = window.matchMedia(
+      `(max-width: ${PUZZLE_THIN_ACTION_LAYOUT_MAX_WIDTH_PX}px)`,
+    );
+    const updateMode = () => {
+      setIsThinActionLayout(mediaQuery.matches);
+    };
+    updateMode();
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', updateMode);
+      return () => {
+        mediaQuery.removeEventListener('change', updateMode);
+      };
+    }
+    mediaQuery.addListener(updateMode);
+    return () => {
+      mediaQuery.removeListener(updateMode);
+    };
+  }, []);
+
   useEffect(() => {
     if (!isSubmitEnabled) {
       setIsSubmitComingSoon(false);
     }
   }, [isSubmitEnabled]);
+
+  if (isThinActionLayout) {
+    const thinSideButtonInsetPx = Math.max(
+      sideButtonInsetPx,
+      Math.round(8 * thinActionButtonScale),
+    );
+    const computedThinBackButtonScaleWrapStyle: CSSProperties = {
+      ...backButtonScaleWrapStyle,
+      transform: `scale(${thinActionButtonScale})`,
+    };
+    const computedThinSubmitScaleWrapStyle: CSSProperties = {
+      ...backButtonGhostScaleWrapStyle,
+      position: 'absolute',
+      left: '50%',
+      top: '50%',
+      transform: `translate(-50%, -50%) scale(${thinActionButtonScale})`,
+      transformOrigin: 'center center',
+    };
+    const thinTitleRowStyle: CSSProperties = {
+      ...computedTitleRowStyle,
+      minHeight: undefined,
+      display: 'grid',
+      gridTemplateColumns: '1fr',
+      justifyItems: 'stretch',
+      alignItems: 'stretch',
+      rowGap: `${Math.max(3, Math.round(6 * clampedScale))}px`,
+    };
+    const thinTopRowStyle: CSSProperties = {
+      width: '100%',
+      minHeight: `${Math.max(
+        24,
+        Math.round(2.15 * 16 * Math.max(thinActionButtonScale, thinTitleScale)),
+      )}px`,
+      position: 'relative',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'flex-start',
+      paddingLeft: `${thinSideButtonInsetPx}px`,
+      boxSizing: 'border-box',
+    };
+    const thinTitleCenterWrapStyle: CSSProperties = {
+      ...titleCenterWrapStyle,
+      top: '50%',
+      transform: `translate(-50%, -50%) scale(${thinTitleScale})`,
+      transformOrigin: 'center center',
+      zIndex: 50,
+    };
+    const thinSubmitSlotStyle: CSSProperties = {
+      width: '100%',
+      minHeight: `${Math.max(
+        24,
+        Math.round(1.72 * 16 * thinActionButtonScale),
+      )}px`,
+      position: 'relative',
+      boxSizing: 'border-box',
+      zIndex: 81,
+    };
+
+    return (
+      <div style={thinTitleRowStyle}>
+        <div style={thinTopRowStyle}>
+          <span style={computedThinBackButtonScaleWrapStyle}>
+            <Link
+              to={backTo}
+              className="puzzle-back-button"
+              style={backButtonStyle}>
+              ←
+            </Link>
+          </span>
+
+          <div style={thinTitleCenterWrapStyle}>
+            <div style={titleWithStarRowStyle}>
+              <h2 style={titleStyle}>"{title}"</h2>
+              <span style={titleActionStarWrapStyle}>
+                <PuzzleFavoriteStar puzzleId={puzzleId} size="1.68rem" />
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div style={thinSubmitSlotStyle}>
+          <span style={computedThinSubmitScaleWrapStyle}>
+            <button
+              type="button"
+              className="puzzle-back-button"
+              style={{
+                ...submitSolutionButtonStyle,
+                opacity: isSubmitEnabled ? 1 : 0.3,
+                cursor: isSubmitEnabled ? 'pointer' : 'default',
+                pointerEvents: isSubmitEnabled ? 'auto' : 'none',
+              }}
+              disabled={!isSubmitEnabled}
+              onClick={() => {
+                if (!isSubmitEnabled) {
+                  return;
+                }
+                setIsSubmitComingSoon(true);
+              }}>
+              {isSubmitComingSoon ? 'coming soon...' : 'submit solution'}
+            </button>
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={computedTitleRowStyle}>
       <div style={{justifySelf: 'start', paddingLeft: `${sideButtonInsetPx}px`}}>

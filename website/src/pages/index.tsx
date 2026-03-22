@@ -9,7 +9,6 @@ type Point = {
 const homeWelcomeLayerStyle = {
   position: 'fixed' as const,
   left: '50%',
-  top: 'calc(40% - 110px)',
   transform: 'translate(-50%, -50%)',
   zIndex: 3,
   width: 'min(92vw, 640px)',
@@ -103,6 +102,7 @@ const SPRITE_TARGET_PADDING_X = 90;
 const SPRITE_TARGET_PADDING_Y = 90;
 const MAX_TRAIL_DISTANCE_PX = 2200;
 const TARGET_DOT_FADE_DISTANCE_PX = 220;
+const MOBILE_WELCOME_GUARD_BREAKPOINT_PX = 780;
 
 const targetDotStyle: CSSProperties = {
   position: 'absolute',
@@ -138,6 +138,29 @@ function distanceBetween(a: Point, b: Point): number {
 
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
+}
+
+function getWelcomeTopPx(
+  viewportWidth: number,
+  viewportHeight: number,
+  headerHeight: number,
+): number {
+  const baseTop = viewportHeight * 0.4 - 110;
+  if (viewportWidth > MOBILE_WELCOME_GUARD_BREAKPOINT_PX) {
+    return baseTop;
+  }
+  return Math.max(headerHeight + 28, baseTop);
+}
+
+function getCurrentHeaderHeight(): number {
+  if (typeof window === 'undefined') {
+    return 0;
+  }
+  const headerNode = document.querySelector('header');
+  if (!(headerNode instanceof HTMLElement)) {
+    return 0;
+  }
+  return Math.round(headerNode.getBoundingClientRect().height);
 }
 
 function createInitialPositions(viewportWidth: number, viewportHeight: number): {
@@ -342,6 +365,13 @@ export default function Home(): ReactNode {
   const [omomScale, setOmomScale] = useState(1);
   const [targetDotPosition, setTargetDotPosition] = useState<Point | null>(null);
   const [targetDotOpacity, setTargetDotOpacity] = useState(0);
+  const [homeWelcomeTopPx, setHomeWelcomeTopPx] = useState<number>(() =>
+    getWelcomeTopPx(
+      typeof window === 'undefined' ? DEFAULT_VIEWPORT_WIDTH : window.innerWidth,
+      typeof window === 'undefined' ? DEFAULT_VIEWPORT_HEIGHT : window.innerHeight,
+      typeof window === 'undefined' ? 56 : getCurrentHeaderHeight(),
+    ),
+  );
 
   const boschPositionRef = useRef<Point>(initialPositions.bosch);
   const omomPositionRef = useRef<Point>(initialPositions.omom);
@@ -382,6 +412,44 @@ export default function Home(): ReactNode {
     ];
     setBoschPosition(nextInitial.bosch);
     setOmomPosition(nextInitial.omom);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const updateWelcomeTop = (): void => {
+      setHomeWelcomeTopPx(
+        getWelcomeTopPx(
+          window.innerWidth,
+          window.innerHeight,
+          getCurrentHeaderHeight(),
+        ),
+      );
+    };
+
+    updateWelcomeTop();
+
+    const headerNode = document.querySelector('header');
+    let observer: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined' && headerNode instanceof HTMLElement) {
+      observer = new ResizeObserver(() => {
+        updateWelcomeTop();
+      });
+      observer.observe(headerNode);
+    }
+
+    window.addEventListener('resize', updateWelcomeTop);
+    window.addEventListener('orientationchange', updateWelcomeTop);
+
+    return () => {
+      window.removeEventListener('resize', updateWelcomeTop);
+      window.removeEventListener('orientationchange', updateWelcomeTop);
+      if (observer) {
+        observer.disconnect();
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -507,7 +575,15 @@ export default function Home(): ReactNode {
     };
 
     const handlePointerDown = (event: PointerEvent): void => {
-      if (event.target instanceof Element && event.target.closest('header')) {
+      const targetElement = event.target instanceof Element ? event.target : null;
+      if (
+        targetElement !== null &&
+        (
+          targetElement.closest('header') ||
+          targetElement.closest('aside[aria-label="Site menu"]') ||
+          targetElement.closest('button[aria-label="Close site menu"]')
+        )
+      ) {
         return;
       }
       const viewportWidth = window.innerWidth;
@@ -611,7 +687,7 @@ export default function Home(): ReactNode {
           </div>
         </div>
       }>
-      <div style={homeWelcomeLayerStyle}>
+      <div style={{...homeWelcomeLayerStyle, top: `${homeWelcomeTopPx}px`}}>
         <div style={homeWelcomeBoxStyle}>
           Welcome to Mons Academy, this world's #1 learning hub for all things Super Metal Mons!
         </div>

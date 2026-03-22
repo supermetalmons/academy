@@ -393,31 +393,38 @@ image[href*='/assets/mons/'] {
   filter: invert(1);
 }
 
-.mons-shell--nav-below .section-subnav__tab {
+.mons-shell--nav-below .section-subnav__tab,
+.mons-shell--mobile-sidebar .section-subnav__tab {
   display: inline-flex !important;
   align-items: center !important;
 }
 
-.mons-shell--nav-below .section-subnav__tab:not(.section-subnav__tab--active) .section-subnav__label-text {
+.mons-shell--nav-below .section-subnav__tab:not(.section-subnav__tab--active) .section-subnav__label-text,
+.mons-shell--mobile-sidebar .section-subnav__tab:not(.section-subnav__tab--active) .section-subnav__label-text {
   display: none !important;
 }
 
-.mons-shell--nav-below .section-subnav__tab:not(.section-subnav__tab--active) {
+.mons-shell--nav-below .section-subnav__tab:not(.section-subnav__tab--active),
+.mons-shell--mobile-sidebar .section-subnav__tab:not(.section-subnav__tab--active) {
   padding-left: 0.42rem !important;
   padding-right: 0.42rem !important;
   transition: transform 150ms cubic-bezier(0.22, 1, 0.36, 1), filter 140ms ease !important;
 }
 
 .mons-shell--nav-below .section-subnav__tab:not(.section-subnav__tab--active):hover,
-.mons-shell--nav-below .section-subnav__tab:not(.section-subnav__tab--active):focus-visible {
+.mons-shell--nav-below .section-subnav__tab:not(.section-subnav__tab--active):focus-visible,
+.mons-shell--mobile-sidebar .section-subnav__tab:not(.section-subnav__tab--active):hover,
+.mons-shell--mobile-sidebar .section-subnav__tab:not(.section-subnav__tab--active):focus-visible {
   transform: scale(1.08) !important;
 }
 
-.mons-shell--nav-below .section-subnav__tab:not(.section-subnav__tab--active):active {
+.mons-shell--nav-below .section-subnav__tab:not(.section-subnav__tab--active):active,
+.mons-shell--mobile-sidebar .section-subnav__tab:not(.section-subnav__tab--active):active {
   transform: translateY(1px) scale(1.03) !important;
 }
 
-.mons-shell--nav-below .section-subnav__label-icon--mobile {
+.mons-shell--nav-below .section-subnav__label-icon--mobile,
+.mons-shell--mobile-sidebar .section-subnav__label-icon--mobile {
   display: block;
 }
 
@@ -431,7 +438,17 @@ image[href*='/assets/mons/'] {
   gap: 0.32rem;
 }
 
+.mons-shell--mobile-gallery-thin .gallery-card-title-row {
+  flex-direction: column;
+  gap: 0.32rem;
+}
+
 .mons-shell--nav-below .gallery-card-title-star {
+  display: inline-flex !important;
+  transform: none !important;
+}
+
+.mons-shell--mobile-gallery-thin .lesson-gallery-card .gallery-card-title-star {
   display: inline-flex !important;
   transform: none !important;
 }
@@ -444,11 +461,23 @@ image[href*='/assets/mons/'] {
   display: none !important;
 }
 
+.mons-shell--mobile-gallery-thin .gallery-card-star-rail {
+  display: none !important;
+}
+
 .mons-shell--nav-below .puzzle-gallery-card .gallery-card-title-star {
   display: none !important;
 }
 
+.mons-shell--mobile-gallery-thin .puzzle-gallery-card .gallery-card-title-star {
+  display: none !important;
+}
+
 .mons-shell--nav-below .puzzle-gallery-card .puzzle-gallery-meta-row {
+  transform: translateY(0.5px) !important;
+}
+
+.mons-shell--mobile-gallery-thin .puzzle-gallery-card .puzzle-gallery-meta-row {
   transform: translateY(0.5px) !important;
 }
 
@@ -458,7 +487,14 @@ image[href*='/assets/mons/'] {
   transform: translateY(-1px);
 }
 
-.mons-shell--nav-below .super-mons-board--puzzle .board-coordinate-label {
+.mons-shell--mobile-gallery-thin .puzzle-gallery-card .puzzle-gallery-meta-star {
+  display: inline-flex;
+  margin-top: 0.18rem;
+  transform: translateY(-1px);
+}
+
+.mons-shell--nav-below .super-mons-board--puzzle .board-coordinate-label,
+.mons-shell--mobile-sidebar .super-mons-board--puzzle .board-coordinate-label {
   display: none !important;
 }
 
@@ -480,7 +516,24 @@ image[href*='/assets/mons/'] {
   overflow: hidden;
 }
 
+.mons-shell--mobile-gallery-thin .gallery-card {
+  position: relative;
+  display: block !important;
+  overflow: hidden;
+}
+
 .mons-shell--nav-below .gallery-card-image-link {
+  position: absolute !important;
+  inset: 0;
+  z-index: 0;
+  display: block !important;
+  width: 100%;
+  height: 100% !important;
+  padding: 0 !important;
+  pointer-events: none;
+}
+
+.mons-shell--mobile-gallery-thin .gallery-card-image-link {
   position: absolute !important;
   inset: 0;
   z-index: 0;
@@ -498,12 +551,28 @@ image[href*='/assets/mons/'] {
   opacity: 0.15;
 }
 
+.mons-shell--mobile-gallery-thin .gallery-card-preview-image {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  opacity: 0.15;
+}
+
 .mons-shell--nav-below .gallery-card-preview-image > * {
   width: 100% !important;
   height: 100% !important;
 }
 
+.mons-shell--mobile-gallery-thin .gallery-card-preview-image > * {
+  width: 100% !important;
+  height: 100% !important;
+}
+
 .mons-shell--nav-below .gallery-card-divider {
+  display: none !important;
+}
+
+.mons-shell--mobile-gallery-thin .gallery-card-divider {
   display: none !important;
 }
 
@@ -518,12 +587,25 @@ image[href*='/assets/mons/'] {
   justify-content: center !important;
 }
 
-.mons-shell--nav-below .gallery-toolbar {
+.mons-shell--mobile-gallery-thin .gallery-card-text-column {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  min-height: 156px;
+  padding: 0.95rem 1rem !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.mons-shell--nav-below .gallery-toolbar,
+.mons-shell--mobile-gallery-thin .gallery-toolbar {
   gap: 0.42rem !important;
   overflow: hidden;
 }
 
-.mons-shell--nav-below .gallery-toolbar-group {
+.mons-shell--nav-below .gallery-toolbar-group,
+.mons-shell--mobile-gallery-thin .gallery-toolbar-group {
   display: flex !important;
   width: 100%;
   min-width: 0;
@@ -532,93 +614,113 @@ image[href*='/assets/mons/'] {
   gap: 0.45rem;
 }
 
-.mons-shell--nav-below .gallery-toolbar-group--sort {
+.mons-shell--nav-below .gallery-toolbar-group--sort,
+.mons-shell--mobile-gallery-thin .gallery-toolbar-group--sort {
   margin-left: 0 !important;
 }
 
-.mons-shell--nav-below .gallery-toolbar-label {
+.mons-shell--nav-below .gallery-toolbar-label,
+.mons-shell--mobile-gallery-thin .gallery-toolbar-label {
   white-space: nowrap;
 }
 
-.mons-shell--nav-below .gallery-toolbar-button {
+.mons-shell--nav-below .gallery-toolbar-button,
+.mons-shell--mobile-gallery-thin .gallery-toolbar-button {
   transition: transform 150ms cubic-bezier(0.22, 1, 0.36, 1), filter 140ms ease !important;
 }
 
 .mons-shell--nav-below .gallery-toolbar-button:hover,
-.mons-shell--nav-below .gallery-toolbar-button:focus-visible {
+.mons-shell--nav-below .gallery-toolbar-button:focus-visible,
+.mons-shell--mobile-gallery-thin .gallery-toolbar-button:hover,
+.mons-shell--mobile-gallery-thin .gallery-toolbar-button:focus-visible {
   transform: scale(1.08);
 }
 
-.mons-shell--nav-below .gallery-toolbar-button:active {
+.mons-shell--nav-below .gallery-toolbar-button:active,
+.mons-shell--mobile-gallery-thin .gallery-toolbar-button:active {
   transform: translateY(1px) scale(1.03);
 }
 
 @media (max-width: 460px) {
-  .mons-shell--nav-below .gallery-toolbar {
+  .mons-shell--nav-below .gallery-toolbar,
+  .mons-shell--mobile-gallery-thin .gallery-toolbar {
     padding: 0.42rem 0.48rem !important;
   }
 
-  .mons-shell--nav-below .gallery-toolbar-label {
+  .mons-shell--nav-below .gallery-toolbar-label,
+  .mons-shell--mobile-gallery-thin .gallery-toolbar-label {
     font-size: 0.9rem !important;
   }
 
-  .mons-shell--nav-below .gallery-toolbar-buttons {
+  .mons-shell--nav-below .gallery-toolbar-buttons,
+  .mons-shell--mobile-gallery-thin .gallery-toolbar-buttons {
     gap: 0.26rem !important;
   }
 
-  .mons-shell--nav-below .gallery-toolbar-button {
+  .mons-shell--nav-below .gallery-toolbar-button,
+  .mons-shell--mobile-gallery-thin .gallery-toolbar-button {
     width: 28px !important;
     height: 28px !important;
   }
 
-  .mons-shell--nav-below .gallery-toolbar-icon {
+  .mons-shell--nav-below .gallery-toolbar-icon,
+  .mons-shell--mobile-gallery-thin .gallery-toolbar-icon {
     width: 15px !important;
     height: 15px !important;
   }
 }
 
 @media (max-width: 390px) {
-  .mons-shell--nav-below .gallery-toolbar {
+  .mons-shell--nav-below .gallery-toolbar,
+  .mons-shell--mobile-gallery-thin .gallery-toolbar {
     padding: 0.36rem 0.42rem !important;
     gap: 0.32rem !important;
   }
 
-  .mons-shell--nav-below .gallery-toolbar-label {
+  .mons-shell--nav-below .gallery-toolbar-label,
+  .mons-shell--mobile-gallery-thin .gallery-toolbar-label {
     font-size: 0.8rem !important;
   }
 
-  .mons-shell--nav-below .gallery-toolbar-group {
+  .mons-shell--nav-below .gallery-toolbar-group,
+  .mons-shell--mobile-gallery-thin .gallery-toolbar-group {
     gap: 0.28rem;
   }
 
-  .mons-shell--nav-below .gallery-toolbar-buttons {
+  .mons-shell--nav-below .gallery-toolbar-buttons,
+  .mons-shell--mobile-gallery-thin .gallery-toolbar-buttons {
     gap: 0.2rem !important;
   }
 
-  .mons-shell--nav-below .gallery-toolbar-button {
+  .mons-shell--nav-below .gallery-toolbar-button,
+  .mons-shell--mobile-gallery-thin .gallery-toolbar-button {
     width: 24px !important;
     height: 24px !important;
   }
 
-  .mons-shell--nav-below .gallery-toolbar-icon {
+  .mons-shell--nav-below .gallery-toolbar-icon,
+  .mons-shell--mobile-gallery-thin .gallery-toolbar-icon {
     width: 12px !important;
     height: 12px !important;
   }
 }
 
 @media (max-width: 430px) {
-  .mons-shell--nav-below .gallery-toolbar-label {
+  .mons-shell--nav-below .gallery-toolbar-label,
+  .mons-shell--mobile-gallery-thin .gallery-toolbar-label {
     display: none !important;
   }
 
-  .mons-shell--nav-below .gallery-toolbar {
+  .mons-shell--nav-below .gallery-toolbar,
+  .mons-shell--mobile-gallery-thin .gallery-toolbar {
     flex-wrap: nowrap !important;
     justify-content: flex-end;
     align-items: center;
     gap: 0.18rem !important;
   }
 
-  .mons-shell--nav-below .gallery-toolbar-group {
+  .mons-shell--nav-below .gallery-toolbar-group,
+  .mons-shell--mobile-gallery-thin .gallery-toolbar-group {
     width: auto;
     min-width: 0;
     justify-content: flex-end;
@@ -626,12 +728,14 @@ image[href*='/assets/mons/'] {
     flex-shrink: 1;
   }
 
-  .mons-shell--nav-below .gallery-toolbar-buttons {
+  .mons-shell--nav-below .gallery-toolbar-buttons,
+  .mons-shell--mobile-gallery-thin .gallery-toolbar-buttons {
     display: inline-flex;
     flex-wrap: nowrap;
   }
 
-  .mons-shell--nav-below .gallery-toolbar-group--sort {
+  .mons-shell--nav-below .gallery-toolbar-group--sort,
+  .mons-shell--mobile-gallery-thin .gallery-toolbar-group--sort {
     border-left: 1px solid rgba(0, 0, 0, 0.65);
     padding-left: 0.34rem;
     margin-left: 0.3rem !important;
@@ -639,19 +743,22 @@ image[href*='/assets/mons/'] {
 }
 
 @media (max-width: 300px) {
-  .mons-shell--nav-below .gallery-toolbar {
+  .mons-shell--nav-below .gallery-toolbar,
+  .mons-shell--mobile-gallery-thin .gallery-toolbar {
     flex-wrap: wrap !important;
     justify-content: stretch;
     gap: 0.3rem !important;
   }
 
-  .mons-shell--nav-below .gallery-toolbar-group {
+  .mons-shell--nav-below .gallery-toolbar-group,
+  .mons-shell--mobile-gallery-thin .gallery-toolbar-group {
     width: 100%;
     justify-content: flex-end;
     gap: 0.22rem;
   }
 
-  .mons-shell--nav-below .gallery-toolbar-group--sort {
+  .mons-shell--nav-below .gallery-toolbar-group--sort,
+  .mons-shell--mobile-gallery-thin .gallery-toolbar-group--sort {
     border-left: none;
     padding-left: 0;
     margin-left: 0 !important;

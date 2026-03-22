@@ -66,6 +66,10 @@ const BOMB_FLAME_PARTICLE_COLORS = ['#FFEFB0', '#FFD36A', '#FFAA3A', '#FF6E1F', 
 const BOMB_SMOKE_PARTICLE_COLORS = ['#F1ECE3', '#B3AAA0', '#868079', '#5D5955', '#3A3836'];
 const FULLSCREEN_SCALE_MARGIN = 0.96;
 const FULLSCREEN_HUD_VERTICAL_OFFSET_PX = 10;
+const FULLSCREEN_THIN_HUD_MAX_WIDTH_PX = 860;
+const FULLSCREEN_THIN_TOP_HUD_EXTRA_OFFSET_PX = -20;
+const FULLSCREEN_THIN_BOTTOM_HUD_EXTRA_OFFSET_PX = 15;
+const FULLSCREEN_BUTTON_HITBOX_EXTRA_PX = 10;
 
 const colors = {
   darkSquare: '#BEBEBE',
@@ -1197,6 +1201,7 @@ export default function SuperMetalMonsBoard({
   const [availableWidth, setAvailableWidth] = useState<number | null>(null);
   const [thinHintScale, setThinHintScale] = useState(1);
   const [isBoardFullscreen, setIsBoardFullscreen] = useState(false);
+  const [isFullscreenThinHudMode, setIsFullscreenThinHudMode] = useState(false);
   const [isFullscreenButtonHovered, setIsFullscreenButtonHovered] = useState(false);
   const [fullscreenScale, setFullscreenScale] = useState(1);
   const [resetAnimation, setResetAnimation] = useState<ResetAnimationState | null>(null);
@@ -1779,6 +1784,29 @@ export default function SuperMetalMonsBoard({
       setIsFullscreenButtonHovered(false);
     }
   }, [isBoardFullscreen]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const mediaQuery = window.matchMedia(
+      `(max-width: ${FULLSCREEN_THIN_HUD_MAX_WIDTH_PX}px)`,
+    );
+    const updateMode = () => {
+      setIsFullscreenThinHudMode(mediaQuery.matches);
+    };
+    updateMode();
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', updateMode);
+      return () => {
+        mediaQuery.removeEventListener('change', updateMode);
+      };
+    }
+    mediaQuery.addListener(updateMode);
+    return () => {
+      mediaQuery.removeListener(updateMode);
+    };
+  }, []);
 
   useEffect(() => {
     if (!isBoardFullscreen) {
@@ -3649,14 +3677,14 @@ export default function SuperMetalMonsBoard({
     ...hudRowBaseStyle,
     marginBottom: `${Math.max(4, Math.round(tilePixels * 0.14)) - topHudOverlapPx}px`,
     transform: isBoardFullscreen
-      ? `translateY(${FULLSCREEN_HUD_VERTICAL_OFFSET_PX}px)`
+      ? `translateY(${FULLSCREEN_HUD_VERTICAL_OFFSET_PX + (isFullscreenThinHudMode ? FULLSCREEN_THIN_TOP_HUD_EXTRA_OFFSET_PX : 0)}px)`
       : undefined,
   };
   const bottomHudRowStyle: CSSProperties = {
     ...hudRowBaseStyle,
     marginTop: `${Math.max(4, Math.round(tilePixels * 0.14)) - bottomHudOverlapPx}px`,
     transform: isBoardFullscreen
-      ? `translateY(${-FULLSCREEN_HUD_VERTICAL_OFFSET_PX}px)`
+      ? `translateY(${-FULLSCREEN_HUD_VERTICAL_OFFSET_PX + (isFullscreenThinHudMode ? FULLSCREEN_THIN_BOTTOM_HUD_EXTRA_OFFSET_PX : 0)}px)`
       : undefined,
   };
   const hudPlayerClusterStyle: CSSProperties = {
@@ -3766,8 +3794,12 @@ export default function SuperMetalMonsBoard({
     ...hudResetButtonStyle,
     marginTop: 0,
     position: 'absolute',
-    right: 0,
-    top: 0,
+    right: `${-Math.round(FULLSCREEN_BUTTON_HITBOX_EXTRA_PX / 2)}px`,
+    top: `${-Math.round(FULLSCREEN_BUTTON_HITBOX_EXTRA_PX / 2)}px`,
+    width: `${hudStatusIconSize + FULLSCREEN_BUTTON_HITBOX_EXTRA_PX}px`,
+    height: `${hudStatusIconSize + FULLSCREEN_BUTTON_HITBOX_EXTRA_PX}px`,
+    padding: `${Math.round(FULLSCREEN_BUTTON_HITBOX_EXTRA_PX / 2)}px`,
+    boxSizing: 'border-box',
     color: isFullscreenButtonHovered ? '#fff' : isActive ? '#000' : '#6f6f6f',
     backgroundColor: isFullscreenButtonHovered ? '#000' : 'transparent',
     borderRadius: '2px',
@@ -4483,7 +4515,7 @@ export default function SuperMetalMonsBoard({
                 markMonAsFaintedOnSpawn(pendingDemonRebound.attackerId);
               }
               triggerAttackEffect(
-                'demon',
+                pendingReboundTargetHasBomb ? 'bomb' : 'demon',
                 pendingDemonRebound.targetCol,
                 pendingDemonRebound.targetRow,
               );
@@ -5307,7 +5339,11 @@ export default function SuperMetalMonsBoard({
                   if (doesDemonAttackTargetHoldBomb) {
                     markMonAsFaintedOnSpawn(selectedEntity.id);
                   }
-                  triggerAttackEffect('demon', col, row);
+                  triggerAttackEffect(
+                    doesDemonAttackTargetHoldBomb ? 'bomb' : 'demon',
+                    col,
+                    row,
+                  );
                   if (doesDemonAttackTargetHoldBomb && demonAttackerSpawnTile !== null) {
                     setSelectedTile({
                       row: demonAttackerSpawnTile.row,

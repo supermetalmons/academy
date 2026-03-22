@@ -315,12 +315,37 @@ const mobileSidebarNavStyle: CSSProperties = {
 const mobileSidebarSocialRowStyle: CSSProperties = {
   ...titleIconRowStyle,
   marginTop: '0.1rem',
+  gap: '0.55rem',
 };
 
 const mobileSidebarTickerViewportStyle: CSSProperties = {
   ...titleTickerViewportStyle,
   width: '100%',
   marginTop: '0.12rem',
+};
+
+const mobileSidebarIconLinkStyle: CSSProperties = {
+  ...titleIconLinkStyle,
+  width: '34px',
+  height: '34px',
+};
+
+const mobileSidebarIconStyle: CSSProperties = {
+  ...titleIconStyle,
+  width: '29.6px',
+  height: '29.6px',
+};
+
+const mobileSidebarDiscordIconStyle: CSSProperties = {
+  ...titleDiscordIconStyle,
+  width: '30.8px',
+  height: '30.8px',
+};
+
+const mobileSidebarRockIconStyle: CSSProperties = {
+  ...titleRockIconStyle,
+  width: '33px',
+  height: '33px',
 };
 
 const buttonStyle: CSSProperties = {
@@ -410,6 +435,7 @@ const NAV_BELOW_RESTORE_HYSTERESIS_PX = 72;
 const SINGLE_WRAP_SPLIT_PX = 36;
 const SINGLE_WRAP_MODE_RESTORE_HYSTERESIS_PX = 24;
 const MOBILE_SIDEBAR_MAX_WIDTH_PX = 780;
+const MOBILE_GALLERY_THIN_MAX_WIDTH_PX = 620;
 const CLOUD_INTRO_SESSION_KEY = 'mons_cloud_intro_seen_v1';
 const TOPBAR_MARQUEE_DURATION_SECONDS = 18;
 const LAST_INSTRUCTION_ROUTE_STORAGE_KEY = 'mons_last_instruction_route_v1';
@@ -734,6 +760,7 @@ export default function NewTopLayout({
   );
   const [pressedItem, setPressedItem] = useState<string | null>(null);
   const [isMobileSidebarMode, setIsMobileSidebarMode] = useState(false);
+  const [isMobileGalleryThinMode, setIsMobileGalleryThinMode] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [hoveredTitleIcon, setHoveredTitleIcon] = useState<TitleIconKey | null>(null);
   const [cloudEnabled, setCloudEnabled] = useState<boolean>(CLOUD_ENABLED_DEFAULT);
@@ -830,6 +857,29 @@ export default function NewTopLayout({
     );
     const updateMode = () => {
       setIsMobileSidebarMode(mediaQuery.matches);
+    };
+    updateMode();
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', updateMode);
+      return () => {
+        mediaQuery.removeEventListener('change', updateMode);
+      };
+    }
+    mediaQuery.addListener(updateMode);
+    return () => {
+      mediaQuery.removeListener(updateMode);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const mediaQuery = window.matchMedia(
+      `(max-width: ${MOBILE_GALLERY_THIN_MAX_WIDTH_PX}px)`,
+    );
+    const updateMode = () => {
+      setIsMobileGalleryThinMode(mediaQuery.matches);
     };
     updateMode();
     if (typeof mediaQuery.addEventListener === 'function') {
@@ -1369,7 +1419,7 @@ export default function NewTopLayout({
   return (
     <main
       style={pageStyle}
-      className={`mons-shell${showNavBelowRow ? ' mons-shell--nav-below' : ''}`}>
+      className={`mons-shell${showNavBelowRow ? ' mons-shell--nav-below' : ''}${isMobileSidebarMode ? ' mons-shell--mobile-sidebar' : ''}${isMobileSidebarMode && isMobileGalleryThinMode ? ' mons-shell--mobile-gallery-thin' : ''}`}>
       {cloudEnabled ? (
         <div
           className={`cloud-shadows${showCloudIntro ? ' cloud-shadows--intro' : ''}`}
@@ -1575,18 +1625,27 @@ export default function NewTopLayout({
                   target="_blank"
                   rel="noreferrer"
                   aria-label="Mons Link"
-                  style={{...titleIconLinkStyle, marginRight: '2px'}}
+                  style={{...mobileSidebarIconLinkStyle, marginRight: '2px'}}
                   onClick={() => setIsMobileSidebarOpen(false)}>
-                  <img src="/assets/mons-rock-icon.svg" alt="" aria-hidden="true" style={titleRockIconStyle} />
+                  <img
+                    src="/assets/mons-rock-icon.svg"
+                    alt=""
+                    aria-hidden="true"
+                    style={mobileSidebarRockIconStyle}
+                  />
                 </a>
                 <a
                   href="https://x.com/supermetalmons"
                   target="_blank"
                   rel="noreferrer"
                   aria-label="Super Metal Mons on X"
-                  style={titleIconLinkStyle}
+                  style={mobileSidebarIconLinkStyle}
                   onClick={() => setIsMobileSidebarOpen(false)}>
-                  <svg viewBox="0 0 24 24" aria-hidden="true" style={titleIconStyle} fill="currentColor">
+                  <svg
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    style={mobileSidebarIconStyle}
+                    fill="currentColor">
                     <path d="M22.46 6c-.77.35-1.6.58-2.46.69a4.28 4.28 0 0 0 1.88-2.36 8.56 8.56 0 0 1-2.72 1.04 4.27 4.27 0 0 0-7.27 3.89 12.13 12.13 0 0 1-8.81-4.47 4.27 4.27 0 0 0 1.32 5.7 4.23 4.23 0 0 1-1.93-.53v.05a4.28 4.28 0 0 0 3.43 4.19 4.32 4.32 0 0 1-1.92.07 4.28 4.28 0 0 0 3.99 2.97A8.58 8.58 0 0 1 2 18.58a12.1 12.1 0 0 0 6.56 1.92c7.87 0 12.18-6.52 12.18-12.18l-.01-.56A8.68 8.68 0 0 0 22.46 6z" />
                   </svg>
                 </a>
@@ -1595,9 +1654,13 @@ export default function NewTopLayout({
                   target="_blank"
                   rel="noreferrer"
                   aria-label="Super Metal Mons on Discord"
-                  style={titleIconLinkStyle}
+                  style={mobileSidebarIconLinkStyle}
                   onClick={() => setIsMobileSidebarOpen(false)}>
-                  <svg viewBox="0 0 640 512" aria-hidden="true" style={titleDiscordIconStyle} fill="currentColor">
+                  <svg
+                    viewBox="0 0 640 512"
+                    aria-hidden="true"
+                    style={mobileSidebarDiscordIconStyle}
+                    fill="currentColor">
                     <path d="M524.5 69.8a1.5 1.5 0 0 0-.8-.7A485.1 485.1 0 0 0 404.1 32a1.8 1.8 0 0 0-1.9.9 337.5 337.5 0 0 0-14.9 30.6 447.8 447.8 0 0 0-134.4 0 309.5 309.5 0 0 0-15.1-30.6 1.9 1.9 0 0 0-1.9-.9A483.5 483.5 0 0 0 116.3 69.1a1.7 1.7 0 0 0-.8.7C39.1 183.7 18.2 294.7 28.4 404.1a2 2 0 0 0 .8 1.4A487.7 487.7 0 0 0 176.2 480a1.9 1.9 0 0 0 2.1-.7 348.2 348.2 0 0 0 30-48.8 1.9 1.9 0 0 0-1-2.6 321.2 321.2 0 0 1-45.9-21.8 1.9 1.9 0 0 1-.2-3.1c3.1-2.3 6-4.7 8.9-7.2a1.9 1.9 0 0 1 1.9-.3c96.2 43.8 200.4 43.8 295.2 0a1.9 1.9 0 0 1 2 .3c2.9 2.5 5.9 4.9 8.9 7.2a1.9 1.9 0 0 1-.2 3.1 301.5 301.5 0 0 1-45.9 21.8 1.9 1.9 0 0 0-1 2.6 391.1 391.1 0 0 0 30 48.8 1.9 1.9 0 0 0 2 .7 486.1 486.1 0 0 0 147.2-74.5 1.9 1.9 0 0 0 .8-1.4c12.2-126-20.6-236.3-86.1-334.6zM222.8 337.2c-29 0-52.8-26.6-52.8-59.2s23.4-59.2 52.8-59.2c29.7 0 53.3 26.6 52.8 59.2 0 32.6-23.4 59.2-52.8 59.2zm196 0c-29 0-52.8-26.6-52.8-59.2s23.4-59.2 52.8-59.2c29.7 0 53.3 26.6 52.8 59.2 0 32.6-23.4 59.2-52.8 59.2z" />
                   </svg>
                 </a>
@@ -1606,9 +1669,13 @@ export default function NewTopLayout({
                   target="_blank"
                   rel="noreferrer"
                   aria-label="Super Metal Mons on Telegram"
-                  style={titleIconLinkStyle}
+                  style={mobileSidebarIconLinkStyle}
                   onClick={() => setIsMobileSidebarOpen(false)}>
-                  <svg viewBox="0 0 24 24" aria-hidden="true" style={titleIconStyle} fill="currentColor">
+                  <svg
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    style={mobileSidebarIconStyle}
+                    fill="currentColor">
                     <path d="M21.4 4.6 3.7 11.5c-.8.3-.8 1.4 0 1.7l4.5 1.6 1.7 5.2c.2.7 1.1.8 1.5.3l2.7-3.3 4.8 3.5c.6.4 1.4.1 1.6-.6l2.1-14.1c.1-.8-.7-1.5-1.4-1.2Zm-2.6 2.3-8.9 7.8-.4 2.8-1.1-3.3L5 13.1l13.8-6.2Z" />
                   </svg>
                 </a>
@@ -1631,9 +1698,6 @@ export default function NewTopLayout({
         {children}
         <Link to="/settings" aria-label="Go to settings" style={settingsShortcutStyle}>
           ⚙️
-        </Link>
-        <Link to="/main" aria-label="Go to old homepage" style={swirlStyle}>
-          🌀
         </Link>
       </div>
     </main>

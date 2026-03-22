@@ -78,7 +78,6 @@ const sectionTitleTextStyle: CSSProperties = {
 
 const imageGridStyle: CSSProperties = {
   display: 'grid',
-  gridTemplateColumns: `repeat(auto-fit, minmax(${GALLERY_MIN_TILE_WIDTH_PX}px, 1fr))`,
   gap: `${GALLERY_GRID_GAP_PX}px`,
 };
 
@@ -240,7 +239,7 @@ const galleryImageLoadedCache = new Set<string>();
 
 function getColumnCount(widthPx: number): number {
   const raw = Math.floor((widthPx + GALLERY_GRID_GAP_PX) / (GALLERY_MIN_TILE_WIDTH_PX + GALLERY_GRID_GAP_PX));
-  return Math.max(1, raw);
+  return Math.max(2, raw);
 }
 
 export default function ResourcesGalleryPage(): ReactNode {
@@ -515,7 +514,10 @@ export default function ResourcesGalleryPage(): ReactNode {
                   ref={(node) => {
                     pageGridRefs.current[section.id] = node;
                   }}
-                  style={imageGridStyle}>
+                  style={{
+                    ...imageGridStyle,
+                    gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+                  }}>
                 {pageImages.map((src, index) => (
                   <button
                     key={src}
