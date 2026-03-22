@@ -37,7 +37,7 @@ export default function PieceDetailsPage(): ReactNode {
         <InstructionSubnav active="basic-rules" />
         <Link to="/instruction" style={backLinkStyle}>
           <span aria-hidden="true" style={backArrowStyle}>←</span>
-          <span style={backTextStyle}>↑ back to board</span>
+          <span style={backTextStyle}>back to board</span>
         </Link>
         <PieceDetailsGallery />
       </div>

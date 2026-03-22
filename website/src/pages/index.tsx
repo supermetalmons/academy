@@ -155,7 +155,7 @@ function getWelcomeTopPx(
   headerHeight: number,
   welcomeBoxHeight: number,
 ): number {
-  const baseTop = viewportHeight * 0.4 - 110;
+  const baseTop = viewportHeight * 0.4 - 90;
   const resolvedWelcomeBoxHeight =
     welcomeBoxHeight > 0 ? welcomeBoxHeight : DEFAULT_WELCOME_BOX_HEIGHT_PX;
   const minTop = headerHeight + HOME_WELCOME_TOP_CLEARANCE_PX + resolvedWelcomeBoxHeight / 2;

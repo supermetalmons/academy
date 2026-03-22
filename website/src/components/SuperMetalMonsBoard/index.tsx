@@ -56,6 +56,9 @@ const SPIRIT_ABILITY_INDICATOR_COLOR = '#B14CFF';
 const ANGEL_PROTECTION_ZONE_COLOR = '#B14CFF';
 const ANGEL_PROTECTION_ZONE_FADE_MS = 240;
 const ANGEL_PROTECTION_ZONE_PULSE_MS = 1400;
+const BOMB_RANGE_ZONE_COLOR = '#C61A1A';
+const BOMB_RANGE_ZONE_FADE_MS = 220;
+const BOMB_RANGE_ZONE_PULSE_MS = 1300;
 const ITEM_SPARKLE_LIGHT_COLOR = '#FEFEFE';
 const ITEM_SPARKLE_DARK_COLOR = '#000000';
 const ITEM_SPARKLE_PARTICLES_PER_TILE = 7;
@@ -632,6 +635,18 @@ type AngelProtectionZone = {
 };
 
 type RenderedAngelProtectionZone = AngelProtectionZone & {
+  status: 'entering' | 'active' | 'leaving';
+};
+
+type BombRangeZone = {
+  key: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+type RenderedBombRangeZone = BombRangeZone & {
   status: 'entering' | 'active' | 'leaving';
 };
 
@@ -1251,6 +1266,9 @@ export default function SuperMetalMonsBoard({
   const [attackEffectSprites, setAttackEffectSprites] = useState<AttackEffectSprite[]>([]);
   const [renderedAngelProtectionZones, setRenderedAngelProtectionZones] = useState<
     RenderedAngelProtectionZone[]
+  >([]);
+  const [renderedBombRangeZones, setRenderedBombRangeZones] = useState<
+    RenderedBombRangeZone[]
   >([]);
   const [playerPotionCount, setPlayerPotionCount] = useState(
     initialPersistedPuzzleState?.playerPotionCount ?? playerStartingPotionCount,
@@ -2138,9 +2156,30 @@ export default function SuperMetalMonsBoard({
         angel.id !== targetEntity.id &&
         Math.max(
           Math.abs(angel.col - targetEntity.col),
-          Math.abs(angel.row - targetEntity.row),
+        Math.abs(angel.row - targetEntity.row),
         ) === 1,
     );
+  const isMonCurrentlyFainted = (
+    mon: BoardEntity & {
+      kind: 'mon';
+      side: 'black' | 'white';
+      monType: MonType;
+    },
+  ): boolean => {
+    if (!enableFreeTileMove) {
+      return false;
+    }
+    const isOnOwnSpawn = isMonOnOwnSpawn({
+      col: mon.col,
+      row: mon.row,
+      type: mon.monType,
+      side: mon.side,
+    });
+    if (!isOnOwnSpawn) {
+      return false;
+    }
+    return !isSandboxFreeMoveBoard || faintedMonIdSet.has(mon.id);
+  };
   const activeMonPositions = useMemo(
     () => ({
       black: visibleBoardEntities
@@ -2658,6 +2697,17 @@ export default function SuperMetalMonsBoard({
     if (selectedEntity.monType === 'spirit') {
       return visibleBoardEntities
         .filter((entity) => entity.id !== selectedEntity.id)
+        .filter((targetEntity) => {
+          if (
+            targetEntity.kind === 'mon' &&
+            targetEntity.side !== undefined &&
+            targetEntity.monType !== undefined &&
+            isMonCurrentlyFainted(targetEntity)
+          ) {
+            return false;
+          }
+          return true;
+        })
         .filter((targetEntity) =>
           isSpiritPushTargetDistance(
             selectedEntity.col,
@@ -2690,6 +2740,7 @@ export default function SuperMetalMonsBoard({
           entity.monType !== undefined,
       )
       .filter((targetEntity) => targetEntity.side !== selectedEntity.side)
+      .filter((targetEntity) => !isMonCurrentlyFainted(targetEntity))
       .filter((targetEntity) => {
         if (selectedEntity.monType === 'mystic' && selectedEntity.heldItemKind !== 'bomb') {
           if (isTargetProtectedByAngel(targetEntity)) {
@@ -2855,6 +2906,8 @@ export default function SuperMetalMonsBoard({
     activeAngels,
     boardEntities,
     enableFreeTileMove,
+    faintedMonIdSet,
+    isSandboxFreeMoveBoard,
     isResetAnimating,
     pendingDemonRebound,
     pendingSpiritPush,
@@ -3058,6 +3111,7 @@ export default function SuperMetalMonsBoard({
           entity.monType !== undefined,
       )
       .filter((targetEntity) => targetEntity.side !== selectedEntity.side)
+      .filter((targetEntity) => !isMonCurrentlyFainted(targetEntity))
       .forEach((targetEntity) => {
         const protectingAngels = getProtectingAngelsForTarget(targetEntity);
         if (protectingAngels.length === 0) {
@@ -3207,6 +3261,67 @@ export default function SuperMetalMonsBoard({
     selectedMovableTile,
     visibleBoardEntities,
   ]);
+  const bombRangeZones = useMemo<BombRangeZone[]>(() => {
+    if (
+      !enableFreeTileMove ||
+      isResetAnimating ||
+      pendingDemonRebound !== null ||
+      pendingSpiritPush !== null ||
+      selectedMovableTile === null
+    ) {
+      return [];
+    }
+    const selectedEntity = visibleBoardEntities.find(
+      (entity) =>
+        entity.col === selectedMovableTile.col &&
+        entity.row === selectedMovableTile.row,
+    );
+    if (
+      selectedEntity === undefined ||
+      selectedEntity.kind !== 'mon' ||
+      selectedEntity.side === undefined ||
+      selectedEntity.monType === undefined ||
+      selectedEntity.heldItemKind !== 'bomb'
+    ) {
+      return [];
+    }
+    const isSelectedMonFainted =
+      isMonOnOwnSpawn({
+        col: selectedEntity.col,
+        row: selectedEntity.row,
+        type: selectedEntity.monType,
+        side: selectedEntity.side,
+      }) &&
+      (!isSandboxFreeMoveBoard || faintedMonIdSet.has(selectedEntity.id));
+    if (isSelectedMonFainted) {
+      return [];
+    }
+
+    const range = 3;
+    const minCol = Math.max(0, selectedEntity.col - range);
+    const minRow = Math.max(0, selectedEntity.row - range);
+    const maxCol = Math.min(BOARD_SIZE, selectedEntity.col + range + 1);
+    const maxRow = Math.min(BOARD_SIZE, selectedEntity.row + range + 1);
+
+    return [
+      {
+        key: `bomb-range-${selectedEntity.id}`,
+        x: minCol,
+        y: minRow,
+        width: maxCol - minCol,
+        height: maxRow - minRow,
+      },
+    ];
+  }, [
+    enableFreeTileMove,
+    faintedMonIdSet,
+    isResetAnimating,
+    isSandboxFreeMoveBoard,
+    pendingDemonRebound,
+    pendingSpiritPush,
+    selectedMovableTile,
+    visibleBoardEntities,
+  ]);
   useEffect(() => {
     setRenderedAngelProtectionZones((current) => {
       const nextZoneByKey = new Map(angelProtectionZones.map((zone) => [zone.key, zone]));
@@ -3255,6 +3370,67 @@ export default function SuperMetalMonsBoard({
       window.cancelAnimationFrame(frameId);
     };
   }, [renderedAngelProtectionZones]);
+  useEffect(() => {
+    setRenderedBombRangeZones((current) => {
+      const nextZoneByKey = new Map(bombRangeZones.map((zone) => [zone.key, zone]));
+      const currentZoneByKey = new Map(current.map((zone) => [zone.key, zone]));
+      const nextRenderedZones: RenderedBombRangeZone[] = [];
+
+      bombRangeZones.forEach((zone) => {
+        const existingZone = currentZoneByKey.get(zone.key);
+        if (existingZone === undefined) {
+          nextRenderedZones.push({
+            ...zone,
+            status: 'entering',
+          });
+          return;
+        }
+        nextRenderedZones.push({
+          ...zone,
+          status: existingZone.status === 'leaving' ? 'active' : existingZone.status,
+        });
+      });
+
+      current.forEach((zone) => {
+        if (!nextZoneByKey.has(zone.key) && zone.status !== 'leaving') {
+          nextRenderedZones.push({
+            ...zone,
+            status: 'leaving',
+          });
+        }
+      });
+
+      return nextRenderedZones;
+    });
+  }, [bombRangeZones]);
+  useEffect(() => {
+    if (!renderedBombRangeZones.some((zone) => zone.status === 'entering')) {
+      return;
+    }
+    const frameId = window.requestAnimationFrame(() => {
+      setRenderedBombRangeZones((current) =>
+        current.map((zone) =>
+          zone.status === 'entering' ? {...zone, status: 'active'} : zone,
+        ),
+      );
+    });
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [renderedBombRangeZones]);
+  useEffect(() => {
+    if (!renderedBombRangeZones.some((zone) => zone.status === 'leaving')) {
+      return;
+    }
+    const timeoutId = window.setTimeout(() => {
+      setRenderedBombRangeZones((current) =>
+        current.filter((zone) => zone.status !== 'leaving'),
+      );
+    }, BOMB_RANGE_ZONE_FADE_MS);
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [renderedBombRangeZones]);
   useEffect(() => {
     if (!renderedAngelProtectionZones.some((zone) => zone.status === 'leaving')) {
       return;
@@ -3376,6 +3552,12 @@ export default function SuperMetalMonsBoard({
 
   const tilePixels = renderWidth / VIEWBOX_SIZE;
   const useBelowPreviewLayout = showHoverPreview && isPreviewBelow;
+  const isThinAngelShieldMode = isFullscreenThinHudMode;
+  const angelShieldPulseValues = isThinAngelShieldMode ? '0.6;1;0.6' : '0.5;1;0.5';
+  const angelShieldOuterStrokeWidth = isThinAngelShieldMode ? 0.105 : 0.09;
+  const angelShieldInnerStrokeWidth = isThinAngelShieldMode ? 0.052 : 0.045;
+  const angelShieldOuterOpacity = isThinAngelShieldMode ? 0.2 : 0.16;
+  const angelShieldInnerOpacity = isThinAngelShieldMode ? 0.5 : 0.42;
   const previewScale = useBelowPreviewLayout
     ? getPreviewScale(tilePixels, THIN_PREVIEW_MIN_SCALE)
     : getPreviewScale(tilePixels);
@@ -4833,6 +5015,12 @@ export default function SuperMetalMonsBoard({
                 targetEntity.side !== undefined &&
                 targetEntity.monType !== undefined &&
                 getProtectingAngelsForTarget(targetEntity).length > 0;
+              const isTargetMonFainted =
+                targetEntity !== undefined &&
+                targetEntity.kind === 'mon' &&
+                targetEntity.side !== undefined &&
+                targetEntity.monType !== undefined &&
+                isMonCurrentlyFainted(targetEntity);
               const targetItemEntity =
                 targetEntity !== undefined && targetEntity.kind === 'item'
                   ? targetEntity
@@ -4843,6 +5031,7 @@ export default function SuperMetalMonsBoard({
                 selectedEntity.monType === 'spirit' &&
                 targetEntity !== undefined &&
                 targetEntity.id !== selectedEntity.id &&
+                !isTargetMonFainted &&
                 isSpiritPushTargetDistance(sourceCol, sourceRow, col, row);
               if (canSpiritPushTargetEntity) {
                 const destinationOptions = getSpiritPushDestinationOptions(targetEntity);
@@ -4890,6 +5079,7 @@ export default function SuperMetalMonsBoard({
                 targetEntity.kind === 'mon' &&
                 targetEntity.side !== undefined &&
                 targetEntity.monType !== undefined &&
+                !isTargetMonFainted &&
                 selectedEntity.side !== targetEntity.side &&
                 Math.max(
                   Math.abs(col - sourceCol),
@@ -5129,6 +5319,7 @@ export default function SuperMetalMonsBoard({
                 targetEntity.kind === 'mon' &&
                 targetEntity.side !== undefined &&
                 targetEntity.monType !== undefined &&
+                !isTargetMonFainted &&
                 !isTargetProtectedByAngel &&
                 selectedEntity.side !== targetEntity.side &&
                 Math.abs(col - sourceCol) === 2 &&
@@ -5255,6 +5446,7 @@ export default function SuperMetalMonsBoard({
                 targetEntity.kind === 'mon' &&
                 targetEntity.side !== undefined &&
                 targetEntity.monType !== undefined &&
+                !isTargetMonFainted &&
                 !isTargetProtectedByAngel &&
                 selectedEntity.side !== targetEntity.side &&
                 demonAttackMiddleTile !== null &&
@@ -5793,6 +5985,56 @@ export default function SuperMetalMonsBoard({
               ))
 	            : null}
 
+        {renderedBombRangeZones.map((zone, index) => (
+          (() => {
+            const frameX = zone.x;
+            const frameY = zone.y;
+            const frameWidth = zone.width;
+            const frameHeight = zone.height;
+            return (
+              <g
+                key={`bomb-range-zone-${zone.key}-${index}`}
+                pointerEvents="none"
+                style={{
+                  opacity: zone.status === 'active' ? 1 : 0,
+                  transition: `opacity ${BOMB_RANGE_ZONE_FADE_MS}ms ease`,
+                  filter: `drop-shadow(0 0 0.08px ${BOMB_RANGE_ZONE_COLOR}) drop-shadow(0 0 0.14px ${BOMB_RANGE_ZONE_COLOR})`,
+                }}>
+                <g>
+                  <animate
+                    attributeName="opacity"
+                    values="0.5;1;0.5"
+                    dur={`${BOMB_RANGE_ZONE_PULSE_MS}ms`}
+                    repeatCount="indefinite"
+                  />
+                  <rect
+                    x={frameX}
+                    y={frameY}
+                    width={frameWidth}
+                    height={frameHeight}
+                    fill="none"
+                    stroke={BOMB_RANGE_ZONE_COLOR}
+                    strokeWidth={0.1}
+                    opacity={0.16}
+                    shapeRendering="geometricPrecision"
+                  />
+                  <rect
+                    x={frameX}
+                    y={frameY}
+                    width={frameWidth}
+                    height={frameHeight}
+                    fill="none"
+                    stroke={BOMB_RANGE_ZONE_COLOR}
+                    strokeWidth={0.05}
+                    opacity={0.42}
+                    shapeRendering="geometricPrecision"
+                  />
+                </g>
+              </g>
+            );
+          })()
+        ))}
+
         {renderedAngelProtectionZones.map((zone, index) => (
           (() => {
             const frameX = zone.x;
@@ -5811,7 +6053,7 @@ export default function SuperMetalMonsBoard({
                 <g>
                   <animate
                     attributeName="opacity"
-                    values="0.5;1;0.5"
+                    values={angelShieldPulseValues}
                     dur={`${ANGEL_PROTECTION_ZONE_PULSE_MS}ms`}
                     repeatCount="indefinite"
                   />
@@ -5822,8 +6064,8 @@ export default function SuperMetalMonsBoard({
                     height={frameHeight}
                     fill="none"
                     stroke={ANGEL_PROTECTION_ZONE_COLOR}
-                    strokeWidth={0.09}
-                    opacity={0.16}
+                    strokeWidth={angelShieldOuterStrokeWidth}
+                    opacity={angelShieldOuterOpacity}
                     shapeRendering="geometricPrecision"
                   />
                   <rect
@@ -5833,8 +6075,8 @@ export default function SuperMetalMonsBoard({
                     height={frameHeight}
                     fill="none"
                     stroke={ANGEL_PROTECTION_ZONE_COLOR}
-                    strokeWidth={0.045}
-                    opacity={0.42}
+                    strokeWidth={angelShieldInnerStrokeWidth}
+                    opacity={angelShieldInnerOpacity}
                     shapeRendering="geometricPrecision"
                   />
                 </g>
@@ -6817,7 +7059,9 @@ export default function SuperMetalMonsBoard({
                         onBlur={() => {
                           setIsFullscreenButtonHovered(false);
                         }}
-                        onClick={() => {
+                        onClick={(event) => {
+                          setIsFullscreenButtonHovered(false);
+                          event.currentTarget.blur();
                           setIsBoardFullscreen((current) => !current);
                         }}>
                         <svg viewBox="0 0 24 24" aria-hidden="true" style={hudResetIconStyle}>

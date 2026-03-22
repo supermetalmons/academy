@@ -187,7 +187,8 @@ const wherePlayImageBaseStyle: CSSProperties = {
 
 const wherePlayImageStyle: CSSProperties = {
   ...wherePlayImageBaseStyle,
-  transform: 'translate(-12px, -44px)',
+  transform: 'translate(-42px, -49px) scale(1.083333)',
+  transformOrigin: 'top left',
 };
 
 const wherePlayItemStyle: CSSProperties = {
