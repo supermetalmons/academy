@@ -867,22 +867,22 @@ image[href*='/assets/mons/'] {
 
 @keyframes monsCloudShadowFlow {
   0% {
-    transform: translateX(-150vw);
+    transform: translateX(var(--cloud-flow-x0, -150vw));
   }
   18% {
-    transform: translateX(-90vw);
+    transform: translateX(var(--cloud-flow-x18, -90vw));
   }
   37% {
-    transform: translateX(-25vw);
+    transform: translateX(var(--cloud-flow-x37, -25vw));
   }
   56% {
-    transform: translateX(35vw);
+    transform: translateX(var(--cloud-flow-x56, 35vw));
   }
   76% {
-    transform: translateX(95vw);
+    transform: translateX(var(--cloud-flow-x76, 95vw));
   }
   100% {
-    transform: translateX(165vw);
+    transform: translateX(var(--cloud-flow-x100, 165vw));
   }
 }
 

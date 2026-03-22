@@ -120,7 +120,7 @@ const videoTutorialLabel: ReactNode = (
       <circle cx="12" cy="12" r="9.2" />
       <path d="M8.4 6.9v10.2L17 12z" fill="currentColor" stroke="none" />
     </svg>
-    <span className="section-subnav__label-text">Video Tutorials</span>
+    <span className="section-subnav__label-text">Videos</span>
   </span>
 );
 

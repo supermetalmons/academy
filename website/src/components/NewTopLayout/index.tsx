@@ -16,6 +16,7 @@ import {
 } from '@site/src/constants/cloudSpeed';
 
 type NewTopLayoutProps = {
+  underCloudChildren?: ReactNode;
   children?: ReactNode;
 };
 
@@ -215,6 +216,113 @@ const navBelowNavStyle: CSSProperties = {
   justifyContent: 'center',
 };
 
+const mobileLogoShellBaseStyle: CSSProperties = {
+  ...logoLinkStyle,
+  position: 'relative',
+  backgroundColor: '#fff',
+};
+
+const mobileHamburgerButtonStyle: CSSProperties = {
+  position: 'absolute',
+  inset: 0,
+  border: 0,
+  background: 'transparent',
+  color: '#000',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  cursor: 'pointer',
+  padding: 0,
+};
+
+const mobileHamburgerIconStyle: CSSProperties = {
+  width: '22px',
+  height: '15px',
+  display: 'inline-flex',
+  flexDirection: 'column',
+  justifyContent: 'space-between',
+  pointerEvents: 'none',
+};
+
+const mobileHamburgerLineStyle: CSSProperties = {
+  width: '100%',
+  height: '2px',
+  backgroundColor: 'currentColor',
+  borderRadius: '2px',
+  display: 'block',
+};
+
+const mobileSidebarBackdropStyle: CSSProperties = {
+  position: 'fixed',
+  inset: 0,
+  backgroundColor: 'rgba(0, 0, 0, 0.36)',
+  zIndex: 10020,
+};
+
+const mobileSidebarPanelBaseStyle: CSSProperties = {
+  position: 'fixed',
+  top: 0,
+  left: 0,
+  bottom: 0,
+  width: 'min(84vw, 330px)',
+  backgroundColor: '#fff',
+  borderRight: '1px solid #000',
+  zIndex: 10021,
+  boxSizing: 'border-box',
+  padding: '1rem 0.9rem',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '0.8rem',
+  transition: 'transform 220ms ease',
+};
+
+const mobileSidebarHeaderStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: '0.5rem',
+};
+
+const mobileSidebarTitleStyle: CSSProperties = {
+  margin: 0,
+  fontSize: '1.35rem',
+  lineHeight: 1.1,
+  color: '#000',
+  fontWeight: 700,
+};
+
+const mobileSidebarCloseStyle: CSSProperties = {
+  border: '1px solid #000',
+  backgroundColor: '#fff',
+  color: '#000',
+  fontSize: '1rem',
+  lineHeight: 1,
+  width: '26px',
+  height: '26px',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  cursor: 'pointer',
+  padding: 0,
+};
+
+const mobileSidebarNavStyle: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '0.55rem',
+};
+
+const mobileSidebarSocialRowStyle: CSSProperties = {
+  ...titleIconRowStyle,
+  marginTop: '0.1rem',
+};
+
+const mobileSidebarTickerViewportStyle: CSSProperties = {
+  ...titleTickerViewportStyle,
+  width: '100%',
+  marginTop: '0.12rem',
+};
+
 const buttonStyle: CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
@@ -227,6 +335,13 @@ const buttonStyle: CSSProperties = {
   fontSize: '1.05rem',
   lineHeight: 1.1,
   transition: 'transform 140ms ease, filter 140ms ease',
+};
+
+const mobileSidebarButtonStyle: CSSProperties = {
+  ...buttonStyle,
+  justifyContent: 'flex-start',
+  width: '100%',
+  fontSize: '1rem',
 };
 
 const activeButtonStyle: CSSProperties = {
@@ -260,6 +375,13 @@ const foregroundLayerStyle: CSSProperties = {
   zIndex: 2,
 };
 
+const underCloudLayerStyle: CSSProperties = {
+  position: 'fixed',
+  inset: 0,
+  zIndex: 0,
+  pointerEvents: 'none',
+};
+
 const topGapFillStyle: CSSProperties = {
   position: 'fixed',
   top: 0,
@@ -285,6 +407,9 @@ const LOGO_SOURCES = [
 ];
 const LOGO_RESTORE_HYSTERESIS_PX = 72;
 const NAV_BELOW_RESTORE_HYSTERESIS_PX = 72;
+const SINGLE_WRAP_SPLIT_PX = 36;
+const SINGLE_WRAP_MODE_RESTORE_HYSTERESIS_PX = 24;
+const MOBILE_SIDEBAR_MAX_WIDTH_PX = 780;
 const CLOUD_INTRO_SESSION_KEY = 'mons_cloud_intro_seen_v1';
 const TOPBAR_MARQUEE_DURATION_SECONDS = 18;
 const LAST_INSTRUCTION_ROUTE_STORAGE_KEY = 'mons_last_instruction_route_v1';
@@ -358,12 +483,32 @@ function getCloudShadowStyle(
   const flowElapsed = positiveModulo(animationClockSeconds + phaseOffset, baseFlowDuration);
   const morphElapsed = positiveModulo(animationClockSeconds + phaseOffset, baseFlowDuration);
   const pulseElapsed = positiveModulo(animationClockSeconds * 0.91 + pulsePhaseSeed, pulseDuration);
+  const cloudWidthPx = Math.round((shadow.width + widthVariance) * sizeScale);
+  const cloudHeightPx = Math.round(
+    (shadow.height + heightVariance) * (0.85 + sizeScale * 0.55),
+  );
+  const cloudOffscreenSpanPx = Math.round(cloudWidthPx + blurPx * 4 + 96);
+  const viewportWidthPx =
+    typeof window === 'undefined' ? 1280 : Math.max(240, window.innerWidth || 1280);
+  const flowStartPx = -Math.max(viewportWidthPx * 1.5, cloudOffscreenSpanPx);
+  const flowEndPx = Math.max(viewportWidthPx * 1.65, viewportWidthPx + cloudOffscreenSpanPx);
+  const flowDistancePx = flowEndPx - flowStartPx;
+  const flowX18Px = flowStartPx + flowDistancePx * (60 / 315);
+  const flowX37Px = flowStartPx + flowDistancePx * (125 / 315);
+  const flowX56Px = flowStartPx + flowDistancePx * (185 / 315);
+  const flowX76Px = flowStartPx + flowDistancePx * (245 / 315);
   return {
     top: `${shadow.top}%`,
-    width: `${Math.round((shadow.width + widthVariance) * sizeScale)}px`,
-    height: `${Math.round((shadow.height + heightVariance) * (0.85 + sizeScale * 0.55))}px`,
+    width: `${cloudWidthPx}px`,
+    height: `${cloudHeightPx}px`,
     opacity: baseOpacity,
     ['--cloud-blur' as any]: `${blurPx}px`,
+    ['--cloud-flow-x0' as any]: `${Math.round(flowStartPx)}px`,
+    ['--cloud-flow-x18' as any]: `${Math.round(flowX18Px)}px`,
+    ['--cloud-flow-x37' as any]: `${Math.round(flowX37Px)}px`,
+    ['--cloud-flow-x56' as any]: `${Math.round(flowX56Px)}px`,
+    ['--cloud-flow-x76' as any]: `${Math.round(flowX76Px)}px`,
+    ['--cloud-flow-x100' as any]: `${Math.round(flowEndPx)}px`,
     ['--cloud-blob-radius' as any]: `${roundA}% ${roundB}% ${roundC}% ${roundD}% / ${roundV1}% ${roundV2}% ${roundV3}% ${roundV4}%`,
     ['--cloud-opacity-high' as any]: baseOpacity.toFixed(3),
     ['--cloud-opacity-mid' as any]: pulseMidOpacity.toFixed(3),
@@ -543,7 +688,10 @@ function getTopbarMarqueeDelaySeconds(): number {
   return -positiveModulo(elapsedSeconds, TOPBAR_MARQUEE_DURATION_SECONDS);
 }
 
-export default function NewTopLayout({children}: NewTopLayoutProps): ReactNode {
+export default function NewTopLayout({
+  underCloudChildren,
+  children,
+}: NewTopLayoutProps): ReactNode {
   const pathname = typeof window === 'undefined' ? '' : window.location.pathname;
   const shouldResetOtherTargetsThisLoad = useMemo(
     () => shouldResetOtherNavTargetsOnReload(),
@@ -585,6 +733,8 @@ export default function NewTopLayout({children}: NewTopLayoutProps): ReactNode {
     getTopbarMarqueeDelaySeconds(),
   );
   const [pressedItem, setPressedItem] = useState<string | null>(null);
+  const [isMobileSidebarMode, setIsMobileSidebarMode] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [hoveredTitleIcon, setHoveredTitleIcon] = useState<TitleIconKey | null>(null);
   const [cloudEnabled, setCloudEnabled] = useState<boolean>(CLOUD_ENABLED_DEFAULT);
   const [cloudSpeedMultiplier, setCloudSpeedMultiplier] = useState<number>(CLOUD_SPEED_DEFAULT);
@@ -658,15 +808,85 @@ export default function NewTopLayout({children}: NewTopLayoutProps): ReactNode {
   const logoHideBreakpointWidthRef = useRef<number | null>(null);
   const logoHideBelowBreakpointWidthRef = useRef<number | null>(null);
   const navBelowBreakpointWidthRef = useRef<number | null>(null);
+  const singleWrapBreakpointWidthRef = useRef<number | null>(null);
   const showNavBelowRowRef = useRef(false);
   const [logoSizePx, setLogoSizePx] = useState(54);
   const [titleHeadingWidthPx, setTitleHeadingWidthPx] = useState<number | null>(null);
   const [hideLogoForSpace, setHideLogoForSpace] = useState(false);
   const [showNavBelowRow, setShowNavBelowRow] = useState(false);
+  const [isCompactDesktopNav, setIsCompactDesktopNav] = useState(false);
+  const [isTwoByTwoDesktopNav, setIsTwoByTwoDesktopNav] = useState(false);
 
   useEffect(() => {
     setPressedItem(null);
   }, [pathname]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const mediaQuery = window.matchMedia(
+      `(max-width: ${MOBILE_SIDEBAR_MAX_WIDTH_PX}px)`,
+    );
+    const updateMode = () => {
+      setIsMobileSidebarMode(mediaQuery.matches);
+    };
+    updateMode();
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', updateMode);
+      return () => {
+        mediaQuery.removeEventListener('change', updateMode);
+      };
+    }
+    mediaQuery.addListener(updateMode);
+    return () => {
+      mediaQuery.removeListener(updateMode);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') {
+      return;
+    }
+    if (!isMobileSidebarMode) {
+      document.body.style.overflow = '';
+      return;
+    }
+    if (!isMobileSidebarOpen) {
+      document.body.style.overflow = '';
+      return;
+    }
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isMobileSidebarMode, isMobileSidebarOpen]);
+
+  useEffect(() => {
+    if (!isMobileSidebarMode) {
+      setIsMobileSidebarOpen(false);
+    }
+  }, [isMobileSidebarMode]);
+
+  useEffect(() => {
+    setIsMobileSidebarOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!isMobileSidebarOpen) {
+      return;
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsMobileSidebarOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [isMobileSidebarOpen]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !shouldResetOtherTargetsThisLoad) {
@@ -891,6 +1111,18 @@ export default function NewTopLayout({children}: NewTopLayoutProps): ReactNode {
   }, []);
 
   useLayoutEffect(() => {
+    if (isMobileSidebarMode) {
+      if (showNavBelowRowRef.current) {
+        showNavBelowRowRef.current = false;
+      }
+      if (showNavBelowRow) {
+        setShowNavBelowRow(false);
+      }
+      if (hideLogoForSpace) {
+        setHideLogoForSpace(false);
+      }
+      return;
+    }
     const rowNode = headerRowRef.current;
     const navNode = navRef.current;
     if (rowNode === null || navNode === null) {
@@ -911,6 +1143,7 @@ export default function NewTopLayout({children}: NewTopLayoutProps): ReactNode {
         secondRowTop === undefined
           ? 0
           : navItems.filter((item) => item.offsetTop === secondRowTop).length;
+      const hasSingleWrappedButton = navRowCount === 2 && secondRowCount === 1;
 
       const currentShowNavBelowRow = showNavBelowRowRef.current;
       let nextShowNavBelowRow = currentShowNavBelowRow;
@@ -932,8 +1165,54 @@ export default function NewTopLayout({children}: NewTopLayoutProps): ReactNode {
         setShowNavBelowRow(nextShowNavBelowRow);
       }
 
+      let nextCompactDesktopNav = false;
+      let nextTwoByTwoDesktopNav = false;
+      if (nextShowNavBelowRow) {
+        singleWrapBreakpointWidthRef.current = null;
+      } else if (hasSingleWrappedButton) {
+        const existingSingleWrapBreakpoint = singleWrapBreakpointWidthRef.current;
+        const nextSingleWrapBreakpoint =
+          existingSingleWrapBreakpoint === null
+            ? window.innerWidth
+            : Math.max(existingSingleWrapBreakpoint, window.innerWidth);
+        singleWrapBreakpointWidthRef.current = nextSingleWrapBreakpoint;
+        const splitWidth = nextSingleWrapBreakpoint - SINGLE_WRAP_SPLIT_PX;
+        const shouldUseTwoByTwo = window.innerWidth < splitWidth;
+        if (shouldUseTwoByTwo) {
+          nextTwoByTwoDesktopNav = true;
+        } else {
+          nextCompactDesktopNav = true;
+        }
+      } else if (singleWrapBreakpointWidthRef.current !== null) {
+        const singleWrapBreakpoint = singleWrapBreakpointWidthRef.current;
+        const restoreThreshold =
+          singleWrapBreakpoint + SINGLE_WRAP_MODE_RESTORE_HYSTERESIS_PX;
+        if (window.innerWidth >= restoreThreshold) {
+          singleWrapBreakpointWidthRef.current = null;
+        } else {
+          nextTwoByTwoDesktopNav = isTwoByTwoDesktopNav;
+          nextCompactDesktopNav = !isTwoByTwoDesktopNav;
+          if (nextCompactDesktopNav && navRowCount >= 2 && secondRowCount >= 2) {
+            nextCompactDesktopNav = false;
+            nextTwoByTwoDesktopNav = true;
+          }
+        }
+      }
+      if (isCompactDesktopNav !== nextCompactDesktopNav) {
+        setIsCompactDesktopNav(nextCompactDesktopNav);
+      }
+      if (isTwoByTwoDesktopNav !== nextTwoByTwoDesktopNav) {
+        setIsTwoByTwoDesktopNav(nextTwoByTwoDesktopNav);
+      }
+
       if (nextShowNavBelowRow) {
         if (!currentShowNavBelowRow) {
+          if (isCompactDesktopNav) {
+            setIsCompactDesktopNav(false);
+          }
+          if (isTwoByTwoDesktopNav) {
+            setIsTwoByTwoDesktopNav(false);
+          }
           setHideLogoForSpace(false);
           return;
         }
@@ -985,16 +1264,32 @@ export default function NewTopLayout({children}: NewTopLayoutProps): ReactNode {
     return () => {
       window.removeEventListener('resize', updateLogoVisibility);
     };
-  }, [showNavBelowRow]);
+  }, [
+    hideLogoForSpace,
+    isCompactDesktopNav,
+    isMobileSidebarMode,
+    isTwoByTwoDesktopNav,
+    showNavBelowRow,
+  ]);
 
   const dynamicLogoLinkStyle: CSSProperties = {
     ...logoLinkStyle,
     width: `${logoSizePx}px`,
     height: `${logoSizePx}px`,
   };
+  const mobileLogoShellStyle: CSSProperties = {
+    ...mobileLogoShellBaseStyle,
+    width: `${logoSizePx}px`,
+    height: `${logoSizePx}px`,
+  };
   const dynamicLogoImageStyle: CSSProperties = {
     ...logoImageStyle,
     filter: logoSizePx <= 44 ? 'blur(0.18px) saturate(0.96)' : 'none',
+    opacity: isMobileSidebarMode ? 0.15 : 1,
+  };
+  const mobileSidebarPanelStyle: CSSProperties = {
+    ...mobileSidebarPanelBaseStyle,
+    transform: isMobileSidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
   };
   const titleText = hideLogoForSpace ? '❀ Mons Academy' : '❀ Mons Academy ⋆⋆⋆';
   const dynamicTitleSocialTickerRowStyle: CSSProperties = {
@@ -1003,12 +1298,25 @@ export default function NewTopLayout({children}: NewTopLayoutProps): ReactNode {
       titleHeadingWidthPx !== null
         ? `min(100%, ${titleHeadingWidthPx}px)`
         : '100%',
+    display: isMobileSidebarMode ? 'none' : titleSocialTickerRowStyle.display,
   };
   const dynamicTitleTickerTrackStyle: CSSProperties = {
     ...titleTickerTrackStyle,
     animationDuration: `${TOPBAR_MARQUEE_DURATION_SECONDS}s`,
     animationDelay: `${topbarMarqueeDelaySeconds.toFixed(3)}s`,
   };
+  const desktopPrimaryNavStyle: CSSProperties = isTwoByTwoDesktopNav
+    ? {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(2, max-content)',
+        justifyContent: 'flex-end',
+        justifyItems: 'stretch',
+        columnGap: '0.44rem',
+        rowGap: '0.44rem',
+      }
+    : isCompactDesktopNav
+      ? {...navStyle, gap: '0.36rem'}
+      : navStyle;
 
   const menuItems: MenuItem[] = BASE_MENU_ITEMS.map((item) => {
     if (item.to === '/instruction') {
@@ -1023,11 +1331,20 @@ export default function NewTopLayout({children}: NewTopLayoutProps): ReactNode {
     return item;
   });
 
-  const renderPrimaryNav = (style: CSSProperties): ReactNode => (
+  const renderPrimaryNav = (
+    style: CSSProperties,
+    compactButtons = false,
+  ): ReactNode => (
     <nav ref={navRef} style={style} aria-label="Primary navigation">
       {menuItems.map((item) => {
         const isActive = isMenuItemActive(pathname, item.to);
         const isPressed = pressedItem === item.to;
+        const compactButtonStyleOverrides: CSSProperties = compactButtons
+          ? {
+              fontSize: '0.98rem',
+              padding: '0.25rem 0.58rem',
+            }
+          : {};
         return (
           <Link
             key={item.label}
@@ -1039,6 +1356,7 @@ export default function NewTopLayout({children}: NewTopLayoutProps): ReactNode {
             onTouchEnd={() => setPressedItem(null)}
             style={{
               ...(isActive ? activeButtonStyle : buttonStyle),
+              ...compactButtonStyleOverrides,
               ...(isPressed ? pressedButtonStyle : undefined),
             }}>
             {item.label}
@@ -1077,11 +1395,29 @@ export default function NewTopLayout({children}: NewTopLayoutProps): ReactNode {
           ))}
         </div>
       ) : null}
+      {underCloudChildren ? (
+        <div style={underCloudLayerStyle}>{underCloudChildren}</div>
+      ) : null}
       <div style={foregroundLayerStyle}>
         <div aria-hidden="true" style={topGapFillStyle} />
         <header style={headerBarStyle}>
           <div ref={headerRowRef} style={headerRowStyle}>
-            {!hideLogoForSpace ? (
+            {isMobileSidebarMode ? (
+              <div style={mobileLogoShellStyle}>
+                <img src={displayedLogoSrc} alt="" style={dynamicLogoImageStyle} />
+                <button
+                  type="button"
+                  aria-label="Open site menu"
+                  style={mobileHamburgerButtonStyle}
+                  onClick={() => setIsMobileSidebarOpen(true)}>
+                  <span style={mobileHamburgerIconStyle} aria-hidden="true">
+                    <span style={mobileHamburgerLineStyle} />
+                    <span style={mobileHamburgerLineStyle} />
+                    <span style={mobileHamburgerLineStyle} />
+                  </span>
+                </button>
+              </div>
+            ) : !hideLogoForSpace ? (
               <Link to="/" aria-label="Go to home page" style={dynamicLogoLinkStyle}>
                 <img src={displayedLogoSrc} alt="" style={dynamicLogoImageStyle} />
               </Link>
@@ -1175,13 +1511,123 @@ export default function NewTopLayout({children}: NewTopLayoutProps): ReactNode {
                   </div>
                 </div>
               </div>
-              {!showNavBelowRow ? renderPrimaryNav(navStyle) : null}
+              {!isMobileSidebarMode && !showNavBelowRow
+                ? renderPrimaryNav(
+                    desktopPrimaryNavStyle,
+                    isCompactDesktopNav || isTwoByTwoDesktopNav,
+                  )
+                : null}
             </div>
           </div>
-          {showNavBelowRow ? (
+          {!isMobileSidebarMode && showNavBelowRow ? (
             <div style={navBelowRowStyle}>{renderPrimaryNav(navBelowNavStyle)}</div>
           ) : null}
         </header>
+        {isMobileSidebarMode ? (
+          <>
+            {isMobileSidebarOpen ? (
+              <button
+                type="button"
+                aria-label="Close site menu"
+                style={mobileSidebarBackdropStyle}
+                onClick={() => setIsMobileSidebarOpen(false)}
+              />
+            ) : null}
+            <aside aria-label="Site menu" style={mobileSidebarPanelStyle}>
+              <div style={mobileSidebarHeaderStyle}>
+                <h2 style={mobileSidebarTitleStyle}>❀ Mons Academy ⋆⋆⋆</h2>
+                <button
+                  type="button"
+                  aria-label="Close site menu"
+                  style={mobileSidebarCloseStyle}
+                  onClick={() => setIsMobileSidebarOpen(false)}>
+                  ×
+                </button>
+              </div>
+              <nav style={mobileSidebarNavStyle} aria-label="Mobile primary navigation">
+                {menuItems.map((item) => {
+                  const isActive = isMenuItemActive(pathname, item.to);
+                  const isPressed = pressedItem === item.to;
+                  return (
+                    <Link
+                      key={`mobile-${item.label}`}
+                      to={item.navigateTo ?? item.to}
+                      onMouseDown={() => setPressedItem(item.to)}
+                      onMouseUp={() => setPressedItem(null)}
+                      onMouseLeave={() => setPressedItem(null)}
+                      onTouchStart={() => setPressedItem(item.to)}
+                      onTouchEnd={() => setPressedItem(null)}
+                      onClick={() => setIsMobileSidebarOpen(false)}
+                      style={{
+                        ...(isActive
+                          ? {...mobileSidebarButtonStyle, ...activeButtonStyle}
+                          : mobileSidebarButtonStyle),
+                        ...(isPressed ? pressedButtonStyle : undefined),
+                      }}>
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </nav>
+              <div style={mobileSidebarSocialRowStyle} aria-label="Platform icons">
+                <a
+                  href="https://mons.link/"
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label="Mons Link"
+                  style={{...titleIconLinkStyle, marginRight: '2px'}}
+                  onClick={() => setIsMobileSidebarOpen(false)}>
+                  <img src="/assets/mons-rock-icon.svg" alt="" aria-hidden="true" style={titleRockIconStyle} />
+                </a>
+                <a
+                  href="https://x.com/supermetalmons"
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label="Super Metal Mons on X"
+                  style={titleIconLinkStyle}
+                  onClick={() => setIsMobileSidebarOpen(false)}>
+                  <svg viewBox="0 0 24 24" aria-hidden="true" style={titleIconStyle} fill="currentColor">
+                    <path d="M22.46 6c-.77.35-1.6.58-2.46.69a4.28 4.28 0 0 0 1.88-2.36 8.56 8.56 0 0 1-2.72 1.04 4.27 4.27 0 0 0-7.27 3.89 12.13 12.13 0 0 1-8.81-4.47 4.27 4.27 0 0 0 1.32 5.7 4.23 4.23 0 0 1-1.93-.53v.05a4.28 4.28 0 0 0 3.43 4.19 4.32 4.32 0 0 1-1.92.07 4.28 4.28 0 0 0 3.99 2.97A8.58 8.58 0 0 1 2 18.58a12.1 12.1 0 0 0 6.56 1.92c7.87 0 12.18-6.52 12.18-12.18l-.01-.56A8.68 8.68 0 0 0 22.46 6z" />
+                  </svg>
+                </a>
+                <a
+                  href="https://discord.gg/skhtAHuFwu"
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label="Super Metal Mons on Discord"
+                  style={titleIconLinkStyle}
+                  onClick={() => setIsMobileSidebarOpen(false)}>
+                  <svg viewBox="0 0 640 512" aria-hidden="true" style={titleDiscordIconStyle} fill="currentColor">
+                    <path d="M524.5 69.8a1.5 1.5 0 0 0-.8-.7A485.1 485.1 0 0 0 404.1 32a1.8 1.8 0 0 0-1.9.9 337.5 337.5 0 0 0-14.9 30.6 447.8 447.8 0 0 0-134.4 0 309.5 309.5 0 0 0-15.1-30.6 1.9 1.9 0 0 0-1.9-.9A483.5 483.5 0 0 0 116.3 69.1a1.7 1.7 0 0 0-.8.7C39.1 183.7 18.2 294.7 28.4 404.1a2 2 0 0 0 .8 1.4A487.7 487.7 0 0 0 176.2 480a1.9 1.9 0 0 0 2.1-.7 348.2 348.2 0 0 0 30-48.8 1.9 1.9 0 0 0-1-2.6 321.2 321.2 0 0 1-45.9-21.8 1.9 1.9 0 0 1-.2-3.1c3.1-2.3 6-4.7 8.9-7.2a1.9 1.9 0 0 1 1.9-.3c96.2 43.8 200.4 43.8 295.2 0a1.9 1.9 0 0 1 2 .3c2.9 2.5 5.9 4.9 8.9 7.2a1.9 1.9 0 0 1-.2 3.1 301.5 301.5 0 0 1-45.9 21.8 1.9 1.9 0 0 0-1 2.6 391.1 391.1 0 0 0 30 48.8 1.9 1.9 0 0 0 2 .7 486.1 486.1 0 0 0 147.2-74.5 1.9 1.9 0 0 0 .8-1.4c12.2-126-20.6-236.3-86.1-334.6zM222.8 337.2c-29 0-52.8-26.6-52.8-59.2s23.4-59.2 52.8-59.2c29.7 0 53.3 26.6 52.8 59.2 0 32.6-23.4 59.2-52.8 59.2zm196 0c-29 0-52.8-26.6-52.8-59.2s23.4-59.2 52.8-59.2c29.7 0 53.3 26.6 52.8 59.2 0 32.6-23.4 59.2-52.8 59.2z" />
+                  </svg>
+                </a>
+                <a
+                  href="https://t.me/supermetalmons"
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label="Super Metal Mons on Telegram"
+                  style={titleIconLinkStyle}
+                  onClick={() => setIsMobileSidebarOpen(false)}>
+                  <svg viewBox="0 0 24 24" aria-hidden="true" style={titleIconStyle} fill="currentColor">
+                    <path d="M21.4 4.6 3.7 11.5c-.8.3-.8 1.4 0 1.7l4.5 1.6 1.7 5.2c.2.7 1.1.8 1.5.3l2.7-3.3 4.8 3.5c.6.4 1.4.1 1.6-.6l2.1-14.1c.1-.8-.7-1.5-1.4-1.2Zm-2.6 2.3-8.9 7.8-.4 2.8-1.1-3.3L5 13.1l13.8-6.2Z" />
+                  </svg>
+                </a>
+              </div>
+              <div className="topbar-marquee" style={mobileSidebarTickerViewportStyle} aria-hidden="true">
+                <span className="topbar-marquee__track" style={dynamicTitleTickerTrackStyle}>
+                  <span style={titleTickerChunkStyle}>
+                    <span>Swag is Eternal</span>
+                    <span>~</span>
+                  </span>
+                  <span style={titleTickerChunkStyle}>
+                    <span>Swag is Eternal</span>
+                    <span>~</span>
+                  </span>
+                </span>
+              </div>
+            </aside>
+          </>
+        ) : null}
         {children}
         <Link to="/settings" aria-label="Go to settings" style={settingsShortcutStyle}>
           ⚙️

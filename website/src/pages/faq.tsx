@@ -23,7 +23,7 @@ const faqWrapStyle: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   gap: '1.8rem',
-  padding: '15px 50px',
+  padding: '15px clamp(16px, 4.5vw, 50px)',
 };
 
 const faqItemStyle: CSSProperties = {

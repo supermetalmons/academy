@@ -62,6 +62,10 @@ const ATTACK_EFFECT_DURATION_MS = 820;
 const ATTACK_EFFECT_CLEANUP_BUFFER_MS = 80;
 const DEMON_ATTACK_PARTICLE_COLORS = ['#FFB347', '#FF7A00', '#FF4300', '#FFD06E'];
 const MYSTIC_ATTACK_PARTICLE_COLORS = ['#D9F4FF', '#97E8FF', '#61CCFF', '#9EE3FF'];
+const BOMB_FLAME_PARTICLE_COLORS = ['#FFEFB0', '#FFD36A', '#FFAA3A', '#FF6E1F', '#F6400A'];
+const BOMB_SMOKE_PARTICLE_COLORS = ['#F1ECE3', '#B3AAA0', '#868079', '#5D5955', '#3A3836'];
+const FULLSCREEN_SCALE_MARGIN = 0.96;
+const FULLSCREEN_HUD_VERTICAL_OFFSET_PX = 10;
 
 const colors = {
   darkSquare: '#BEBEBE',
@@ -583,7 +587,7 @@ type ManaPoolPulseSprite = {
   isExpanding: boolean;
 };
 
-type AttackEffectKind = 'demon' | 'mystic';
+type AttackEffectKind = 'demon' | 'mystic' | 'bomb';
 
 type AttackEffectSprite = {
   id: string;
@@ -1034,6 +1038,52 @@ function createMysticAttackParticles(seed: number): AttackBurstParticle[] {
   return particles;
 }
 
+function createBombFlameParticles(seed: number): AttackBurstParticle[] {
+  const random = mulberry32(seed);
+  const particles: AttackBurstParticle[] = [];
+  const count = 20;
+  for (let i = 0; i < count; i += 1) {
+    const angle = random() * Math.PI * 2;
+    const distance = 0.36 + random() * 1.42;
+    particles.push({
+      dx: Math.cos(angle) * distance,
+      dy: Math.sin(angle) * distance,
+      size: 0.08 + random() * 0.18,
+      delayMs: random() * 62,
+      durationMs: 190 + random() * 220,
+      color:
+        BOMB_FLAME_PARTICLE_COLORS[
+          Math.floor(random() * BOMB_FLAME_PARTICLE_COLORS.length)
+        ],
+      opacity: 0.75 + random() * 0.25,
+    });
+  }
+  return particles;
+}
+
+function createBombSmokeParticles(seed: number): AttackBurstParticle[] {
+  const random = mulberry32(seed);
+  const particles: AttackBurstParticle[] = [];
+  const count = 16;
+  for (let i = 0; i < count; i += 1) {
+    const angle = random() * Math.PI * 2;
+    const distance = 0.18 + random() * 1.12;
+    particles.push({
+      dx: Math.cos(angle) * distance,
+      dy: Math.sin(angle) * distance,
+      size: 0.12 + random() * 0.24,
+      delayMs: 35 + random() * 210,
+      durationMs: 340 + random() * 360,
+      color:
+        BOMB_SMOKE_PARTICLE_COLORS[
+          Math.floor(random() * BOMB_SMOKE_PARTICLE_COLORS.length)
+        ],
+      opacity: 0.38 + random() * 0.38,
+    });
+  }
+  return particles;
+}
+
 function clamp01(value: number): number {
   if (value <= 0) {
     return 0;
@@ -1080,24 +1130,6 @@ function getBoardGap(unit: number, showHoverPreview: boolean): number {
   return Math.max(baseGap, desiredPreviewOffset + PREVIEW_GAP_SAFETY_PX);
 }
 
-function getTopNavWrapped(): boolean | null {
-  if (typeof document === 'undefined') {
-    return null;
-  }
-  const nav = document.querySelector('nav[aria-label="Primary navigation"]');
-  if (!(nav instanceof HTMLElement)) {
-    return null;
-  }
-  const items = Array.from(nav.children).filter(
-    (child): child is HTMLElement => child instanceof HTMLElement,
-  );
-  if (items.length <= 1) {
-    return false;
-  }
-  const firstTop = items[0].offsetTop;
-  return items.some((item) => Math.abs(item.offsetTop - firstTop) > 1);
-}
-
 function animateHudScoreValue(node: HTMLSpanElement | null): void {
   if (node === null || typeof node.animate !== 'function') {
     return;
@@ -1135,6 +1167,7 @@ export default function SuperMetalMonsBoard({
   const opponentStartingPotionCount = getOpponentStartingPotionCount(boardPreset);
   const isSandboxFreeMoveBoard = enableFreeTileMove && boardPreset === 'default';
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  const boardRowRef = useRef<HTMLDivElement | null>(null);
   const boardContainerRef = useRef<HTMLDivElement | null>(null);
   const boardSvgRef = useRef<SVGSVGElement | null>(null);
   const previewMessageBoxRef = useRef<HTMLDivElement | null>(null);
@@ -1163,6 +1196,9 @@ export default function SuperMetalMonsBoard({
   const [isPreviewBelow, setIsPreviewBelow] = useState(false);
   const [availableWidth, setAvailableWidth] = useState<number | null>(null);
   const [thinHintScale, setThinHintScale] = useState(1);
+  const [isBoardFullscreen, setIsBoardFullscreen] = useState(false);
+  const [isFullscreenButtonHovered, setIsFullscreenButtonHovered] = useState(false);
+  const [fullscreenScale, setFullscreenScale] = useState(1);
   const [resetAnimation, setResetAnimation] = useState<ResetAnimationState | null>(null);
   const [resetAnimationProgress, setResetAnimationProgress] = useState(1);
   const initialBoardEntities = useMemo(
@@ -1227,6 +1263,7 @@ export default function SuperMetalMonsBoard({
   const previewBelowBreakpointWidthRef = useRef<number | null>(null);
   const scaledFactorRef = useRef(1);
   const [waveSeedNonce, setWaveSeedNonce] = useState(1);
+  const canUseBoardFullscreen = enableFreeTileMove;
   const selectedTileHighlightClipPathId = useId().replace(/:/g, '');
   const itemSparkleClipPathIdPrefix = useId().replace(/:/g, '');
   const [boardEntities, setBoardEntities] = useState<BoardEntity[]>(
@@ -1730,6 +1767,93 @@ export default function SuperMetalMonsBoard({
     };
   }, [resetAnimation]);
 
+  useEffect(() => {
+    if (canUseBoardFullscreen || !isBoardFullscreen) {
+      return;
+    }
+    setIsBoardFullscreen(false);
+  }, [canUseBoardFullscreen, isBoardFullscreen]);
+
+  useEffect(() => {
+    if (!isBoardFullscreen) {
+      setIsFullscreenButtonHovered(false);
+    }
+  }, [isBoardFullscreen]);
+
+  useEffect(() => {
+    if (!isBoardFullscreen) {
+      return;
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsBoardFullscreen(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [isBoardFullscreen]);
+
+  useEffect(() => {
+    if (!isBoardFullscreen || typeof document === 'undefined') {
+      return;
+    }
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isBoardFullscreen]);
+
+  useLayoutEffect(() => {
+    if (!isBoardFullscreen) {
+      if (fullscreenScale !== 1) {
+        setFullscreenScale(1);
+      }
+      return;
+    }
+    const node = boardRowRef.current;
+    if (node === null) {
+      return;
+    }
+    const updateFullscreenScale = () => {
+      const naturalWidth = node.offsetWidth;
+      const naturalHeight = node.offsetHeight;
+      if (naturalWidth <= 0 || naturalHeight <= 0) {
+        setFullscreenScale(1);
+        return;
+      }
+      const maxWidth = Math.max(1, window.innerWidth - 32);
+      const maxHeight = Math.max(1, window.innerHeight - 32);
+      const nextScale =
+        Math.min(1, maxWidth / naturalWidth, maxHeight / naturalHeight) *
+        FULLSCREEN_SCALE_MARGIN;
+      setFullscreenScale((current) =>
+        Math.abs(current - nextScale) < 0.001 ? current : nextScale,
+      );
+    };
+
+    updateFullscreenScale();
+
+    if (typeof ResizeObserver !== 'undefined') {
+      const observer = new ResizeObserver(() => {
+        updateFullscreenScale();
+      });
+      observer.observe(node);
+      window.addEventListener('resize', updateFullscreenScale);
+      return () => {
+        observer.disconnect();
+        window.removeEventListener('resize', updateFullscreenScale);
+      };
+    }
+
+    window.addEventListener('resize', updateFullscreenScale);
+    return () => {
+      window.removeEventListener('resize', updateFullscreenScale);
+    };
+  }, [fullscreenScale, isBoardFullscreen, renderWidth]);
+
   useLayoutEffect(() => {
     const node = wrapRef.current;
     if (node === null) {
@@ -1758,6 +1882,9 @@ export default function SuperMetalMonsBoard({
     };
   }, []);
 
+  const maxUnitPixels =
+    isBoardFullscreen && canUseBoardFullscreen ? 92 : MAX_UNIT_PIXELS;
+
   useLayoutEffect(() => {
     const updateRenderWidth = () => {
       const layoutWidth = availableWidth ?? window.innerWidth;
@@ -1768,9 +1895,8 @@ export default function SuperMetalMonsBoard({
           getPreviewBoxWidth(MIN_SIDE_LAYOUT_UNIT_PIXELS) +
           getBoardGap(MIN_SIDE_LAYOUT_UNIT_PIXELS, true) <=
           maxAvailableWidth;
-      const topNavWrapped = getTopNavWrapped() ?? false;
       const shouldForcePreviewBelow =
-        showHoverPreview && (topNavWrapped || !sideLayoutFitsAtMinUnit);
+        showHoverPreview && !sideLayoutFitsAtMinUnit;
       let nextIsPreviewBelow = false;
 
       if (!showHoverPreview) {
@@ -1803,7 +1929,7 @@ export default function SuperMetalMonsBoard({
       setIsPreviewBelow(nextIsPreviewBelow);
       let snappedUnit = MIN_UNIT_PIXELS;
 
-      for (let unit = MAX_UNIT_PIXELS; unit >= MIN_UNIT_PIXELS; unit -= 1) {
+      for (let unit = maxUnitPixels; unit >= MIN_UNIT_PIXELS; unit -= 1) {
         if (unit % 2 !== 0) {
           continue;
         }
@@ -1823,7 +1949,7 @@ export default function SuperMetalMonsBoard({
     };
 
     updateRenderWidth();
-  }, [availableWidth, isPreviewBelow, showHoverPreview]);
+  }, [availableWidth, isPreviewBelow, maxUnitPixels, showHoverPreview]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -1899,7 +2025,23 @@ export default function SuperMetalMonsBoard({
   const hoverTiles: ReactNode[] = [];
   const currentWrapStyle: CSSProperties = {
     ...wrapStyle,
-    justifyContent: align === 'left' ? 'flex-start' : 'center',
+    justifyContent: isBoardFullscreen
+      ? 'center'
+      : align === 'left'
+        ? 'flex-start'
+        : 'center',
+    ...(isBoardFullscreen
+      ? {
+          position: 'fixed',
+          inset: 0,
+          zIndex: 12050,
+          backgroundColor: '#fff',
+          boxSizing: 'border-box',
+          padding: '16px',
+          alignItems: 'center',
+          overflow: 'hidden',
+        }
+      : {}),
   };
   const visibleBoardEntities = useMemo(
     () =>
@@ -1918,9 +2060,18 @@ export default function SuperMetalMonsBoard({
         } =>
           entity.kind === 'mon' &&
           entity.side !== undefined &&
-          entity.monType === 'angel',
+          entity.monType === 'angel' &&
+          (!enableFreeTileMove ||
+            (isSandboxFreeMoveBoard
+              ? !faintedMonIdSet.has(entity.id)
+              : !isMonOnOwnSpawn({
+                  col: entity.col,
+                  row: entity.row,
+                  type: entity.monType,
+                  side: entity.side,
+                }))),
       ),
-    [visibleBoardEntities],
+    [enableFreeTileMove, faintedMonIdSet, isSandboxFreeMoveBoard, visibleBoardEntities],
   );
   const getProtectingAngelsForTarget = (
     targetEntity: BoardEntity & {
@@ -2478,7 +2629,7 @@ export default function SuperMetalMonsBoard({
       )
       .filter((targetEntity) => targetEntity.side !== selectedEntity.side)
       .filter((targetEntity) => {
-        if (selectedEntity.monType === 'mystic') {
+        if (selectedEntity.monType === 'mystic' && selectedEntity.heldItemKind !== 'bomb') {
           if (isTargetProtectedByAngel(targetEntity)) {
             return false;
           }
@@ -2503,7 +2654,7 @@ export default function SuperMetalMonsBoard({
           );
         }
 
-        if (selectedEntity.monType === 'demon') {
+        if (selectedEntity.monType === 'demon' && selectedEntity.heldItemKind !== 'bomb') {
           if (isTargetProtectedByAngel(targetEntity)) {
             return false;
           }
@@ -2551,6 +2702,25 @@ export default function SuperMetalMonsBoard({
           if (!canRespawnTarget) {
             return false;
           }
+          if (targetEntity.heldItemKind === 'bomb') {
+            const attackerSpawnTile = getMonSpawnTile(
+              selectedEntity.side,
+              selectedEntity.monType,
+            );
+            if (attackerSpawnTile === null) {
+              return false;
+            }
+            const canRespawnAttacker = !visibleBoardEntities.some(
+              (entity) =>
+                entity.id !== selectedEntity.id &&
+                entity.id !== targetEntity.id &&
+                entity.col === attackerSpawnTile.col &&
+                entity.row === attackerSpawnTile.row,
+            );
+            if (!canRespawnAttacker) {
+              return false;
+            }
+          }
           const targetCarriedMana = boardEntities.find(
             (entity) =>
               !entity.isScored &&
@@ -2561,6 +2731,7 @@ export default function SuperMetalMonsBoard({
           );
           const isTargetDrainerHoldingNormalMana =
             targetEntity.monType === 'drainer' &&
+            targetEntity.heldItemKind !== 'bomb' &&
             (targetCarriedMana?.kind === 'whiteMana' ||
               targetCarriedMana?.kind === 'blackMana');
           if (!isTargetDrainerHoldingNormalMana) {
@@ -2576,7 +2747,7 @@ export default function SuperMetalMonsBoard({
         }
 
         if (selectedEntity.heldItemKind === 'bomb') {
-          if (targetEntity.side !== 'black') {
+          if (targetEntity.side === selectedEntity.side) {
             return false;
           }
           const inBombRange =
@@ -2783,6 +2954,17 @@ export default function SuperMetalMonsBoard({
       return [];
     }
     if (selectedEntity.monType === 'angel') {
+      const isSelectedAngelFaintedOnSpawn =
+        isMonOnOwnSpawn({
+          col: selectedEntity.col,
+          row: selectedEntity.row,
+          type: selectedEntity.monType,
+          side: selectedEntity.side,
+        }) &&
+        (!isSandboxFreeMoveBoard || faintedMonIdSet.has(selectedEntity.id));
+      if (isSelectedAngelFaintedOnSpawn) {
+        return [];
+      }
       const minCol = Math.max(0, selectedEntity.col - 1);
       const minRow = Math.max(0, selectedEntity.row - 1);
       const maxCol = Math.min(BOARD_SIZE, selectedEntity.col + 2);
@@ -2886,6 +3068,25 @@ export default function SuperMetalMonsBoard({
             if (!canRespawnTarget) {
               return false;
             }
+            if (targetEntity.heldItemKind === 'bomb') {
+              const attackerSpawnTile = getMonSpawnTile(
+                selectedEntity.side,
+                selectedEntity.monType,
+              );
+              if (attackerSpawnTile === null) {
+                return false;
+              }
+              const canRespawnAttacker = !visibleBoardEntities.some(
+                (entity) =>
+                  entity.id !== selectedEntity.id &&
+                  entity.id !== targetEntity.id &&
+                  entity.col === attackerSpawnTile.col &&
+                  entity.row === attackerSpawnTile.row,
+              );
+              if (!canRespawnAttacker) {
+                return false;
+              }
+            }
             const targetCarriedMana = boardEntities.find(
               (entity) =>
                 !entity.isScored &&
@@ -2896,6 +3097,7 @@ export default function SuperMetalMonsBoard({
             );
             const isTargetDrainerHoldingNormalMana =
               targetEntity.monType === 'drainer' &&
+              targetEntity.heldItemKind !== 'bomb' &&
               (targetCarriedMana?.kind === 'whiteMana' ||
                 targetCarriedMana?.kind === 'blackMana');
             if (!isTargetDrainerHoldingNormalMana) {
@@ -2935,7 +3137,9 @@ export default function SuperMetalMonsBoard({
   }, [
     boardEntities,
     enableFreeTileMove,
+    faintedMonIdSet,
     isResetAnimating,
+    isSandboxFreeMoveBoard,
     pendingDemonRebound,
     pendingSpiritPush,
     selectedMovableTile,
@@ -3273,6 +3477,13 @@ export default function SuperMetalMonsBoard({
     alignItems: 'flex-start',
     gap: `${useBelowPreviewLayout ? belowPreviewGapPx : boardGapPx}px`,
   };
+  const currentBoardRowStyle: CSSProperties = isBoardFullscreen
+    ? {
+        ...boardRowStyle,
+        transform: `scale(${fullscreenScale})`,
+        transformOrigin: 'center center',
+      }
+    : boardRowStyle;
   const boardStackStyle: CSSProperties = {
     display: 'flex',
     flexDirection: 'column',
@@ -3437,10 +3648,16 @@ export default function SuperMetalMonsBoard({
   const topHudRowStyle: CSSProperties = {
     ...hudRowBaseStyle,
     marginBottom: `${Math.max(4, Math.round(tilePixels * 0.14)) - topHudOverlapPx}px`,
+    transform: isBoardFullscreen
+      ? `translateY(${FULLSCREEN_HUD_VERTICAL_OFFSET_PX}px)`
+      : undefined,
   };
   const bottomHudRowStyle: CSSProperties = {
     ...hudRowBaseStyle,
     marginTop: `${Math.max(4, Math.round(tilePixels * 0.14)) - bottomHudOverlapPx}px`,
+    transform: isBoardFullscreen
+      ? `translateY(${-FULLSCREEN_HUD_VERTICAL_OFFSET_PX}px)`
+      : undefined,
   };
   const hudPlayerClusterStyle: CSSProperties = {
     display: 'inline-flex',
@@ -3525,12 +3742,42 @@ export default function SuperMetalMonsBoard({
     userSelect: 'none',
     WebkitUserSelect: 'none',
   };
+  const hudActionButtonsWrapStyle: CSSProperties = {
+    marginTop: '15px',
+    width: `${hudStatusIconSize + (isBoardFullscreen ? 50 : 30)}px`,
+    height: `${hudStatusIconSize}px`,
+    position: 'relative',
+    alignSelf: 'flex-end',
+  };
   const getHudResetButtonStateStyle = (enabled: boolean): CSSProperties => ({
     ...hudResetButtonStyle,
     color: enabled ? '#000000' : '#808080',
     opacity: enabled ? 1 : 0.52,
     cursor: enabled ? 'pointer' : 'default',
     transition: 'color 220ms ease, opacity 220ms ease',
+  });
+  const getHudResetButtonOffsetStyle = (isFullscreen: boolean): CSSProperties => ({
+    position: 'absolute',
+    right: isFullscreen ? '50px' : '30px',
+    top: 0,
+    marginTop: 0,
+  });
+  const getHudFullscreenButtonStyle = (isActive: boolean): CSSProperties => ({
+    ...hudResetButtonStyle,
+    marginTop: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    color: isFullscreenButtonHovered ? '#fff' : isActive ? '#000' : '#6f6f6f',
+    backgroundColor: isFullscreenButtonHovered ? '#000' : 'transparent',
+    borderRadius: '2px',
+    opacity: isFullscreenButtonHovered ? 1 : isActive ? 1 : 0.9,
+    cursor: 'pointer',
+    transform: isFullscreenButtonHovered ? 'translateY(-1.5px) scale(1.16)' : 'none',
+    filter: isFullscreenButtonHovered ? 'brightness(1.02)' : 'none',
+    willChange: 'transform, color, background-color',
+    transition:
+      'color 220ms ease, opacity 220ms ease, filter 180ms ease, transform 180ms ease, background-color 180ms ease',
   });
   const hudResetIconStyle: CSSProperties = {
     width: '100%',
@@ -4098,6 +4345,25 @@ export default function SuperMetalMonsBoard({
                 });
                 return;
               }
+              const pendingReboundTargetEntity = visibleBoardEntities.find(
+                (entity) => entity.id === pendingDemonRebound.targetId,
+              );
+              const pendingReboundTargetHasBomb =
+                pendingReboundTargetEntity?.kind === 'mon' &&
+                pendingReboundTargetEntity.heldItemKind === 'bomb';
+              const pendingReboundAttackerEntity = visibleBoardEntities.find(
+                (entity) => entity.id === pendingDemonRebound.attackerId,
+              );
+              const pendingReboundAttackerSpawnTile =
+                pendingReboundAttackerEntity !== undefined &&
+                pendingReboundAttackerEntity.kind === 'mon' &&
+                pendingReboundAttackerEntity.side !== undefined &&
+                pendingReboundAttackerEntity.monType !== undefined
+                  ? getMonSpawnTile(
+                      pendingReboundAttackerEntity.side,
+                      pendingReboundAttackerEntity.monType,
+                    )
+                  : null;
               setBoardEntities((currentEntities) => {
                 const sourceIndex = currentEntities.findIndex(
                   (entity) => entity.id === pendingDemonRebound.attackerId,
@@ -4163,15 +4429,44 @@ export default function SuperMetalMonsBoard({
                 const targetOriginalCol = targetMon.col;
                 const targetOriginalRow = targetMon.row;
                 const nextEntities = [...currentEntities];
+                const doesTargetHoldBomb = targetMon.heldItemKind === 'bomb';
+                const attackerRespawnTile = doesTargetHoldBomb
+                  ? getMonSpawnTile(sourceMon.side, sourceMon.monType)
+                  : null;
+                if (doesTargetHoldBomb && attackerRespawnTile === null) {
+                  return currentEntities;
+                }
+                if (attackerRespawnTile !== null) {
+                  const isAttackerRespawnTileOccupied = currentEntities.some(
+                    (entity) =>
+                      entity.id !== sourceMon.id &&
+                      entity.id !== targetMon.id &&
+                      !entity.isScored &&
+                      entity.carriedByDrainerId === undefined &&
+                      entity.col === attackerRespawnTile.col &&
+                      entity.row === attackerRespawnTile.row,
+                  );
+                  if (isAttackerRespawnTileOccupied) {
+                    return currentEntities;
+                  }
+                }
                 nextEntities[sourceIndex] = {
                   ...sourceMon,
-                  col: reboundChoice.col,
-                  row: reboundChoice.row,
+                  col: attackerRespawnTile?.col ?? reboundChoice.col,
+                  row: attackerRespawnTile?.row ?? reboundChoice.row,
+                  heldItemKind:
+                    attackerRespawnTile !== null && sourceMon.heldItemKind === 'bomb'
+                      ? undefined
+                      : sourceMon.heldItemKind,
                 };
                 nextEntities[targetIndex] = {
                   ...targetMon,
                   col: respawnTile.col,
                   row: respawnTile.row,
+                  heldItemKind:
+                    targetMon.heldItemKind === 'bomb'
+                      ? undefined
+                      : targetMon.heldItemKind,
                 };
                 dropFaintedDrainerCarriedMana(
                   currentEntities,
@@ -4184,13 +4479,23 @@ export default function SuperMetalMonsBoard({
                 return nextEntities;
               });
               markMonAsFaintedOnSpawn(pendingDemonRebound.targetId);
+              if (pendingReboundTargetHasBomb) {
+                markMonAsFaintedOnSpawn(pendingDemonRebound.attackerId);
+              }
               triggerAttackEffect(
                 'demon',
                 pendingDemonRebound.targetCol,
                 pendingDemonRebound.targetRow,
               );
               setPendingDemonRebound(null);
-              setSelectedTile({row: reboundChoice.row, col: reboundChoice.col});
+              if (pendingReboundTargetHasBomb && pendingReboundAttackerSpawnTile !== null) {
+                setSelectedTile({
+                  row: pendingReboundAttackerSpawnTile.row,
+                  col: pendingReboundAttackerSpawnTile.col,
+                });
+              } else {
+                setSelectedTile({row: reboundChoice.row, col: reboundChoice.col});
+              }
               return;
             }
             if (pendingSpiritPush !== null) {
@@ -4396,17 +4701,7 @@ export default function SuperMetalMonsBoard({
                 targetEntity.kind === 'mon' &&
                 targetEntity.side !== undefined &&
                 targetEntity.monType !== undefined &&
-                visibleBoardEntities.some(
-                  (entity) =>
-                    entity.id !== targetEntity.id &&
-                    entity.kind === 'mon' &&
-                    entity.side === targetEntity.side &&
-                    entity.monType === 'angel' &&
-                    Math.max(
-                      Math.abs(entity.col - targetEntity.col),
-                      Math.abs(entity.row - targetEntity.row),
-                    ) === 1,
-                );
+                getProtectingAngelsForTarget(targetEntity).length > 0;
               const targetItemEntity =
                 targetEntity !== undefined && targetEntity.kind === 'item'
                   ? targetEntity
@@ -4456,13 +4751,13 @@ export default function SuperMetalMonsBoard({
                 return;
               }
 
-              const canThrowBombAtBlackMon =
+              const canThrowBombAtEnemyMon =
                 selectedEntity.kind === 'mon' &&
                 selectedEntity.side !== undefined &&
                 selectedEntity.heldItemKind === 'bomb' &&
                 targetEntity !== undefined &&
                 targetEntity.kind === 'mon' &&
-                targetEntity.side === 'black' &&
+                targetEntity.side !== undefined &&
                 targetEntity.monType !== undefined &&
                 selectedEntity.side !== targetEntity.side &&
                 Math.max(
@@ -4470,7 +4765,7 @@ export default function SuperMetalMonsBoard({
                   Math.abs(row - sourceRow),
                 ) <= 3 &&
                 (col !== sourceCol || row !== sourceRow);
-              if (canThrowBombAtBlackMon) {
+              if (canThrowBombAtEnemyMon) {
                 setBoardEntities((currentEntities) => {
                   const sourceIndex = currentEntities.findIndex(
                     (entity) => entity.id === selectedEntity.id,
@@ -4488,7 +4783,7 @@ export default function SuperMetalMonsBoard({
                     sourceMon.side === undefined ||
                     sourceMon.heldItemKind !== 'bomb' ||
                     targetMon.kind !== 'mon' ||
-                    targetMon.side !== 'black' ||
+                    targetMon.side === undefined ||
                     targetMon.monType === undefined ||
                     sourceMon.side === targetMon.side
                   ) {
@@ -4535,6 +4830,10 @@ export default function SuperMetalMonsBoard({
                     ...targetMon,
                     col: respawnTile.col,
                     row: respawnTile.row,
+                    heldItemKind:
+                      targetMon.heldItemKind === 'bomb'
+                        ? undefined
+                        : targetMon.heldItemKind,
                   };
                   dropFaintedDrainerCarriedMana(
                     currentEntities,
@@ -4547,11 +4846,15 @@ export default function SuperMetalMonsBoard({
                   return nextEntities;
                 });
                 markMonAsFaintedOnSpawn(targetEntity.id);
+                triggerAttackEffect('bomb', col, row);
                 setSelectedTile({row: sourceRow, col: sourceCol});
                 return;
               }
 
               if (isSelectedDrainer && isTargetManaEntity) {
+                if (selectedEntity.heldItemKind === 'bomb') {
+                  return;
+                }
                 if (!canEntityMoveToTile(selectedEntity, targetEntity.col, targetEntity.row)) {
                   return;
                 }
@@ -4753,6 +5056,10 @@ export default function SuperMetalMonsBoard({
                       ...targetMon,
                       col: respawnTile.col,
                       row: respawnTile.row,
+                      heldItemKind:
+                        targetMon.heldItemKind === 'bomb'
+                          ? undefined
+                          : targetMon.heldItemKind,
                     };
                     dropFaintedDrainerCarriedMana(
                       currentEntities,
@@ -4787,6 +5094,26 @@ export default function SuperMetalMonsBoard({
                   type: targetEntity.monType,
                   side: targetEntity.side,
                 });
+              const doesDemonAttackTargetHoldBomb =
+                targetEntity !== undefined &&
+                targetEntity.kind === 'mon' &&
+                targetEntity.heldItemKind === 'bomb';
+              const demonAttackerSpawnTile =
+                selectedEntity.kind === 'mon' &&
+                selectedEntity.side !== undefined &&
+                selectedEntity.monType !== undefined
+                  ? getMonSpawnTile(selectedEntity.side, selectedEntity.monType)
+                  : null;
+              const canRespawnDemonAttackerOnBombFaint =
+                !doesDemonAttackTargetHoldBomb ||
+                (demonAttackerSpawnTile !== null &&
+                  !visibleBoardEntities.some(
+                    (entity) =>
+                      entity.id !== selectedEntity.id &&
+                      entity.id !== targetEntity?.id &&
+                      entity.col === demonAttackerSpawnTile.col &&
+                      entity.row === demonAttackerSpawnTile.row,
+                  ));
               const canDemonAttackEnemyMon =
                 selectedEntity.kind === 'mon' &&
                 selectedEntity.side !== undefined &&
@@ -4800,6 +5127,7 @@ export default function SuperMetalMonsBoard({
                 !isTargetProtectedByAngel &&
                 selectedEntity.side !== targetEntity.side &&
                 demonAttackMiddleTile !== null &&
+                canRespawnDemonAttackerOnBombFaint &&
                 !isCenterSuperManaTile(
                   demonAttackMiddleTile.col,
                   demonAttackMiddleTile.row,
@@ -4834,10 +5162,19 @@ export default function SuperMetalMonsBoard({
                   );
                   const isTargetDrainerHoldingNormalMana =
                     targetEntity.monType === 'drainer' &&
+                    targetEntity.heldItemKind !== 'bomb' &&
                     (targetCarriedMana?.kind === 'whiteMana' ||
                       targetCarriedMana?.kind === 'blackMana');
+                  const shouldUseSpawnRebound =
+                    !doesDemonAttackTargetHoldBomb &&
+                    isDemonAttackTargetOnOwnSpawn &&
+                    !canEntityMoveToTile(
+                      selectedEntity,
+                      targetEntity.col,
+                      targetEntity.row,
+                    );
                   if (
-                    isTargetDrainerHoldingNormalMana &&
+                    (isTargetDrainerHoldingNormalMana || shouldUseSpawnRebound) &&
                     targetSpawnTile !== null
                   ) {
                     const reboundOptions = getDemonReboundOptions(
@@ -4891,6 +5228,27 @@ export default function SuperMetalMonsBoard({
                     if (respawnTile === null) {
                       return currentEntities;
                     }
+                    const doesTargetHoldBomb = targetMon.heldItemKind === 'bomb';
+                    const attackerRespawnTile = doesTargetHoldBomb
+                      ? getMonSpawnTile(sourceEntity.side, sourceEntity.monType)
+                      : null;
+                    if (doesTargetHoldBomb && attackerRespawnTile === null) {
+                      return currentEntities;
+                    }
+                    if (attackerRespawnTile !== null) {
+                      const isAttackerRespawnTileOccupied = currentEntities.some(
+                        (entity) =>
+                          entity.id !== sourceEntity.id &&
+                          entity.id !== targetMon.id &&
+                          !entity.isScored &&
+                          entity.carriedByDrainerId === undefined &&
+                          entity.col === attackerRespawnTile.col &&
+                          entity.row === attackerRespawnTile.row,
+                      );
+                      if (isAttackerRespawnTileOccupied) {
+                        return currentEntities;
+                      }
+                    }
                     const isRespawnTileOccupied = currentEntities.some(
                       (entity) =>
                         entity.id !== sourceEntity.id &&
@@ -4909,7 +5267,17 @@ export default function SuperMetalMonsBoard({
                     const isTargetAlreadyOnSpawn =
                       targetMon.col === respawnTile.col &&
                       targetMon.row === respawnTile.row;
-                    if (!isTargetAlreadyOnSpawn) {
+                    if (attackerRespawnTile !== null) {
+                      nextEntities[sourceIndex] = {
+                        ...sourceEntity,
+                        col: attackerRespawnTile.col,
+                        row: attackerRespawnTile.row,
+                        heldItemKind:
+                          sourceEntity.heldItemKind === 'bomb'
+                            ? undefined
+                            : sourceEntity.heldItemKind,
+                      };
+                    } else if (!isTargetAlreadyOnSpawn) {
                       nextEntities[sourceIndex] = {
                         ...sourceEntity,
                         col: targetMon.col,
@@ -4920,6 +5288,10 @@ export default function SuperMetalMonsBoard({
                       ...targetMon,
                       col: respawnTile.col,
                       row: respawnTile.row,
+                      heldItemKind:
+                        targetMon.heldItemKind === 'bomb'
+                          ? undefined
+                          : targetMon.heldItemKind,
                     };
                     dropFaintedDrainerCarriedMana(
                       currentEntities,
@@ -4932,10 +5304,20 @@ export default function SuperMetalMonsBoard({
                     return nextEntities;
                   });
                   markMonAsFaintedOnSpawn(targetEntity.id);
+                  if (doesDemonAttackTargetHoldBomb) {
+                    markMonAsFaintedOnSpawn(selectedEntity.id);
+                  }
                   triggerAttackEffect('demon', col, row);
-                  setSelectedTile(
-                    isDemonAttackTargetOnOwnSpawn ? {row: sourceRow, col: sourceCol} : targetTile,
-                  );
+                  if (doesDemonAttackTargetHoldBomb && demonAttackerSpawnTile !== null) {
+                    setSelectedTile({
+                      row: demonAttackerSpawnTile.row,
+                      col: demonAttackerSpawnTile.col,
+                    });
+                  } else {
+                    setSelectedTile(
+                      isDemonAttackTargetOnOwnSpawn ? {row: sourceRow, col: sourceCol} : targetTile,
+                    );
+                  }
                   return;
                 }
               }
@@ -5085,7 +5467,7 @@ export default function SuperMetalMonsBoard({
       ref={wrapRef}
       style={currentWrapStyle}
       className={enableFreeTileMove ? 'super-mons-board super-mons-board--puzzle' : 'super-mons-board'}>
-      <div style={boardRowStyle}>
+      <div ref={boardRowRef} style={currentBoardRowStyle}>
         <div ref={boardContainerRef} style={boardStackStyle}>
           {showPlayerHud ? (
             <div style={topHudRowStyle} aria-label="Opponent HUD">
@@ -5689,6 +6071,116 @@ export default function SuperMetalMonsBoard({
           const centerY = effect.row + 0.5;
           const progress = clamp01(effect.progress);
           const elapsedMs = ATTACK_EFFECT_DURATION_MS * progress;
+          if (effect.kind === 'bomb') {
+            const flameParticles = createBombFlameParticles(seed);
+            const smokeParticles = createBombSmokeParticles(seed + 9191);
+            const flashOpacity = Math.max(0, 1 - progress * 1.9);
+            const flashRadius = 0.22 + easeOutCubic(progress) * 1.18;
+            const heatOpacity = Math.max(0, 0.9 * (1 - progress * 1.25));
+            const heatRadius = 0.2 + easeOutCubic(progress) * 0.84;
+            const shockRingRadius = 0.16 + easeOutCubic(progress) * 1.84;
+            const shockRingOpacity = Math.max(0, 0.86 * (1 - progress * 1.3));
+            return (
+              <g
+                key={effect.id}
+                transform={`translate(${centerX} ${centerY})`}
+                pointerEvents="none"
+                style={{shapeRendering: 'geometricPrecision'}}>
+                <circle
+                  cx={0}
+                  cy={0}
+                  r={flashRadius}
+                  fill="#FFF9D0"
+                  opacity={flashOpacity}
+                />
+                <circle
+                  cx={0}
+                  cy={0}
+                  r={heatRadius}
+                  fill="#FFB24A"
+                  opacity={heatOpacity}
+                />
+                <circle
+                  cx={0}
+                  cy={0}
+                  r={shockRingRadius}
+                  fill="none"
+                  stroke="#FF7E1A"
+                  strokeWidth={0.12}
+                  opacity={shockRingOpacity}
+                />
+                {flameParticles.map((particle, index) => {
+                  const localProgress = clamp01(
+                    (elapsedMs - particle.delayMs) / particle.durationMs,
+                  );
+                  const traveled = easeOutCubic(localProgress);
+                  const px = particle.dx * traveled;
+                  const py = particle.dy * traveled;
+                  const radiusBase = Math.max(
+                    0.014,
+                    particle.size * (1 - 0.86 * localProgress),
+                  );
+                  const flameAngleDeg =
+                    (Math.atan2(particle.dy, particle.dx) * 180) / Math.PI + 90;
+                  const opacity = Math.max(
+                    0,
+                    particle.opacity * (1 - localProgress) * 1.12,
+                  );
+                  return (
+                    <g
+                      key={`${effect.id}-bomb-flame-${index}`}
+                      transform={`translate(${px.toFixed(3)} ${py.toFixed(3)})`}
+                      opacity={opacity}>
+                      <ellipse
+                        cx={0}
+                        cy={0}
+                        rx={(radiusBase * 0.62).toFixed(3)}
+                        ry={(radiusBase * 1.6).toFixed(3)}
+                        fill={particle.color}
+                        transform={`rotate(${flameAngleDeg.toFixed(2)})`}
+                      />
+                      <circle
+                        cx={0}
+                        cy={0}
+                        r={(radiusBase * 0.36).toFixed(3)}
+                        fill="#FFFDEA"
+                        opacity={0.88}
+                      />
+                    </g>
+                  );
+                })}
+                {smokeParticles.map((particle, index) => {
+                  const localProgress = clamp01(
+                    (elapsedMs - particle.delayMs) / particle.durationMs,
+                  );
+                  const traveled = easeOutCubic(localProgress);
+                  const px = particle.dx * (0.45 + traveled * 0.72);
+                  const py = particle.dy * (0.38 + traveled * 0.72) - traveled * 0.42;
+                  const radius = Math.max(
+                    0.02,
+                    particle.size * (0.78 + localProgress * 0.96),
+                  );
+                  const opacity = Math.max(
+                    0,
+                    particle.opacity * (1 - localProgress * 0.9),
+                  );
+                  return (
+                    <g
+                      key={`${effect.id}-bomb-smoke-${index}`}
+                      transform={`translate(${px.toFixed(3)} ${py.toFixed(3)})`}
+                      opacity={opacity}>
+                      <circle
+                        cx={0}
+                        cy={0}
+                        r={radius.toFixed(3)}
+                        fill={particle.color}
+                      />
+                    </g>
+                  );
+                })}
+              </g>
+            );
+          }
           if (effect.kind === 'demon') {
             const particles = createDemonAttackParticles(seed);
             const coreOpacity = Math.max(0, 0.95 * (1 - progress));
@@ -6143,24 +6635,125 @@ export default function SuperMetalMonsBoard({
                   </div>
                 ) : null}
                 {enableFreeTileMove ? (
-                  <button
-                    type="button"
-                    className="player-hud-reset-button"
-                    aria-label="Reset puzzle board"
-                    disabled={!hasPuzzleBoardChanges || isResetAnimating}
-                    style={getHudResetButtonStateStyle(hasPuzzleBoardChanges || isResetAnimating)}
-                    onClick={resetBoardToInitialPuzzleState}>
-                    <svg
-                      ref={resetIconRef}
-                      viewBox="0 0 512 512"
-                      aria-hidden="true"
-                      style={hudResetIconStyle}>
-                      <path
-                        d="M125.7 160H176c17.7 0 32 14.3 32 32s-14.3 32-32 32H48c-17.7 0-32-14.3-32-32V64c0-17.7 14.3-32 32-32s32 14.3 32 32v51.2L97.6 97.6c87.5-87.5 229.3-87.5 316.8 0s87.5 229.3 0 316.8s-229.3 87.5-316.8 0c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0c62.5 62.5 163.8 62.5 226.3 0s62.5-163.8 0-226.3s-163.8-62.5-226.3 0L125.7 160z"
-                        fill="currentColor"
-                      />
-                    </svg>
-                  </button>
+                  <div style={hudActionButtonsWrapStyle}>
+                    <button
+                      type="button"
+                      className="player-hud-reset-button"
+                      aria-label="Reset puzzle board"
+                      disabled={!hasPuzzleBoardChanges || isResetAnimating}
+                      style={{
+                        ...getHudResetButtonStateStyle(hasPuzzleBoardChanges || isResetAnimating),
+                        ...getHudResetButtonOffsetStyle(isBoardFullscreen),
+                      }}
+                      onClick={resetBoardToInitialPuzzleState}>
+                      <svg
+                        ref={resetIconRef}
+                        viewBox="0 0 512 512"
+                        aria-hidden="true"
+                        style={hudResetIconStyle}>
+                        <path
+                          d="M125.7 160H176c17.7 0 32 14.3 32 32s-14.3 32-32 32H48c-17.7 0-32-14.3-32-32V64c0-17.7 14.3-32 32-32s32 14.3 32 32v51.2L97.6 97.6c87.5-87.5 229.3-87.5 316.8 0s87.5 229.3 0 316.8s-229.3 87.5-316.8 0c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0c62.5 62.5 163.8 62.5 226.3 0s62.5-163.8 0-226.3s-163.8-62.5-226.3 0L125.7 160z"
+                          fill="currentColor"
+                        />
+                      </svg>
+                    </button>
+                    {canUseBoardFullscreen ? (
+                      <button
+                        type="button"
+                        aria-label={isBoardFullscreen ? 'Close fullscreen board' : 'Open fullscreen board'}
+                        style={getHudFullscreenButtonStyle(isBoardFullscreen)}
+                        onMouseEnter={() => {
+                          setIsFullscreenButtonHovered(true);
+                        }}
+                        onMouseLeave={() => {
+                          setIsFullscreenButtonHovered(false);
+                        }}
+                        onFocus={() => {
+                          setIsFullscreenButtonHovered(true);
+                        }}
+                        onBlur={() => {
+                          setIsFullscreenButtonHovered(false);
+                        }}
+                        onClick={() => {
+                          setIsBoardFullscreen((current) => !current);
+                        }}>
+                        <svg viewBox="0 0 24 24" aria-hidden="true" style={hudResetIconStyle}>
+                          {isBoardFullscreen ? (
+                            <path
+                              d="M6 6L18 18M18 6L6 18"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth={2.4}
+                              strokeLinecap="round"
+                            />
+                          ) : (
+                            <>
+                              <g
+                                style={{
+                                  transform: isFullscreenButtonHovered
+                                    ? 'translate(-0.9px, -0.9px)'
+                                    : 'translate(0px, 0px)',
+                                  transition: 'transform 180ms ease',
+                                }}>
+                                <path
+                                  d="M4 9V4h5"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth={2.2}
+                                  strokeLinecap="square"
+                                />
+                              </g>
+                              <g
+                                style={{
+                                  transform: isFullscreenButtonHovered
+                                    ? 'translate(0.9px, -0.9px)'
+                                    : 'translate(0px, 0px)',
+                                  transition: 'transform 180ms ease',
+                                }}>
+                                <path
+                                  d="M15 4h5v5"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth={2.2}
+                                  strokeLinecap="square"
+                                />
+                              </g>
+                              <g
+                                style={{
+                                  transform: isFullscreenButtonHovered
+                                    ? 'translate(0.9px, 0.9px)'
+                                    : 'translate(0px, 0px)',
+                                  transition: 'transform 180ms ease',
+                                }}>
+                                <path
+                                  d="M20 15v5h-5"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth={2.2}
+                                  strokeLinecap="square"
+                                />
+                              </g>
+                              <g
+                                style={{
+                                  transform: isFullscreenButtonHovered
+                                    ? 'translate(-0.9px, 0.9px)'
+                                    : 'translate(0px, 0px)',
+                                  transition: 'transform 180ms ease',
+                                }}>
+                                <path
+                                  d="M9 20H4v-5"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth={2.2}
+                                  strokeLinecap="square"
+                                />
+                              </g>
+                            </>
+                          )}
+                        </svg>
+                      </button>
+                    ) : null}
+                  </div>
                 ) : null}
               </div>
             </div>

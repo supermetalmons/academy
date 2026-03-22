@@ -80,7 +80,7 @@ const collectionItems: Array<{label: string; href: string; chain: ChainKind}> = 
 
 const collectionsWrapStyle: CSSProperties = {
   marginTop: 'calc(1rem + 15px)',
-  padding: '0 50px',
+  padding: '0 clamp(16px, 4.5vw, 50px)',
 };
 
 const collectionsBlockStyle: CSSProperties = {
