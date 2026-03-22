@@ -185,7 +185,7 @@ function createInitialPositions(viewportWidth: number, viewportHeight: number): 
   const baseY = viewportHeight * 0.5 + SPRITE_ROW_VERTICAL_SHIFT_PX;
   return {
     bosch: {
-      x: rowLeft + BOSCH_STACK_WIDTH * 0.5 - 15,
+      x: rowLeft + BOSCH_STACK_WIDTH * 0.5,
       y: baseY,
     },
     omom: {
@@ -522,6 +522,67 @@ export default function Home(): ReactNode {
       cleanups.forEach((cleanup) => cleanup());
     };
   }, [homeSpriteLoadedByKey.bosch, homeSpriteLoadedByKey.omom]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || areHomeSpritesReady) {
+      return;
+    }
+
+    let isDisposed = false;
+    let probeTimeout: number | null = null;
+    let probeAttempts = 0;
+    const maxProbeAttempts = 80;
+    const probeIntervalMs = 60;
+
+    const probeImageReadyState = (): void => {
+      if (isDisposed) {
+        return;
+      }
+      probeAttempts += 1;
+
+      const boschNode = boschImageRef.current;
+      const omomNode = omomImageRef.current;
+      const isBoschReady =
+        boschNode !== null && boschNode.complete && boschNode.naturalWidth > 0;
+      const isOmomReady =
+        omomNode !== null && omomNode.complete && omomNode.naturalWidth > 0;
+
+      if (isBoschReady) {
+        markHomeSpriteLoaded('bosch', BOSCH_SPRITE_SRC);
+      }
+      if (isOmomReady) {
+        markHomeSpriteLoaded('omom', OMOM_SPRITE_SRC);
+      }
+
+      if ((isBoschReady && isOmomReady) || probeAttempts >= maxProbeAttempts) {
+        return;
+      }
+
+      probeTimeout = window.setTimeout(probeImageReadyState, probeIntervalMs);
+    };
+
+    const handlePageShow = (): void => {
+      probeImageReadyState();
+    };
+    const handleVisibilityChange = (): void => {
+      if (document.visibilityState === 'visible') {
+        probeImageReadyState();
+      }
+    };
+
+    probeImageReadyState();
+    window.addEventListener('pageshow', handlePageShow);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      isDisposed = true;
+      window.removeEventListener('pageshow', handlePageShow);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (probeTimeout !== null) {
+        window.clearTimeout(probeTimeout);
+      }
+    };
+  }, [areHomeSpritesReady]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {

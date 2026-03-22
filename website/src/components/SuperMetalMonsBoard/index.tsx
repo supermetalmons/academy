@@ -3717,12 +3717,12 @@ export default function SuperMetalMonsBoard({
     (isNarrowHudMode ? THIN_HUD_ACTION_HITBOX_EXTRA_PX : 0);
   const hudFullscreenButtonWidthPx =
     hudActionButtonSizePx + hudFullscreenButtonHitboxExtraPx;
-  const hudFullscreenButtonRightPx = isNarrowHudMode
-    ? hudNarrowFullscreenButtonRightPx
-    : -Math.round(hudFullscreenButtonHitboxExtraPx / 2);
   const hudNarrowFullscreenButtonRightPx =
     -Math.round(hudFullscreenButtonHitboxExtraPx / 2) +
     Math.round(hudActionButtonRightInsetPx * 0.25);
+  const hudFullscreenButtonRightPx = isNarrowHudMode
+    ? hudNarrowFullscreenButtonRightPx
+    : -Math.round(hudFullscreenButtonHitboxExtraPx / 2);
   const narrowHudSideInsetPx = isNarrowHudMode
     ? Math.min(
         THIN_HUD_SIDE_SAFE_INSET_PX +
