@@ -2179,6 +2179,9 @@ export default function SuperMetalMonsBoard({
       if (selectedTile === null && selectedMoveResourceId === null) {
         return;
       }
+      if (event.button !== 0) {
+        return;
+      }
       const target = event.target as Node | null;
       if (
         target !== null &&
@@ -4111,12 +4114,11 @@ export default function SuperMetalMonsBoard({
       ? {display: 'none'}
       : {
           position: 'fixed',
-          left: `${boardSvgRect.left}px`,
-          top: `${boardSvgRect.top}px`,
-          width: `${boardSvgRect.width}px`,
-          height: `${boardSvgRect.height}px`,
+          inset: 0,
           border: 'none',
-          background: 'transparent',
+          background: 'rgba(255, 255, 255, 0.02)',
+          backdropFilter: 'blur(3px)',
+          WebkitBackdropFilter: 'blur(3px)',
           margin: 0,
           padding: 0,
           cursor: 'pointer',

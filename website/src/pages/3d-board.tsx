@@ -45,6 +45,9 @@ const ZOOM_MIN = 0.25;
 const ZOOM_MAX = 4;
 const WHEEL_ZOOM_SENSITIVITY = 0.0017;
 const WHEEL_ZOOM_MAX_STEP = 0.09;
+const TOUCH_ROTATION_SENSITIVITY = ROTATION_SENSITIVITY * 0.72;
+const TOUCH_PINCH_SCALE_MIN_STEP = 0.92;
+const TOUCH_PINCH_SCALE_MAX_STEP = 1.08;
 const BILLBOARD_WIDTH_SCALE = 1.12;
 const BILLBOARD_HEIGHT_SCALE = 1.2;
 const BILLBOARD_GROUND_OFFSET_PX = 4;
@@ -272,6 +275,17 @@ type SpriteMotionState = {
   arcPx: number;
 };
 
+type TouchPoint = {
+  x: number;
+  y: number;
+};
+
+type TouchGestureAnchor = {
+  centerX: number;
+  centerY: number;
+  distance: number;
+};
+
 type Tile = {
   row: number;
   col: number;
@@ -332,6 +346,12 @@ function normalizeWheelDeltaPx(deltaY: number, deltaMode: number): number {
     return deltaY * window.innerHeight;
   }
   return deltaY;
+}
+
+function getPointDistance(left: TouchPoint, right: TouchPoint): number {
+  const dx = right.x - left.x;
+  const dy = right.y - left.y;
+  return Math.sqrt(dx * dx + dy * dy);
 }
 
 function getCloudShadowStyle(
@@ -907,6 +927,19 @@ const sceneParticleLayerStyle: CSSProperties = {
   zIndex: 0,
 };
 
+const itemChoiceGlobalBackdropBlurStyle: CSSProperties = {
+  position: 'fixed',
+  left: 0,
+  right: 0,
+  top: TOP_BAR_HEIGHT_PX,
+  bottom: 0,
+  pointerEvents: 'none',
+  background: 'rgba(255, 255, 255, 0.02)',
+  backdropFilter: 'blur(3px)',
+  WebkitBackdropFilter: 'blur(3px)',
+  zIndex: 12089,
+};
+
 const sceneFrameStyle: CSSProperties = {
   position: 'relative',
   width: PRISM_WIDTH_PX + 260,
@@ -1412,6 +1445,7 @@ const ModeIconMoon = (): ReactNode => (
     <path
       fillRule="evenodd"
       fill="currentColor"
+      transform="translate(16 0) scale(-1 1)"
       d="M8.2 1.9a6.1 6.1 0 1 0 5.58 8.56A4.8 4.8 0 1 1 8.2 1.9z"
     />
   </svg>
@@ -1623,6 +1657,9 @@ export default function ThreeDBoardPage(): ReactNode {
   const rotationRef = useRef(rotation);
   const autoRotateFrameRef = useRef<number | null>(null);
   const autoRotateLastTimestampRef = useRef<number | null>(null);
+  const activeTouchPointsRef = useRef<Map<number, TouchPoint>>(new Map());
+  const touchGestureAnchorRef = useRef<TouchGestureAnchor | null>(null);
+  const isTouchGestureActiveRef = useRef(false);
   const hasDismissedRotationHintRef = useRef(false);
   const itemStandeeSparklesByKeyRef = useRef<Record<string, ItemStandeeSparkleParticle[]>>({});
   const animationClockSecondsRef = useRef<number>(
@@ -1708,7 +1745,7 @@ export default function ThreeDBoardPage(): ReactNode {
       const previousTimestamp = autoRotateLastTimestampRef.current ?? nowMs;
       autoRotateLastTimestampRef.current = nowMs;
       const elapsedSeconds = Math.min(0.05, Math.max(0, (nowMs - previousTimestamp) / 1000));
-      if (elapsedSeconds > 0 && !isDragActiveRef.current) {
+      if (elapsedSeconds > 0 && !isDragActiveRef.current && !isTouchGestureActiveRef.current) {
         const deltaY = elapsedSeconds * AUTO_ROTATE_DEG_PER_SECOND;
         setRotation((current) => ({
           ...current,
@@ -2005,6 +2042,28 @@ export default function ThreeDBoardPage(): ReactNode {
     if (target?.closest('[aria-label="3d board top bar"]')) {
       return;
     }
+    if (event.pointerType === 'touch') {
+      activeTouchPointsRef.current.set(event.pointerId, {
+        x: event.clientX,
+        y: event.clientY,
+      });
+      event.currentTarget.setPointerCapture(event.pointerId);
+      if (activeTouchPointsRef.current.size >= 2) {
+        const points = Array.from(activeTouchPointsRef.current.values());
+        const first = points[0];
+        const second = points[1];
+        if (first !== undefined && second !== undefined) {
+          touchGestureAnchorRef.current = {
+            centerX: (first.x + second.x) / 2,
+            centerY: (first.y + second.y) / 2,
+            distance: Math.max(1, getPointDistance(first, second)),
+          };
+          isTouchGestureActiveRef.current = true;
+          isDragActiveRef.current = true;
+        }
+      }
+      return;
+    }
     if (event.button !== 2) {
       return;
     }
@@ -2017,6 +2076,61 @@ export default function ThreeDBoardPage(): ReactNode {
   };
 
   const handlePointerMove = (event: PointerEvent<HTMLElement>) => {
+    if (event.pointerType === 'touch') {
+      if (!activeTouchPointsRef.current.has(event.pointerId)) {
+        return;
+      }
+      activeTouchPointsRef.current.set(event.pointerId, {
+        x: event.clientX,
+        y: event.clientY,
+      });
+      if (activeTouchPointsRef.current.size < 2) {
+        touchGestureAnchorRef.current = null;
+        isTouchGestureActiveRef.current = false;
+        isDragActiveRef.current = dragState !== null;
+        return;
+      }
+      const points = Array.from(activeTouchPointsRef.current.values());
+      const first = points[0];
+      const second = points[1];
+      if (first === undefined || second === undefined) {
+        return;
+      }
+      const centerX = (first.x + second.x) / 2;
+      const centerY = (first.y + second.y) / 2;
+      const distance = Math.max(1, getPointDistance(first, second));
+      const anchor = touchGestureAnchorRef.current ?? {
+        centerX,
+        centerY,
+        distance,
+      };
+      const deltaX = centerX - anchor.centerX;
+      const deltaY = centerY - anchor.centerY;
+      const distanceRatio = clamp(
+        distance / Math.max(1, anchor.distance),
+        TOUCH_PINCH_SCALE_MIN_STEP,
+        TOUCH_PINCH_SCALE_MAX_STEP,
+      );
+      if (deltaX !== 0 || deltaY !== 0) {
+        if (!hasDismissedRotationHintRef.current) {
+          hasDismissedRotationHintRef.current = true;
+          setShowRotationHint(false);
+        }
+        setRotation((current) => ({
+          x: clamp(current.x - deltaY * TOUCH_ROTATION_SENSITIVITY, -89, 0),
+          y: current.y + deltaX * TOUCH_ROTATION_SENSITIVITY,
+        }));
+      }
+      if (distanceRatio !== 1) {
+        setZoomScale((current) => clamp(current * distanceRatio, ZOOM_MIN, ZOOM_MAX));
+      }
+      touchGestureAnchorRef.current = {centerX, centerY, distance};
+      isTouchGestureActiveRef.current = true;
+      isDragActiveRef.current = true;
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     if (!dragState || event.pointerId !== dragState.pointerId) {
       return;
     }
@@ -2045,6 +2159,31 @@ export default function ThreeDBoardPage(): ReactNode {
   };
 
   const clearDragState = (event: PointerEvent<HTMLElement>) => {
+    if (event.pointerType === 'touch') {
+      activeTouchPointsRef.current.delete(event.pointerId);
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+      if (activeTouchPointsRef.current.size >= 2) {
+        const points = Array.from(activeTouchPointsRef.current.values());
+        const first = points[0];
+        const second = points[1];
+        if (first !== undefined && second !== undefined) {
+          touchGestureAnchorRef.current = {
+            centerX: (first.x + second.x) / 2,
+            centerY: (first.y + second.y) / 2,
+            distance: Math.max(1, getPointDistance(first, second)),
+          };
+        }
+        isTouchGestureActiveRef.current = true;
+        isDragActiveRef.current = true;
+      } else {
+        touchGestureAnchorRef.current = null;
+        isTouchGestureActiveRef.current = false;
+        isDragActiveRef.current = dragState !== null;
+      }
+      return;
+    }
     if (!dragState || event.pointerId !== dragState.pointerId) {
       return;
     }
@@ -2576,6 +2715,7 @@ export default function ThreeDBoardPage(): ReactNode {
           </button>
         </div>
       </div>
+      {isItemPickupChoiceOpen ? <div aria-hidden="true" style={itemChoiceGlobalBackdropBlurStyle} /> : null}
       <div
         aria-label="3d prism viewport"
         style={sceneViewportStyle}
