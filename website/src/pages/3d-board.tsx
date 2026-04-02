@@ -1666,9 +1666,31 @@ export default function ThreeDBoardPage(): ReactNode {
     typeof window === 'undefined' ? 0 : Date.now() / 1000,
   );
   const animationClockSeconds = animationClockSecondsRef.current;
+  const isWindowsCompositor = useMemo(() => {
+    if (typeof navigator === 'undefined') {
+      return false;
+    }
+    const platform = navigator.platform ?? '';
+    const userAgent = navigator.userAgent ?? '';
+    return /Win/i.test(platform) || /Windows/i.test(userAgent);
+  }, []);
+  const useGrassGpuStabilityMode = isWindowsCompositor;
+  const grassCloudRenderCount = useGrassGpuStabilityMode ? 6 : GRASS_CLOUD_SHADOW_RENDER_MAX;
+  const grassCloudTransformStyle = useGrassGpuStabilityMode ? 'flat' : 'preserve-3d';
+  const grassCloudBackfaceVisibility = useGrassGpuStabilityMode ? 'hidden' : 'visible';
+  const grassCloudContain = useGrassGpuStabilityMode ? 'none' : 'paint';
+  const grassCloudBlobWillChange = useGrassGpuStabilityMode ? 'auto' : 'transform';
+  const grassCloudDriftFilter = useGrassGpuStabilityMode
+    ? 'none'
+    : 'blur(calc(var(--cloud-blur, 12px) * 0.72))';
+  const boardSvgTransformStabilizer = useGrassGpuStabilityMode
+    ? 'none'
+    : 'translateZ(0.01px)';
+  const boardSvgWillChange = useGrassGpuStabilityMode ? 'auto' : 'transform';
+  const boardSvgContain = useGrassGpuStabilityMode ? 'none' : 'paint';
   const grassCloudShadowStyles = useMemo(
     () =>
-      GRASS_CLOUD_SHADOWS.slice(0, GRASS_CLOUD_SHADOW_RENDER_MAX).map((shadow, index) =>
+      GRASS_CLOUD_SHADOWS.slice(0, grassCloudRenderCount).map((shadow, index) =>
         getCloudShadowStyle(
           shadow,
           index,
@@ -1676,16 +1698,16 @@ export default function ThreeDBoardPage(): ReactNode {
           GRASS_PLANE_WIDTH_PX,
         ),
       ),
-    [animationClockSeconds],
+    [animationClockSeconds, grassCloudRenderCount],
   );
   const cloudLobeStyles = useMemo(
     () =>
-      GRASS_CLOUD_SHADOWS.slice(0, GRASS_CLOUD_SHADOW_RENDER_MAX).map((shadow, index) =>
+      GRASS_CLOUD_SHADOWS.slice(0, grassCloudRenderCount).map((shadow, index) =>
         Array.from({length: CLOUD_LOBE_COUNT}, (_unused, lobeIndex) =>
           getCloudLobeStyle(shadow, index, lobeIndex),
         ),
       ),
-    [],
+    [grassCloudRenderCount],
   );
   const safeCloudSpeedMultiplier = clampCloudSpeed(cloudSpeedMultiplier);
   const cloudVariablesStyle = useMemo<CSSProperties>(
@@ -2308,7 +2330,7 @@ export default function ThreeDBoardPage(): ReactNode {
   const boardGlossOpacity = clamp(1 - antiFlickerSmoothBlend * 0.72, 0.16, 1);
   const shouldUseSmoothGrassRendering = true;
   const grassTextureTileSizePx = GRASS_PLANE_TILE_SIZE_PX;
-  const grassTextureBlurPx = GRASS_STABLE_BLUR_PX;
+  const grassTextureBlurPx = useGrassGpuStabilityMode ? 0 : GRASS_STABLE_BLUR_PX;
   const grassPatternOpacity = 1;
   const grassBaseFillOpacity = 0;
   const grassCloudOpacityMultiplier = 1;
@@ -2420,6 +2442,15 @@ export default function ThreeDBoardPage(): ReactNode {
     : {
         ...grassPlaneStyle,
       };
+  const stabilizedGrassPlaneStyle: CSSProperties = useGrassGpuStabilityMode
+    ? {
+        ...currentGrassPlaneStyle,
+        transformStyle: 'flat',
+        willChange: 'auto',
+        contain: 'paint',
+        backfaceVisibility: 'hidden',
+      }
+    : currentGrassPlaneStyle;
   const currentGrassFadeOverlayStyle: CSSProperties = {
     ...grassPlaneFadeOverlayStyle,
     background: `radial-gradient(circle ${GRASS_MASK_RADIUS_PX.toFixed(
@@ -2432,11 +2463,23 @@ export default function ThreeDBoardPage(): ReactNode {
       2,
     )}px, rgba(${grassEdgeFadeColor},1) 100%)`,
   };
+  const stabilizedGrassFadeOverlayStyle: CSSProperties = useGrassGpuStabilityMode
+    ? {
+        ...currentGrassFadeOverlayStyle,
+        backfaceVisibility: 'hidden',
+      }
+    : currentGrassFadeOverlayStyle;
   const currentGrassBaseFillStyle: CSSProperties = {
     ...grassPlaneBaseFillStyle,
     backgroundColor: isDarkMode ? '#131a14' : '#cedac1',
     opacity: grassBaseFillOpacity,
   };
+  const stabilizedGrassBaseFillStyle: CSSProperties = useGrassGpuStabilityMode
+    ? {
+        ...currentGrassBaseFillStyle,
+        backfaceVisibility: 'hidden',
+      }
+    : currentGrassBaseFillStyle;
   const currentTopFaceOutlineStyle: CSSProperties = isDarkMode
     ? {
         ...topFaceOutlineStyle,
@@ -2632,9 +2675,9 @@ export default function ThreeDBoardPage(): ReactNode {
           color: inherit;
         }
         .three-d-board-grass-clouds {
-          transform-style: preserve-3d;
-          backface-visibility: visible;
-          contain: paint;
+          transform-style: ${grassCloudTransformStyle};
+          backface-visibility: ${grassCloudBackfaceVisibility};
+          contain: ${grassCloudContain};
         }
         .three-d-board-grass-clouds .cloud-shadows__blob {
           mix-blend-mode: normal;
@@ -2646,11 +2689,11 @@ export default function ThreeDBoardPage(): ReactNode {
           animation-delay: var(--cloud-flow-delay, 0s) !important;
           animation-duration:
             calc(var(--cloud-flow-duration, 80s) / var(--cloud-speed-multiplier, 1)) !important;
-          will-change: transform;
+          will-change: ${grassCloudBlobWillChange};
         }
         .three-d-board-grass-clouds .cloud-shadows__drift {
           animation: none !important;
-          filter: blur(calc(var(--cloud-blur, 12px) * 0.72));
+          filter: ${grassCloudDriftFilter};
           will-change: auto;
         }
         .three-d-board-grass-clouds .cloud-shadows__aspect {
@@ -2661,9 +2704,9 @@ export default function ThreeDBoardPage(): ReactNode {
           shape-rendering: ${boardSvgShapeRendering};
           image-rendering: ${boardSvgImageRendering};
           filter: ${boardSvgCompositeFilter};
-          transform: translateZ(0.01px);
-          will-change: transform;
-          contain: paint;
+          transform: ${boardSvgTransformStabilizer};
+          will-change: ${boardSvgWillChange};
+          contain: ${boardSvgContain};
           backface-visibility: hidden;
         }
         .three-d-board-surface .super-mons-board svg rect,
@@ -2737,8 +2780,8 @@ export default function ThreeDBoardPage(): ReactNode {
             <div style={floatLayerDynamicStyle}>
               <div style={prismCoreStyle}>
                 {isGrassModeEnabled ? (
-                  <div aria-hidden="true" style={currentGrassPlaneStyle}>
-                    <div aria-hidden="true" style={currentGrassBaseFillStyle} />
+                  <div aria-hidden="true" style={stabilizedGrassPlaneStyle}>
+                    <div aria-hidden="true" style={stabilizedGrassBaseFillStyle} />
                     <div
                       style={{
                         ...grassPlaneTextureStyle,
@@ -2746,6 +2789,13 @@ export default function ThreeDBoardPage(): ReactNode {
                         imageRendering: shouldUseSmoothGrassRendering
                           ? 'auto'
                           : grassPlaneTextureStyle.imageRendering,
+                        transform: useGrassGpuStabilityMode
+                          ? 'translateZ(0px)'
+                          : grassPlaneTextureStyle.transform,
+                        willChange: useGrassGpuStabilityMode ? 'auto' : grassPlaneTextureStyle.willChange,
+                        backfaceVisibility: useGrassGpuStabilityMode
+                          ? 'hidden'
+                          : grassPlaneTextureStyle.backfaceVisibility,
                         opacity: grassPatternOpacity,
                         filter:
                           grassTextureBlurPx > 0.01
@@ -2761,11 +2811,14 @@ export default function ThreeDBoardPage(): ReactNode {
                         style={{
                           ...projectedGrassCloudLayerStyle,
                           ...cloudVariablesStyle,
+                          transformStyle: grassCloudTransformStyle,
+                          backfaceVisibility: grassCloudBackfaceVisibility,
+                          contain: grassCloudContain,
                           opacity:
                             (isDarkMode ? 0.46 : projectedGrassCloudLayerStyle.opacity) *
                             grassCloudOpacityMultiplier,
                         }}>
-                        {GRASS_CLOUD_SHADOWS.slice(0, GRASS_CLOUD_SHADOW_RENDER_MAX).map((shadow, index) => (
+                        {GRASS_CLOUD_SHADOWS.slice(0, grassCloudRenderCount).map((shadow, index) => (
                           <span
                             key={`grass-cloud-${shadow.top}-${index}`}
                             className="cloud-shadows__blob"
@@ -2785,7 +2838,7 @@ export default function ThreeDBoardPage(): ReactNode {
                         ))}
                       </div>
                     ) : null}
-                    <div aria-hidden="true" style={currentGrassFadeOverlayStyle} />
+                    <div aria-hidden="true" style={stabilizedGrassFadeOverlayStyle} />
                   </div>
                 ) : null}
                 <div style={currentFrontFaceStyle} />
