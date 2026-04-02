@@ -73,14 +73,14 @@ const GRASS_LOW_ANGLE_PATTERN_FADE_MAX = 0.9;
 const GRASS_LOW_ANGLE_BASE_FILL_MAX = 0.92;
 const BOARD_LOW_ANGLE_STABILITY_BLUR_MAX_PX = 0.72;
 const BOARD_PERIMETER_PX = PRISM_WIDTH_PX * 2 + PRISM_DEPTH_PX * 2;
-const GRASS_MASK_CIRCUMFERENCE_MULTIPLIER = 6;
+const GRASS_MASK_CIRCUMFERENCE_MULTIPLIER = 5;
 const GRASS_MASK_CIRCUMFERENCE_PX =
   BOARD_PERIMETER_PX * GRASS_MASK_CIRCUMFERENCE_MULTIPLIER;
 const GRASS_MASK_RADIUS_PX = GRASS_MASK_CIRCUMFERENCE_PX / (2 * Math.PI);
 const GRASS_MASK_INNER_RADIUS_PX = GRASS_MASK_RADIUS_PX * 0.74;
 const GRASS_MASK_MID_RADIUS_PX = GRASS_MASK_RADIUS_PX * 0.9;
 const GRASS_CLIP_RADIUS_PX = GRASS_MASK_RADIUS_PX;
-const GRASS_PLANE_EDGE_PADDING_PX = 120;
+const GRASS_PLANE_EDGE_PADDING_PX = 90;
 const GRASS_PLANE_WIDTH_PX = GRASS_CLIP_RADIUS_PX * 2 + GRASS_PLANE_EDGE_PADDING_PX * 2;
 const GRASS_PLANE_HEIGHT_PX = GRASS_CLIP_RADIUS_PX * 2 + GRASS_PLANE_EDGE_PADDING_PX * 2;
 const MONS_ASSET_PATH_FRAGMENT = '/assets/mons/';
@@ -118,6 +118,9 @@ const GRASS_CLOUD_SHADOWS: CloudShadow[] = [
   {top: 88, width: 940, height: 336, opacity: 0.114, duration: 63.9, delay: 71.3},
   {top: 94, width: 760, height: 266, opacity: 0.101, duration: 55.2, delay: 76.8},
 ];
+const GRASS_CLOUD_SHADOW_RENDER_MAX = 10;
+const CLOSE_ZOOM_PERF_THRESHOLD = 2.05;
+const CLOSE_ZOOM_PERF_DRAG_THRESHOLD = 1.75;
 
 type Rotation = {
   x: number;
@@ -448,18 +451,20 @@ function extractBillboardSprites(
       return;
     }
     const centerPoint = new DOMPoint(centerUnitsX, centerUnitsY).matrixTransform(svgCtm);
-    const leftPx = centerPoint.x;
-    const topPx = centerPoint.y;
+    const leftPx = Number(centerPoint.x.toFixed(2));
+    const topPx = Number(centerPoint.y.toFixed(2));
     const tileCol = Math.max(0, Math.min(10, Math.floor(centerUnitsX)));
     const tileRow = Math.max(0, Math.min(10, Math.floor(centerUnitsY)));
-    const widthPx =
+    const widthPxRaw =
       unscaledUnitPx === null
         ? widthUnits
         : widthUnits * unscaledUnitPx * BOARD_SURFACE_SCALE * zoomScale;
-    const heightPx =
+    const heightPxRaw =
       unscaledUnitPx === null
         ? heightUnits
         : heightUnits * unscaledUnitPx * BOARD_SURFACE_SCALE * zoomScale;
+    const widthPx = Number(widthPxRaw.toFixed(2));
+    const heightPx = Number(heightPxRaw.toFixed(2));
     const localX = centerUnitsX - 5.5;
     const localZ = centerUnitsY - 5.5;
     const rotatedZ = -localX * sinY + localZ * cosY;
@@ -505,6 +510,38 @@ function extractBillboardSprites(
   }));
 }
 
+function areBillboardSpritesEquivalent(
+  previous: BillboardSprite[],
+  next: BillboardSprite[],
+): boolean {
+  if (previous.length !== next.length) {
+    return false;
+  }
+  for (let index = 0; index < previous.length; index += 1) {
+    const left = previous[index];
+    const right = next[index];
+    if (
+      left.key !== right.key ||
+      left.zIndex !== right.zIndex ||
+      left.tileCol !== right.tileCol ||
+      left.tileRow !== right.tileRow ||
+      left.isRotatedQuarterTurn !== right.isRotatedQuarterTurn
+    ) {
+      return false;
+    }
+    if (
+      Math.abs(left.leftPx - right.leftPx) > 0.01 ||
+      Math.abs(left.topPx - right.topPx) > 0.01 ||
+      Math.abs(left.widthPx - right.widthPx) > 0.01 ||
+      Math.abs(left.heightPx - right.heightPx) > 0.01 ||
+      Math.abs(left.opacity - right.opacity) > 0.001
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function extractBoardSurfaceClipPath(boardHost: HTMLElement): string | null {
   const svg = boardHost.querySelector<SVGSVGElement>('.super-mons-board svg');
   if (svg === null) {
@@ -524,7 +561,7 @@ function extractBoardSurfaceClipPath(boardHost: HTMLElement): string | null {
     return null;
   }
   return `polygon(${corners
-    .map((point) => `${point.x.toFixed(2)}px ${point.y.toFixed(2)}px`)
+    .map((point) => `${point.x.toFixed(1)}px ${point.y.toFixed(1)}px`)
     .join(', ')})`;
 }
 
@@ -1153,6 +1190,7 @@ export default function ThreeDBoardPage(): ReactNode {
   const [boardSurfaceClipPath, setBoardSurfaceClipPath] = useState<string | null>(null);
   const boardHostRef = useRef<HTMLDivElement | null>(null);
   const zoomScaleRef = useRef(zoomScale);
+  const isDragActiveRef = useRef(false);
   const rotationRef = useRef(rotation);
   const hasDismissedRotationHintRef = useRef(false);
   const itemStandeeSparklesByKeyRef = useRef<Record<string, ItemStandeeSparkleParticle[]>>({});
@@ -1162,7 +1200,7 @@ export default function ThreeDBoardPage(): ReactNode {
   const animationClockSeconds = animationClockSecondsRef.current;
   const grassCloudShadowStyles = useMemo(
     () =>
-      GRASS_CLOUD_SHADOWS.map((shadow, index) =>
+      GRASS_CLOUD_SHADOWS.slice(0, GRASS_CLOUD_SHADOW_RENDER_MAX).map((shadow, index) =>
         getCloudShadowStyle(
           shadow,
           index,
@@ -1174,7 +1212,7 @@ export default function ThreeDBoardPage(): ReactNode {
   );
   const cloudLobeStyles = useMemo(
     () =>
-      GRASS_CLOUD_SHADOWS.map((shadow, index) =>
+      GRASS_CLOUD_SHADOWS.slice(0, GRASS_CLOUD_SHADOW_RENDER_MAX).map((shadow, index) =>
         Array.from({length: CLOUD_LOBE_COUNT}, (_unused, lobeIndex) =>
           getCloudLobeStyle(shadow, index, lobeIndex),
         ),
@@ -1199,6 +1237,10 @@ export default function ThreeDBoardPage(): ReactNode {
   useEffect(() => {
     zoomScaleRef.current = zoomScale;
   }, [zoomScale]);
+
+  useEffect(() => {
+    isDragActiveRef.current = dragState !== null;
+  }, [dragState]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -1263,21 +1305,38 @@ export default function ThreeDBoardPage(): ReactNode {
     }
     let rafId = 0;
     let isRunning = true;
-    const tick = () => {
+    let lastMeasureMs = 0;
+    const tick = (nowMs: number) => {
       if (!isRunning) {
         return;
       }
-      setBillboardSprites(
-        extractBillboardSprites(
-          boardHost,
-          zoomScaleRef.current,
-          rotationRef.current,
-        ),
+      const isNearZoom = zoomScaleRef.current >= CLOSE_ZOOM_PERF_THRESHOLD;
+      const isActiveCloseDrag =
+        isDragActiveRef.current &&
+        zoomScaleRef.current >= CLOSE_ZOOM_PERF_DRAG_THRESHOLD;
+      const targetIntervalMs = isActiveCloseDrag ? 24 : isNearZoom ? 17 : 12;
+      if (lastMeasureMs !== 0 && nowMs - lastMeasureMs < targetIntervalMs) {
+        rafId = window.requestAnimationFrame(tick);
+        return;
+      }
+      lastMeasureMs = nowMs;
+      const nextSprites = extractBillboardSprites(
+        boardHost,
+        zoomScaleRef.current,
+        rotationRef.current,
       );
-      setBoardSurfaceClipPath(extractBoardSurfaceClipPath(boardHost));
+      setBillboardSprites((current) =>
+        areBillboardSpritesEquivalent(current, nextSprites)
+          ? current
+          : nextSprites,
+      );
+      const nextClipPath = extractBoardSurfaceClipPath(boardHost);
+      setBoardSurfaceClipPath((current) =>
+        current === nextClipPath ? current : nextClipPath,
+      );
       rafId = window.requestAnimationFrame(tick);
     };
-    tick();
+    rafId = window.requestAnimationFrame(tick);
 
     return () => {
       isRunning = false;
@@ -1473,6 +1532,13 @@ export default function ThreeDBoardPage(): ReactNode {
   const grassPatternOpacity = 1;
   const grassBaseFillOpacity = 0;
   const grassCloudOpacityMultiplier = 1;
+  const isCloseZoomPerformanceMode =
+    zoomScale >= CLOSE_ZOOM_PERF_THRESHOLD ||
+    (dragState !== null && zoomScale >= CLOSE_ZOOM_PERF_DRAG_THRESHOLD);
+  const shouldSuspendGrassClouds =
+    dragState !== null && zoomScale >= CLOSE_ZOOM_PERF_DRAG_THRESHOLD;
+  const shouldRenderReflections =
+    areReflectionsEnabled && !isCloseZoomPerformanceMode;
   const grassEdgeFadeColor = isDarkMode ? '7,9,14' : '255,255,255';
   const currentPageStyle: CSSProperties = isDarkMode
     ? {
@@ -1676,9 +1742,27 @@ export default function ThreeDBoardPage(): ReactNode {
         .three-d-board-grass-clouds {
           transform-style: preserve-3d;
           backface-visibility: visible;
+          contain: paint;
         }
         .three-d-board-grass-clouds .cloud-shadows__blob {
           mix-blend-mode: normal;
+          /* Keep only horizontal drift in 3D mode to avoid pulse/morph repaints
+             that cause visible tile flashing on some GPUs. */
+          animation-name: monsCloudShadowFlow !important;
+          animation-timing-function: linear !important;
+          animation-iteration-count: infinite !important;
+          animation-delay: var(--cloud-flow-delay, 0s) !important;
+          animation-duration:
+            calc(var(--cloud-flow-duration, 80s) / var(--cloud-speed-multiplier, 1)) !important;
+          will-change: transform;
+        }
+        .three-d-board-grass-clouds .cloud-shadows__drift {
+          animation: none !important;
+          filter: blur(calc(var(--cloud-blur, 12px) * 0.72));
+          will-change: auto;
+        }
+        .three-d-board-grass-clouds .cloud-shadows__aspect {
+          will-change: auto;
         }
         .three-d-board-surface .super-mons-board svg {
           overflow: visible;
@@ -1765,7 +1849,9 @@ export default function ThreeDBoardPage(): ReactNode {
                             : undefined,
                       }}
                     />
-                    {cloudEnabled && grassCloudOpacityMultiplier > 0.01 ? (
+                    {cloudEnabled &&
+                    grassCloudOpacityMultiplier > 0.01 &&
+                    !shouldSuspendGrassClouds ? (
                       <div
                         className="cloud-shadows three-d-board-grass-clouds"
                         style={{
@@ -1775,7 +1861,7 @@ export default function ThreeDBoardPage(): ReactNode {
                             (isDarkMode ? 0.46 : projectedGrassCloudLayerStyle.opacity) *
                             grassCloudOpacityMultiplier,
                         }}>
-                        {GRASS_CLOUD_SHADOWS.map((shadow, index) => (
+                        {GRASS_CLOUD_SHADOWS.slice(0, GRASS_CLOUD_SHADOW_RENDER_MAX).map((shadow, index) => (
                           <span
                             key={`grass-cloud-${shadow.top}-${index}`}
                             className="cloud-shadows__blob"
@@ -1853,7 +1939,7 @@ export default function ThreeDBoardPage(): ReactNode {
           </div>
         </div>
       </div>
-      {areReflectionsEnabled ? (
+      {shouldRenderReflections ? (
         <div
           aria-hidden="true"
           style={{
@@ -1933,16 +2019,21 @@ export default function ThreeDBoardPage(): ReactNode {
               isHoveredSpriteByStandeeTile ||
               isSelectedSprite;
             const baseSpriteFilter =
-              isEmphasizedSprite
+              isCloseZoomPerformanceMode
+                ? 'none'
+                : isEmphasizedSprite
                 ? billboardSpriteImageHoverGlowFilter
                 : billboardSpriteImageStyle.filter;
             const resolvedSpriteFilter =
               typeof baseSpriteFilter === 'string' ? baseSpriteFilter : '';
             const finalSpriteFilter = sprite.isRotatedQuarterTurn
-              ? `${resolvedSpriteFilter} blur(${BILLBOARD_FAINTED_BLUR_PX}px)`.trim()
+              ? isCloseZoomPerformanceMode
+                ? resolvedSpriteFilter
+                : `${resolvedSpriteFilter} blur(${BILLBOARD_FAINTED_BLUR_PX}px)`.trim()
               : resolvedSpriteFilter;
             const isItemStandee = isItemStandeePotionHref(sprite.href);
-            const itemStandeeSparkles = isItemStandee
+            const itemStandeeSparkles =
+              isItemStandee && !isCloseZoomPerformanceMode
               ? getItemStandeeSparkles(sprite.key)
               : [];
             const spriteHitTargetStyle = getSpriteHitTargetStyle(sprite.href);
@@ -2036,7 +2127,7 @@ export default function ThreeDBoardPage(): ReactNode {
                 triggerTileClickFromSprite(sprite.tileCol, sprite.tileRow);
               }}
             />
-            {isItemStandee ? (
+            {itemStandeeSparkles.length > 0 ? (
               <div style={billboardItemStandeeSparkleLayerStyle}>
                 <svg viewBox="0 0 1 1" style={billboardItemStandeeSparkleSvgStyle}>
                   {itemStandeeSparkles.map((particle) => {
