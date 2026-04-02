@@ -759,6 +759,7 @@ export default function NewTopLayout({
   children,
 }: NewTopLayoutProps): ReactNode {
   const pathname = typeof window === 'undefined' ? '' : window.location.pathname;
+  const isHomepageRoute = pathname === '/';
   const shouldResetOtherTargetsThisLoad = useMemo(
     () => shouldResetOtherNavTargetsOnReload(),
     [],
@@ -1515,7 +1516,18 @@ export default function NewTopLayout({
             <div ref={headerInnerRef} style={headerInnerStyle}>
               <div style={titleBlockStyle}>
                 <Link to="/" style={homeLinkStyle}>
-                  <h1 ref={titleHeadingRef} style={titleStyle}>{titleText}</h1>
+                  <h1
+                    ref={titleHeadingRef}
+                    style={titleStyle}
+                    onClick={(event) => {
+                      if (!isHomepageRoute || event.detail !== 3) {
+                        return;
+                      }
+                      event.preventDefault();
+                      window.location.assign('/drainer-grid');
+                    }}>
+                    {titleText}
+                  </h1>
                 </Link>
                 <div style={dynamicTitleSocialTickerRowStyle}>
                   <div style={titleIconRowStyle} aria-label="Platform icons">

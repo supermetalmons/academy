@@ -8,6 +8,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from 'react';
+import {createPortal} from 'react-dom';
 import Link from '@docusaurus/Link';
 import {getPieceDetailPathByTitle} from '@site/src/data/pieceDetails';
 
@@ -50,6 +51,8 @@ const RESET_GHOST_FADE_MS = 260;
 const HUD_SCORE_X_OFFSET_PX = 5;
 const SCORED_MANA_FADE_OUT_MS = 320;
 const SCORED_MANA_FADE_OUT_HOLD_MS = 70;
+const FAINTED_MON_OPACITY = 0.7;
+const FAINTED_MON_BLUR_PX = 0.07;
 const MANA_POOL_PULSE_MS = 620;
 const DEFAULT_ATTACK_INDICATOR_COLOR = '#8A0B0B';
 const SPIRIT_ABILITY_INDICATOR_COLOR = '#B14CFF';
@@ -93,6 +96,19 @@ const colors = {
   wave1: '#6666FF',
   wave2: '#00FCFF',
   border: '#000000',
+};
+
+type BoardColorPalette = typeof colors;
+
+const darkModeColors: BoardColorPalette = {
+  darkSquare: '#121212',
+  lightSquare: '#545454',
+  manaPool: '#FCF20B',
+  pickupItemSquare: '#B0B0B0',
+  simpleManaSquare: '#8F760E',
+  wave1: '#C4B400',
+  wave2: '#E1CD2A',
+  border: '#F1F1F1',
 };
 
 export const boardAssets = {
@@ -488,9 +504,36 @@ type SuperMetalMonsBoardProps = {
   showMoveResources?: boolean;
   showPlayerHud?: boolean;
   enableHoverClickScaling?: boolean;
+  boardTheme?: 'light' | 'dark';
   boardPreset?: SuperMetalMonsBoardPreset;
   showSpawnGhosts?: boolean;
   enableFreeTileMove?: boolean;
+  hoveredTileOverride?: Tile | null;
+  showHoveredTileCenterDot?: boolean;
+  showSpawnGhostsAlways?: boolean;
+  onHoveredTileChange?: (tile: Tile | null) => void;
+  onHudSnapshotChange?: (snapshot: {
+    playerScore: number;
+    opponentScore: number;
+    playerPotionCount: number;
+    opponentPotionCount: number;
+    canReset: boolean;
+    isResetAnimating: boolean;
+  }) => void;
+  onPotionCountChange?: (
+    payload:
+      | {
+          side: 'white';
+          count: number;
+        }
+      | {
+          side: 'black';
+          count: number;
+        },
+  ) => void;
+  onItemPickupChoiceOpenChange?: (isOpen: boolean) => void;
+  externalResetTrigger?: number;
+  onSelectedTileChange?: (tile: Tile | null) => void;
   onPuzzleBoardDirtyChange?: (isDirty: boolean) => void;
   onRenderWidthChange?: (width: number) => void;
 };
@@ -560,11 +603,13 @@ type PersistedPuzzleBoardState = {
   playerScore: number;
   opponentScore: number;
   playerPotionCount: number;
+  opponentPotionCount?: number;
   faintedMonIds?: string[];
 };
 
 type PendingItemPickupChoice = {
   monId: string;
+  monSide: 'black' | 'white';
   itemId: string;
   targetCol: number;
   targetRow: number;
@@ -980,7 +1025,10 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-function createCornerWaveLines(seed: number): CornerWaveLine[] {
+function createCornerWaveLines(
+  seed: number,
+  palette: BoardColorPalette = colors,
+): CornerWaveLine[] {
   const random = mulberry32(seed);
   const lines: CornerWaveLine[] = [];
   const lineCount = 10;
@@ -997,7 +1045,7 @@ function createCornerWaveLines(seed: number): CornerWaveLine[] {
       x: random() * (1 - width),
       width,
       y,
-      color: random() > 0.5 ? colors.wave1 : colors.wave2,
+      color: random() > 0.5 ? palette.wave1 : palette.wave2,
     });
   }
   return lines.sort((a, b) => a.y - b.y);
@@ -1187,9 +1235,19 @@ export default function SuperMetalMonsBoard({
   showMoveResources = false,
   showPlayerHud = false,
   enableHoverClickScaling = true,
+  boardTheme = 'light',
   boardPreset = 'default',
   showSpawnGhosts = false,
   enableFreeTileMove = false,
+  hoveredTileOverride = null,
+  showHoveredTileCenterDot = false,
+  showSpawnGhostsAlways = false,
+  onHoveredTileChange,
+  onHudSnapshotChange,
+  onPotionCountChange,
+  onItemPickupChoiceOpenChange,
+  externalResetTrigger = 0,
+  onSelectedTileChange,
   onPuzzleBoardDirtyChange,
   onRenderWidthChange,
 }: SuperMetalMonsBoardProps): ReactNode {
@@ -1215,6 +1273,7 @@ export default function SuperMetalMonsBoard({
   const attackEffectCounterRef = useRef(0);
   const attackEffectFrameByIdRef = useRef<Record<string, number>>({});
   const attackEffectTimeoutByIdRef = useRef<Record<string, number>>({});
+  const previousExternalResetTriggerRef = useRef(externalResetTrigger);
   const [hoveredTile, setHoveredTile] = useState<Tile | null>(null);
   const [selectedTile, setSelectedTile] = useState<Tile | null>(null);
   const [hoveredMoveResourceId, setHoveredMoveResourceId] = useState<string | null>(null);
@@ -1232,6 +1291,14 @@ export default function SuperMetalMonsBoard({
   const [fullscreenScale, setFullscreenScale] = useState(1);
   const [resetAnimation, setResetAnimation] = useState<ResetAnimationState | null>(null);
   const [resetAnimationProgress, setResetAnimationProgress] = useState(1);
+
+  useEffect(() => {
+    onSelectedTileChange?.(selectedTile);
+  }, [onSelectedTileChange, selectedTile]);
+
+  useEffect(() => {
+    onHoveredTileChange?.(hoveredTile);
+  }, [hoveredTile, onHoveredTileChange]);
   const initialBoardEntities = useMemo(
     () => buildBoardEntitiesFromPreset(boardPreset),
     [boardPreset],
@@ -1272,6 +1339,9 @@ export default function SuperMetalMonsBoard({
   >([]);
   const [playerPotionCount, setPlayerPotionCount] = useState(
     initialPersistedPuzzleState?.playerPotionCount ?? playerStartingPotionCount,
+  );
+  const [opponentPotionCount, setOpponentPotionCount] = useState(
+    initialPersistedPuzzleState?.opponentPotionCount ?? opponentStartingPotionCount,
   );
   const [faintedMonIdSet, setFaintedMonIdSet] = useState<Set<string>>(
     () =>
@@ -1320,16 +1390,20 @@ export default function SuperMetalMonsBoard({
         )
       : moveResourceOrder;
   const opponentHudResourceOrder: HudResourceKey[] =
-    opponentStartingPotionCount > 0
+    opponentPotionCount > 0
       ? [
           ...moveResourceOrder,
           ...Array.from(
-            {length: opponentStartingPotionCount},
+            {length: opponentPotionCount},
             () => 'statusPotion' as const,
           ),
         ]
       : moveResourceOrder;
   const isResetAnimating = resetAnimation !== null;
+  const boardColors: BoardColorPalette =
+    boardTheme === 'dark' ? darkModeColors : colors;
+  const hoveredTileCenterDotColor =
+    boardTheme === 'dark' ? '#c5c9d3' : '#5a5a5a';
   const hasPuzzleBoardChanges = useMemo(() => {
     if (!enableFreeTileMove) {
       return false;
@@ -1358,6 +1432,24 @@ export default function SuperMetalMonsBoard({
     }
     onPuzzleBoardDirtyChange(hasPuzzleBoardChanges);
   }, [hasPuzzleBoardChanges, onPuzzleBoardDirtyChange]);
+  useEffect(() => {
+    onHudSnapshotChange?.({
+      playerScore,
+      opponentScore,
+      playerPotionCount,
+      opponentPotionCount,
+      canReset: hasPuzzleBoardChanges,
+      isResetAnimating,
+    });
+  }, [
+    hasPuzzleBoardChanges,
+    isResetAnimating,
+    onHudSnapshotChange,
+    opponentPotionCount,
+    opponentScore,
+    playerPotionCount,
+    playerScore,
+  ]);
 
   const markMonAsFaintedOnSpawn = (monId: string): void => {
     if (!isSandboxFreeMoveBoard) {
@@ -1595,6 +1687,9 @@ export default function SuperMetalMonsBoard({
     setPlayerPotionCount(
       persistedState?.playerPotionCount ?? playerStartingPotionCount,
     );
+    setOpponentPotionCount(
+      persistedState?.opponentPotionCount ?? opponentStartingPotionCount,
+    );
     setFaintedMonIdSet(
       isSandboxFreeMoveBoard
         ? new Set(persistedState?.faintedMonIds ?? [])
@@ -1625,6 +1720,7 @@ export default function SuperMetalMonsBoard({
     initialScores.black,
     initialScores.white,
     isSandboxFreeMoveBoard,
+    opponentStartingPotionCount,
     playerStartingPotionCount,
   ]);
 
@@ -1738,6 +1834,7 @@ export default function SuperMetalMonsBoard({
       playerScore,
       opponentScore,
       playerPotionCount,
+      opponentPotionCount,
       faintedMonIds: Array.from(faintedMonIdSet),
     });
   }, [
@@ -1745,6 +1842,7 @@ export default function SuperMetalMonsBoard({
     boardPreset,
     enableFreeTileMove,
     faintedMonIdSet,
+    opponentPotionCount,
     opponentScore,
     playerPotionCount,
     playerScore,
@@ -2030,6 +2128,9 @@ export default function SuperMetalMonsBoard({
     };
   }, []);
   const isItemPickupChoiceOpen = pendingItemPickupChoice !== null;
+  useEffect(() => {
+    onItemPickupChoiceOpenChange?.(isItemPickupChoiceOpen);
+  }, [isItemPickupChoiceOpen, onItemPickupChoiceOpenChange]);
 
   useEffect(() => {
     const clearSelectionOnOutsideClick = (event: PointerEvent) => {
@@ -2203,29 +2304,55 @@ export default function SuperMetalMonsBoard({
           (entity): entity is BoardEntity & {kind: 'mon'; side: 'black'; monType: MonType} =>
             entity.kind === 'mon' && entity.side === 'black' && entity.monType !== undefined,
         )
-        .map((entity) => ({
-          id: entity.id,
-          col: entity.col,
-          row: entity.row,
-          href: entity.href,
-          type: entity.monType,
-          heldItemKind: entity.heldItemKind,
-        })),
+        .map((entity) => {
+          const isOnOwnSpawn = isMonOnOwnSpawn({
+            col: entity.col,
+            row: entity.row,
+            type: entity.monType,
+            side: entity.side,
+          });
+          const isFainted =
+            enableFreeTileMove &&
+            isOnOwnSpawn &&
+            (!isSandboxFreeMoveBoard || faintedMonIdSet.has(entity.id));
+          return {
+            id: entity.id,
+            col: entity.col,
+            row: entity.row,
+            href: entity.href,
+            type: entity.monType,
+            heldItemKind: entity.heldItemKind,
+            isFainted,
+          };
+        }),
       white: visibleBoardEntities
         .filter(
           (entity): entity is BoardEntity & {kind: 'mon'; side: 'white'; monType: MonType} =>
             entity.kind === 'mon' && entity.side === 'white' && entity.monType !== undefined,
         )
-        .map((entity) => ({
-          id: entity.id,
-          col: entity.col,
-          row: entity.row,
-          href: entity.href,
-          type: entity.monType,
-          heldItemKind: entity.heldItemKind,
-        })),
+        .map((entity) => {
+          const isOnOwnSpawn = isMonOnOwnSpawn({
+            col: entity.col,
+            row: entity.row,
+            type: entity.monType,
+            side: entity.side,
+          });
+          const isFainted =
+            enableFreeTileMove &&
+            isOnOwnSpawn &&
+            (!isSandboxFreeMoveBoard || faintedMonIdSet.has(entity.id));
+          return {
+            id: entity.id,
+            col: entity.col,
+            row: entity.row,
+            href: entity.href,
+            type: entity.monType,
+            heldItemKind: entity.heldItemKind,
+            isFainted,
+          };
+        }),
     }),
-    [visibleBoardEntities],
+    [enableFreeTileMove, faintedMonIdSet, isSandboxFreeMoveBoard, visibleBoardEntities],
   );
   const spawnGhosts = useMemo(
     () =>
@@ -2456,13 +2583,13 @@ export default function SuperMetalMonsBoard({
   const cornerWaveLines = useMemo(
     () =>
       cornerManaPoolPositions.map((_, index) =>
-        createCornerWaveLines(waveSeedNonce + (index + 1) * 7919),
+        createCornerWaveLines(waveSeedNonce + (index + 1) * 7919, boardColors),
       ),
-    [waveSeedNonce],
+    [boardColors, waveSeedNonce],
   );
   const previewManaPoolWaves = useMemo(
-    () => createCornerWaveLines(waveSeedNonce + 424242),
-    [waveSeedNonce],
+    () => createCornerWaveLines(waveSeedNonce + 424242, boardColors),
+    [boardColors, waveSeedNonce],
   );
   const getPreviewDetailPath = (title: string): string | undefined =>
     getPieceDetailPathByTitle(title) ?? undefined;
@@ -2544,9 +2671,11 @@ export default function SuperMetalMonsBoard({
     };
   });
 
+  const effectiveHoveredTile = hoveredTileOverride ?? hoveredTile;
+
   const hoveredPiece =
-    hoveredTile !== null
-      ? pieceByTile[`${hoveredTile.row}-${hoveredTile.col}`] ?? null
+    effectiveHoveredTile !== null
+      ? pieceByTile[`${effectiveHoveredTile.row}-${effectiveHoveredTile.col}`] ?? null
       : null;
   const selectedPiece =
     selectedTile !== null
@@ -3499,7 +3628,7 @@ export default function SuperMetalMonsBoard({
       : selectedTile !== null
       ? selectedTile
       : hoveredPiece !== null
-        ? hoveredTile
+        ? effectiveHoveredTile
         : null;
   const activeBoardTileForThinPreview =
     selectedPiece !== null
@@ -3507,7 +3636,7 @@ export default function SuperMetalMonsBoard({
       : selectedMoveResource === null &&
           hoveredMoveResource === null &&
           hoveredPiece !== null
-        ? hoveredTile
+        ? effectiveHoveredTile
         : null;
   const activeMoveResourceButton =
     activeMoveResourceId !== null
@@ -3787,7 +3916,7 @@ export default function SuperMetalMonsBoard({
           alignItems: 'center',
           justifyContent: 'center',
           gap: `${Math.max(8, Math.round(tilePixels * 0.48))}px`,
-          zIndex: 50,
+          zIndex: 12091,
           pointerEvents: 'auto',
         };
   const itemChoiceBackdropStyle: CSSProperties =
@@ -3804,7 +3933,7 @@ export default function SuperMetalMonsBoard({
           margin: 0,
           padding: 0,
           cursor: 'pointer',
-          zIndex: 49,
+          zIndex: 12090,
         };
   const itemChoiceButtonStyle: CSSProperties = {
     border: 'none',
@@ -3858,6 +3987,88 @@ export default function SuperMetalMonsBoard({
     WebkitUserDrag: 'none',
     pointerEvents: 'none',
   };
+  const itemPickupChoiceOverlay =
+    isItemPickupChoiceOpen && boardSvgRect !== null
+      ? (
+          <>
+            <button
+              type="button"
+              aria-label="Cancel item pickup"
+              style={itemChoiceBackdropStyle}
+              onClick={() => {
+                setPendingItemPickupChoice(null);
+                setHoveredItemChoice(null);
+              }}
+            />
+            <div style={itemChoiceModalStyle} aria-label="Choose item pickup">
+              <button
+                type="button"
+                aria-label="Pick bomb"
+                style={getItemChoiceButtonStyle('bomb')}
+                onMouseEnter={() => {
+                  setHoveredItemChoice('bomb');
+                }}
+                onMouseLeave={() => {
+                  setHoveredItemChoice((current) =>
+                    current === 'bomb' ? null : current,
+                  );
+                }}
+                onClick={() => {
+                  applyItemPickupChoice('bomb', pendingItemPickupChoice);
+                }}>
+                <span
+                  aria-hidden="true"
+                  style={{
+                    position: 'relative',
+                    width: '100%',
+                    height: '100%',
+                    display: 'block',
+                  }}>
+                  <span style={getItemChoiceHoverHaloStyle('bomb')} />
+                  <img
+                    src={boardAssets.bomb}
+                    alt="Bomb"
+                    draggable={false}
+                    style={itemChoiceIconStyle}
+                  />
+                </span>
+              </button>
+              <button
+                type="button"
+                aria-label="Pick potion"
+                style={getItemChoiceButtonStyle('potion')}
+                onMouseEnter={() => {
+                  setHoveredItemChoice('potion');
+                }}
+                onMouseLeave={() => {
+                  setHoveredItemChoice((current) =>
+                    current === 'potion' ? null : current,
+                  );
+                }}
+                onClick={() => {
+                  applyItemPickupChoice('potion', pendingItemPickupChoice);
+                }}>
+                <span
+                  aria-hidden="true"
+                  style={{
+                    position: 'relative',
+                    width: '100%',
+                    height: '100%',
+                    display: 'block',
+                  }}>
+                  <span style={getItemChoiceHoverHaloStyle('potion')} />
+                  <img
+                    src={boardAssets.potion}
+                    alt="Potion"
+                    draggable={false}
+                    style={itemChoiceIconStyle}
+                  />
+                </span>
+              </button>
+            </div>
+          </>
+        )
+      : null;
   const moveResourcesWrapStyle: CSSProperties = {
     marginTop: `${Math.max(4, Math.round(tilePixels * 0.22))}px`,
     width: `${renderWidth}px`,
@@ -4146,7 +4357,7 @@ export default function SuperMetalMonsBoard({
     if (pendingChoice === null) {
       return;
     }
-    const {monId, itemId, targetCol, targetRow} = pendingChoice;
+    const {monId, monSide, itemId, targetCol, targetRow} = pendingChoice;
     setBoardEntities((currentEntities) => {
       const monIndex = currentEntities.findIndex((entity) => entity.id === monId);
       const itemIndex = currentEntities.findIndex((entity) => entity.id === itemId);
@@ -4209,7 +4420,25 @@ export default function SuperMetalMonsBoard({
       return nextEntities;
     });
     if (choice === 'potion') {
-      setPlayerPotionCount((prev) => prev + 1);
+      if (monSide === 'black') {
+        setOpponentPotionCount((prev) => {
+          const next = prev + 1;
+          onPotionCountChange?.({
+            side: 'black',
+            count: next,
+          });
+          return next;
+        });
+      } else {
+        setPlayerPotionCount((prev) => {
+          const next = prev + 1;
+          onPotionCountChange?.({
+            side: 'white',
+            count: next,
+          });
+          return next;
+        });
+      }
     }
     setSelectedTile({row: targetRow, col: targetCol});
     setPendingItemPickupChoice(null);
@@ -4295,6 +4524,7 @@ export default function SuperMetalMonsBoard({
     setPlayerScore(initialScores.white);
     setOpponentScore(initialScores.black);
     setPlayerPotionCount(playerStartingPotionCount);
+    setOpponentPotionCount(opponentStartingPotionCount);
     setFaintedMonIdSet(new Set());
     previouslyScoredManaIdsRef.current = new Set();
     triggerResetFadeInForEntities(scoredManaEntityIds);
@@ -4323,6 +4553,17 @@ export default function SuperMetalMonsBoard({
     setScaledFactor(1);
     scaledFactorRef.current = 1;
   };
+  useEffect(() => {
+    if (!enableFreeTileMove) {
+      previousExternalResetTriggerRef.current = externalResetTrigger;
+      return;
+    }
+    if (previousExternalResetTriggerRef.current === externalResetTrigger) {
+      return;
+    }
+    previousExternalResetTriggerRef.current = externalResetTrigger;
+    resetBoardToInitialPuzzleState();
+  }, [enableFreeTileMove, externalResetTrigger, resetBoardToInitialPuzzleState]);
   const previewPanelStyle: CSSProperties = {
     width: `${previewBoxWidthPx}px`,
     height: `${renderWidth}px`,
@@ -4647,7 +4888,7 @@ export default function SuperMetalMonsBoard({
             y={row}
             width={1}
             height={1}
-            fill={colors.darkSquare}
+            fill={boardColors.darkSquare}
           />,
         );
       }
@@ -4863,19 +5104,39 @@ export default function SuperMetalMonsBoard({
               const spiritPushTargetEntity = visibleBoardEntities.find(
                 (entity) => entity.id === pendingSpiritPush.targetId,
               );
-              const scoredSpiritPushedMana =
+              const isSpiritPushDestinationManaPool = cornerManaPoolTileKeySet.has(
+                toTileKey(destinationChoice.col, destinationChoice.row),
+              );
+              const spiritPushTargetCarriedManaEntity =
                 spiritPushTargetEntity !== undefined &&
-                isManaEntityKind(spiritPushTargetEntity.kind) &&
-                cornerManaPoolTileKeySet.has(
-                  toTileKey(destinationChoice.col, destinationChoice.row),
-                )
+                spiritPushTargetEntity.kind === 'mon' &&
+                spiritPushTargetEntity.monType === 'drainer'
+                  ? boardEntities.find(
+                      (entity) =>
+                        !entity.isScored &&
+                        entity.carriedByDrainerId === spiritPushTargetEntity.id &&
+                        isManaEntityKind(entity.kind),
+                    )
+                  : undefined;
+              const scoredSpiritPushedMana =
+                isSpiritPushDestinationManaPool &&
+                spiritPushTargetEntity !== undefined &&
+                isManaEntityKind(spiritPushTargetEntity.kind)
                   ? {
                       id: spiritPushTargetEntity.id,
                       href: spiritPushTargetEntity.href,
                       col: destinationChoice.col,
                       row: destinationChoice.row,
                     }
-                  : null;
+                  : isSpiritPushDestinationManaPool &&
+                      spiritPushTargetCarriedManaEntity !== undefined
+                    ? {
+                        id: spiritPushTargetCarriedManaEntity.id,
+                        href: spiritPushTargetCarriedManaEntity.href,
+                        col: destinationChoice.col,
+                        row: destinationChoice.row,
+                      }
+                    : null;
               setBoardEntities((currentEntities) => {
                 const spiritIndex = currentEntities.findIndex(
                   (entity) => entity.id === pendingSpiritPush.spiritId,
@@ -4911,9 +5172,7 @@ export default function SuperMetalMonsBoard({
                   return currentEntities;
                 }
                 const nextEntities = [...currentEntities];
-                const isDestinationManaPool = cornerManaPoolTileKeySet.has(
-                  toTileKey(destinationChoice.col, destinationChoice.row),
-                );
+                const isDestinationManaPool = isSpiritPushDestinationManaPool;
                 nextEntities[targetIndex] = {
                   ...target,
                   col: destinationChoice.col,
@@ -4941,6 +5200,10 @@ export default function SuperMetalMonsBoard({
                       ...nextEntities[carriedManaIndex],
                       col: destinationChoice.col,
                       row: destinationChoice.row,
+                      isScored: isDestinationManaPool,
+                      carriedByDrainerId: isDestinationManaPool
+                        ? undefined
+                        : nextEntities[carriedManaIndex].carriedByDrainerId,
                     };
                   }
                 }
@@ -5099,6 +5362,7 @@ export default function SuperMetalMonsBoard({
                 }
                 const nextPendingPickupChoice: PendingItemPickupChoice = {
                   monId: selectedEntity.id,
+                  monSide: selectedEntity.side,
                   itemId: targetItemEntity.id,
                   targetCol: col,
                   targetRow: row,
@@ -5887,7 +6151,7 @@ export default function SuperMetalMonsBoard({
             onMouseLeave={() => {
               setHoveredTile(null);
             }}>
-          <rect x={0} y={0} width={11} height={11} fill={colors.lightSquare} />
+          <rect x={0} y={0} width={11} height={11} fill={boardColors.lightSquare} />
           {darkSquares}
 
         {manaPoolPositions.map(([col, row], i) => (
@@ -5897,7 +6161,7 @@ export default function SuperMetalMonsBoard({
             y={row}
             width={1}
             height={1}
-            fill={colors.manaPool}
+            fill={boardColors.manaPool}
           />
         ))}
 
@@ -5931,7 +6195,7 @@ export default function SuperMetalMonsBoard({
                         y={line.y}
                         width={slide.width}
                         height={WAVE_PIXEL}
-                        fill={colors.manaPool}
+                        fill={boardColors.manaPool}
                       />
                     </>
                   ) : null}
@@ -5948,7 +6212,7 @@ export default function SuperMetalMonsBoard({
               y={row}
               width={1}
               height={1}
-              fill={colors.pickupItemSquare}
+              fill={boardColors.pickupItemSquare}
             />
           ))}
 
@@ -5959,7 +6223,7 @@ export default function SuperMetalMonsBoard({
               y={row}
               width={1}
               height={1}
-              fill={colors.simpleManaSquare}
+              fill={boardColors.simpleManaSquare}
 	            />
 	          ))}
 
@@ -5990,11 +6254,13 @@ export default function SuperMetalMonsBoard({
 
 	        {showSpawnGhosts
 	          ? spawnGhosts.map((ghost, index) => (
+              !showSpawnGhostsAlways &&
               ghostHiddenTileKeySet.has(toTileKey(ghost.col, ghost.row))
                 ? null
                 : (
 		              <image
 	                key={`spawn-ghost-${index}`}
+                  className="spawn-ghost-image"
 	                href={ghost.href}
 	                x={ghost.col + spawnGhostInsetUnits}
 	                y={ghost.row + spawnGhostInsetUnits}
@@ -6290,15 +6556,6 @@ export default function SuperMetalMonsBoard({
           (() => {
             const {col, row} = getRenderedEntityCoords(mon);
             const frame = getPieceFrame(row, col);
-            const isRotatedOnSpawn =
-              enableFreeTileMove &&
-              isMonOnOwnSpawn({
-                col: mon.col,
-                row: mon.row,
-                type: mon.type,
-                side: 'black',
-              }) &&
-              (!isSandboxFreeMoveBoard || faintedMonIdSet.has(mon.id));
             const rotationCenterX = frame.x + frame.size / 2;
             const rotationCenterY = frame.y + frame.size / 2;
             const heldManaData =
@@ -6350,8 +6607,16 @@ export default function SuperMetalMonsBoard({
                   y={frame.y}
                   width={frame.size}
                   height={frame.size}
-                  transform={isRotatedOnSpawn ? `rotate(90 ${rotationCenterX} ${rotationCenterY})` : undefined}
-                  style={boardPieceImageStyle}
+                  transform={mon.isFainted ? `rotate(90 ${rotationCenterX} ${rotationCenterY})` : undefined}
+                  style={
+                    mon.isFainted
+                      ? {
+                          ...boardPieceImageStyle,
+                          opacity: FAINTED_MON_OPACITY,
+                          filter: `blur(${FAINTED_MON_BLUR_PX}px)`,
+                        }
+                      : boardPieceImageStyle
+                  }
                 />
                 {heldPieceHref !== undefined ? (
                   <image
@@ -6372,15 +6637,6 @@ export default function SuperMetalMonsBoard({
           (() => {
             const {col, row} = getRenderedEntityCoords(mon);
             const frame = getPieceFrame(row, col);
-            const isRotatedOnSpawn =
-              enableFreeTileMove &&
-              isMonOnOwnSpawn({
-                col: mon.col,
-                row: mon.row,
-                type: mon.type,
-                side: 'white',
-              }) &&
-              (!isSandboxFreeMoveBoard || faintedMonIdSet.has(mon.id));
             const rotationCenterX = frame.x + frame.size / 2;
             const rotationCenterY = frame.y + frame.size / 2;
             const heldManaData =
@@ -6432,8 +6688,16 @@ export default function SuperMetalMonsBoard({
                   y={frame.y}
                   width={frame.size}
                   height={frame.size}
-                  transform={isRotatedOnSpawn ? `rotate(90 ${rotationCenterX} ${rotationCenterY})` : undefined}
-                  style={boardPieceImageStyle}
+                  transform={mon.isFainted ? `rotate(90 ${rotationCenterX} ${rotationCenterY})` : undefined}
+                  style={
+                    mon.isFainted
+                      ? {
+                          ...boardPieceImageStyle,
+                          opacity: FAINTED_MON_OPACITY,
+                          filter: `blur(${FAINTED_MON_BLUR_PX}px)`,
+                        }
+                      : boardPieceImageStyle
+                  }
                 />
                 {heldPieceHref !== undefined ? (
                   <image
@@ -6797,11 +7061,23 @@ export default function SuperMetalMonsBoard({
           />
         ))}
 
+        {showHoveredTileCenterDot && effectiveHoveredTile !== null ? (
+          <circle
+            cx={effectiveHoveredTile.col + 0.5}
+            cy={effectiveHoveredTile.row + 0.5}
+            r={0.08}
+            fill={hoveredTileCenterDotColor}
+            opacity={0.85}
+            pointerEvents="none"
+          />
+        ) : null}
+
           {hoverTiles}
 
         {files.map((label, col) => (
           (() => {
-            const isActive = hoveredTile === null || hoveredTile.col === col;
+            const isActive =
+              effectiveHoveredTile === null || effectiveHoveredTile.col === col;
             return (
           <text
             key={`file-bottom-${label}`}
@@ -6809,7 +7085,7 @@ export default function SuperMetalMonsBoard({
             x={col + 0.5}
             y={11.34}
             textAnchor="middle"
-            fill={colors.border}
+            fill={boardColors.border}
             style={{
               ...coordTextStyle,
               opacity: isActive ? coordTextStyle.opacity : 0,
@@ -6825,7 +7101,8 @@ export default function SuperMetalMonsBoard({
 
         {Array.from({length: BOARD_SIZE}).map((_, row) => (
           (() => {
-            const isActive = hoveredTile === null || hoveredTile.row === row;
+            const isActive =
+              effectiveHoveredTile === null || effectiveHoveredTile.row === row;
             return (
           <text
             key={`rank-left-${row}`}
@@ -6833,7 +7110,7 @@ export default function SuperMetalMonsBoard({
             x={-0.22}
             y={row + 0.57}
             textAnchor="middle"
-            fill={colors.border}
+            fill={boardColors.border}
             style={{
               ...coordTextStyle,
               opacity: isActive ? coordTextStyle.opacity : 0,
@@ -6849,85 +7126,9 @@ export default function SuperMetalMonsBoard({
 
           </svg>
 
-          {isItemPickupChoiceOpen ? (
-            <>
-              <button
-                type="button"
-                aria-label="Cancel item pickup"
-                style={itemChoiceBackdropStyle}
-                onClick={() => {
-                  setPendingItemPickupChoice(null);
-                  setHoveredItemChoice(null);
-                }}
-              />
-              <div style={itemChoiceModalStyle} aria-label="Choose item pickup">
-              <button
-                type="button"
-                aria-label="Pick bomb"
-                style={getItemChoiceButtonStyle('bomb')}
-                onMouseEnter={() => {
-                  setHoveredItemChoice('bomb');
-                }}
-                onMouseLeave={() => {
-                  setHoveredItemChoice((current) =>
-                    current === 'bomb' ? null : current,
-                  );
-                }}
-                onClick={() => {
-                  applyItemPickupChoice('bomb', pendingItemPickupChoice);
-                }}>
-                <span
-                  aria-hidden="true"
-                  style={{
-                    position: 'relative',
-                    width: '100%',
-                    height: '100%',
-                    display: 'block',
-                  }}>
-                  <span style={getItemChoiceHoverHaloStyle('bomb')} />
-                  <img
-                    src={boardAssets.bomb}
-                    alt="Bomb"
-                    draggable={false}
-                    style={itemChoiceIconStyle}
-                  />
-                </span>
-              </button>
-              <button
-                type="button"
-                aria-label="Pick potion"
-                style={getItemChoiceButtonStyle('potion')}
-                onMouseEnter={() => {
-                  setHoveredItemChoice('potion');
-                }}
-                onMouseLeave={() => {
-                  setHoveredItemChoice((current) =>
-                    current === 'potion' ? null : current,
-                  );
-                }}
-                onClick={() => {
-                  applyItemPickupChoice('potion', pendingItemPickupChoice);
-                }}>
-                <span
-                  aria-hidden="true"
-                  style={{
-                    position: 'relative',
-                    width: '100%',
-                    height: '100%',
-                    display: 'block',
-                  }}>
-                  <span style={getItemChoiceHoverHaloStyle('potion')} />
-                  <img
-                    src={boardAssets.potion}
-                    alt="Potion"
-                    draggable={false}
-                    style={itemChoiceIconStyle}
-                  />
-                </span>
-              </button>
-              </div>
-            </>
-          ) : null}
+          {typeof document !== 'undefined' && itemPickupChoiceOverlay !== null
+            ? createPortal(itemPickupChoiceOverlay, document.body)
+            : itemPickupChoiceOverlay}
 
           {showThinFloatingPreview ? (
             <div ref={previewMessageBoxRef} style={thinFloatingPreviewBoxStyle}>
@@ -6938,7 +7139,7 @@ export default function SuperMetalMonsBoard({
                     style={previewPoolSvgStyle}
                     shapeRendering="crispEdges"
                     aria-label="Mana pool preview">
-                    <rect x={0} y={0} width={1} height={1} fill={colors.manaPool} />
+                    <rect x={0} y={0} width={1} height={1} fill={boardColors.manaPool} />
                     <g opacity={0.5}>
                       {previewManaPoolWaves.map((line, lineIndex) => {
                         const slide = getWaveSlideFrame(line, waveFrameIndex);
@@ -6965,7 +7166,7 @@ export default function SuperMetalMonsBoard({
                                   y={line.y}
                                   width={slide.width}
                                   height={WAVE_PIXEL}
-                                  fill={colors.manaPool}
+                                  fill={boardColors.manaPool}
                                 />
                               </>
                             ) : null}
@@ -7213,7 +7414,7 @@ export default function SuperMetalMonsBoard({
                     style={previewPoolSvgStyle}
                     shapeRendering="crispEdges"
                     aria-label="Mana pool preview">
-                    <rect x={0} y={0} width={1} height={1} fill={colors.manaPool} />
+                    <rect x={0} y={0} width={1} height={1} fill={boardColors.manaPool} />
                     <g opacity={0.5}>
                       {previewManaPoolWaves.map((line, lineIndex) => {
                         const slide = getWaveSlideFrame(line, waveFrameIndex);
@@ -7240,7 +7441,7 @@ export default function SuperMetalMonsBoard({
                                   y={line.y}
                                   width={slide.width}
                                   height={WAVE_PIXEL}
-                                  fill={colors.manaPool}
+                                  fill={boardColors.manaPool}
                                 />
                               </>
                             ) : null}
