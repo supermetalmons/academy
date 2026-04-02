@@ -842,7 +842,7 @@ export default function DrainerGridPage(): ReactNode {
       aria-label="White drainer grid">
       <canvas ref={overlayCanvasRef} aria-hidden="true" style={overlayCanvasStyle} />
       <div data-grid-topbar="true" aria-label="Icon ocean top bar" style={topBarStyle}>
-        <span style={topBarTitleStyle}>mons future aesthetical research</span>
+        <span style={topBarTitleStyle}>mons future aesthetical research dept.</span>
         <div style={topBarButtonsStyle}>
           <button
             type="button"

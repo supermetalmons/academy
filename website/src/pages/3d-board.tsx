@@ -52,12 +52,15 @@ const BILLBOARD_ALL_PIECES_LOW_ANGLE_DROP_PX = 1.1;
 const BILLBOARD_MIN_OPACITY = 0.45;
 const BILLBOARD_SMOOTH_RENDER_MAX_ZOOM = 1.8;
 const BILLBOARD_MANA_ITEM_LOW_ANGLE_DROP_PX = 3.5;
+const BILLBOARD_HELD_ATTACHMENT_LOW_ANGLE_DROP_PX = 0.9;
 const BILLBOARD_HOVER_SCALE = 1.08;
+const BILLBOARD_ATTACK_TARGET_SCALE = 1.115;
 const BILLBOARD_FAINTED_BLUR_PX = 0.55;
 const BILLBOARD_REFLECTION_OPACITY = 0.28;
 const BILLBOARD_REFLECTION_BLUR_PX = 0.55;
 const BILLBOARD_REFLECTION_HEIGHT_SCALE = 0.86;
 const BILLBOARD_REFLECTION_VERTICAL_OFFSET_PX = -2;
+const AUTO_ROTATE_DEG_PER_SECOND = 6.8;
 const LOW_ANGLE_STABILITY_START_DEG = 18;
 const LOW_ANGLE_STABILITY_MAX_BLUR_PX = 0.46;
 const FAR_ZOOM_STABILITY_START = 1;
@@ -121,6 +124,111 @@ const GRASS_CLOUD_SHADOWS: CloudShadow[] = [
 const GRASS_CLOUD_SHADOW_RENDER_MAX = 10;
 const CLOSE_ZOOM_PERF_THRESHOLD = 2.05;
 const CLOSE_ZOOM_PERF_DRAG_THRESHOLD = 1.75;
+const BILLBOARD_SMOOTH_MOVE_DURATION_MS = 210;
+const BILLBOARD_SMOOTH_ARC_HEIGHT_PX = 26;
+const BILLBOARD_SMOOTH_RETARGET_MIN_PROGRESS = 0.92;
+const BOARD_TILE_CENTER_COUNT = 121;
+const ACTIVE_TOGGLE_BG_COLOR = '#88A8F8';
+const ACTIVE_TOGGLE_BORDER_COLOR = '#5E79CC';
+const ACTIVE_TOGGLE_TEXT_COLOR = '#FFFFFF';
+const BST_NOISE_IFRAME_SRC_DOC = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #000; }
+    canvas { display: block; width: 100%; height: 100%; }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <script type="module">
+    import * as THREE from 'three';
+    import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+    import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+    import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+    const COUNT = 5000;
+    const SPEED_MULT = 0.1;
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x000000, 0.01);
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2000);
+    camera.position.set(0, 0, 100);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    const composer = new EffectComposer(renderer);
+    composer.addPass(new RenderPass(scene, camera));
+    const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+    bloomPass.strength = 1.8;
+    bloomPass.radius = 0.4;
+    bloomPass.threshold = 0;
+    composer.addPass(bloomPass);
+
+    const geometry = new THREE.TetrahedronGeometry(0.25);
+    const material = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const mesh = new THREE.InstancedMesh(geometry, material, COUNT);
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    scene.add(mesh);
+
+    const dummy = new THREE.Object3D();
+    const color = new THREE.Color();
+    const target = new THREE.Vector3();
+    const positions = [];
+    for (let i = 0; i < COUNT; i++) {
+      positions.push(new THREE.Vector3((Math.random() - 0.5) * 100, (Math.random() - 0.5) * 100, (Math.random() - 0.5) * 100));
+      mesh.setColorAt(i, color.setHex(0x00ff88));
+    }
+
+    const clock = new THREE.Clock();
+    function animate() {
+      requestAnimationFrame(animate);
+      const time = clock.getElapsedTime() * SPEED_MULT;
+      const spread = 100;
+      const drift = 1.11;
+      for (let i = 0; i < COUNT; i++) {
+        const seed = i * 2654435761;
+        const rx = ((seed >> 0) & 0xFFFF) / 0xFFFF - 0.5;
+        const ry = ((seed >> 4) & 0xFFFF) / 0xFFFF - 0.5;
+        const rz = ((seed >> 8) & 0xFFFF) / 0xFFFF - 0.5;
+        const dx = Math.sin(time * drift * 0.7 + i * 0.01) * 5;
+        const dy = Math.cos(time * drift * 0.5 + i * 0.02) * 5;
+        const dz = Math.sin(time * drift * 0.3 + i * 0.015) * 5;
+        target.set(rx * spread * 2 + dx, ry * spread * 2 + dy, rz * spread * 2 + dz);
+        const hue = ((seed >> 12) & 0xFFFF) / 0xFFFF;
+        color.setHSL(hue, 0.5, 0.5);
+        positions[i].lerp(target, 0.1);
+        dummy.position.copy(positions[i]);
+        dummy.updateMatrix();
+        mesh.setMatrixAt(i, dummy.matrix);
+        mesh.setColorAt(i, color);
+      }
+      mesh.instanceMatrix.needsUpdate = true;
+      mesh.instanceColor.needsUpdate = true;
+      composer.render();
+    }
+    animate();
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      composer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>`;
 
 type Rotation = {
   x: number;
@@ -129,6 +237,7 @@ type Rotation = {
 
 type BillboardSprite = {
   key: string;
+  trackKey: string;
   href: string;
   leftPx: number;
   topPx: number;
@@ -139,6 +248,28 @@ type BillboardSprite = {
   tileRow: number;
   opacity: number;
   isRotatedQuarterTurn: boolean;
+  isHeldAttachment: boolean;
+  isAttackTargeted: boolean;
+};
+
+type SpriteMotionState = {
+  fromLeftPx: number;
+  fromTopPx: number;
+  toLeftPx: number;
+  toTopPx: number;
+  fromZIndex: number;
+  toZIndex: number;
+  fromOffsetX: number;
+  fromOffsetY: number;
+  toOffsetX: number;
+  toOffsetY: number;
+  fromTileCol: number;
+  fromTileRow: number;
+  toTileCol: number;
+  toTileRow: number;
+  startMs: number;
+  durationMs: number;
+  arcPx: number;
 };
 
 type Tile = {
@@ -168,6 +299,25 @@ type CloudShadow = {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+function easeOutCubic(value: number): number {
+  return 1 - (1 - value) * (1 - value) * (1 - value);
+}
+
+function getSpriteMotionFrame(
+  motion: SpriteMotionState,
+  nowMs: number,
+): {leftPx: number; topPx: number; progress: number; eased: number} {
+  const progress = clamp((nowMs - motion.startMs) / motion.durationMs, 0, 1);
+  const eased = easeOutCubic(progress);
+  const arcOffsetPx = motion.arcPx > 0 ? Math.sin(Math.PI * progress) * motion.arcPx : 0;
+  return {
+    leftPx: motion.fromLeftPx + (motion.toLeftPx - motion.fromLeftPx) * eased,
+    topPx: motion.fromTopPx + (motion.toTopPx - motion.fromTopPx) * eased - arcOffsetPx,
+    progress,
+    eased,
+  };
 }
 
 function positiveModulo(value: number, divisor: number): number {
@@ -344,6 +494,50 @@ function isItemBillboardHref(href: string): boolean {
   return /\/(bomborpotion|bomb|potion)\.png$/.test(normalizedHref);
 }
 
+function isMonBillboardHref(href: string): boolean {
+  const normalizedHref = href.toLowerCase();
+  return /\/(angel|demon|drainer|spirit|mystic)b?\.png$/.test(normalizedHref);
+}
+
+function isHeldAttachmentBillboardHref(href: string): boolean {
+  const normalizedHref = href.toLowerCase();
+  return /\/(mana|manab|supermana|supermanasimple|bomb)\.png$/.test(normalizedHref);
+}
+
+type SvgImageFrame = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  centerX: number;
+  centerY: number;
+};
+
+function getSvgImageFrame(image: SVGImageElement): SvgImageFrame | null {
+  const x = parseSvgUnit(image.getAttribute('x'));
+  const y = parseSvgUnit(image.getAttribute('y'));
+  const width = parseSvgUnit(image.getAttribute('width'));
+  const height = parseSvgUnit(image.getAttribute('height'));
+  if (
+    x === null ||
+    y === null ||
+    width === null ||
+    height === null ||
+    width <= 0 ||
+    height <= 0
+  ) {
+    return null;
+  }
+  return {
+    x,
+    y,
+    width,
+    height,
+    centerX: x + width / 2,
+    centerY: y + height / 2,
+  };
+}
+
 function mulberry32(seed: number): () => number {
   let t = seed;
   return () => {
@@ -413,10 +607,21 @@ function extractBillboardSprites(
   const sinY = Math.sin(radY);
   const svgImages = Array.from(svg.querySelectorAll<SVGImageElement>('image'));
   svgImages.forEach((image, index) => {
+    if (
+      image.getAttribute('data-billboard-ignore') === 'true' ||
+      image.classList.contains('spawn-ghost-image')
+    ) {
+      return;
+    }
     const href = image.getAttribute('href') ?? image.href.baseVal ?? '';
     if (!href.includes(MONS_ASSET_PATH_FRAGMENT)) {
       return;
     }
+    const explicitTrackKey = image.getAttribute('data-billboard-id');
+    const trackKey = explicitTrackKey && explicitTrackKey.trim().length > 0
+      ? `id:${explicitTrackKey.trim()}`
+      : `auto:${href}-${index}`;
+    const isAttackTargeted = image.getAttribute('data-attack-targeted') === 'true';
     const inlineOpacity = Number.parseFloat(
       image.style.opacity || image.getAttribute('opacity') || '1',
     );
@@ -426,22 +631,15 @@ function extractBillboardSprites(
     const opacity = Number.isFinite(inlineOpacity) ? clamp(inlineOpacity, 0, 1) : 1;
     const transformAttr = image.getAttribute('transform') ?? '';
     const isRotatedQuarterTurn = /rotate\(\s*90(?:[,\s)]|$)/i.test(transformAttr);
-    const xUnits = parseSvgUnit(image.getAttribute('x'));
-    const yUnits = parseSvgUnit(image.getAttribute('y'));
-    const widthUnits = parseSvgUnit(image.getAttribute('width'));
-    const heightUnits = parseSvgUnit(image.getAttribute('height'));
-    if (
-      xUnits === null ||
-      yUnits === null ||
-      widthUnits === null ||
-      heightUnits === null ||
-      widthUnits <= 0 ||
-      heightUnits <= 0
-    ) {
+    const frame = getSvgImageFrame(image);
+    if (frame === null) {
       return;
     }
-    const centerUnitsX = xUnits + widthUnits / 2;
-    const centerUnitsY = yUnits + heightUnits / 2;
+    const centerUnitsX = frame.centerX;
+    const centerUnitsY = frame.centerY;
+    let depthCenterUnitsX = centerUnitsX;
+    let depthCenterUnitsY = centerUnitsY;
+    let isHeldAttachment = false;
     if (
       centerUnitsX < 0 ||
       centerUnitsX > 11 ||
@@ -451,28 +649,65 @@ function extractBillboardSprites(
       return;
     }
     const centerPoint = new DOMPoint(centerUnitsX, centerUnitsY).matrixTransform(svgCtm);
-    const leftPx = Number(centerPoint.x.toFixed(2));
-    const topPx = Number(centerPoint.y.toFixed(2));
-    const tileCol = Math.max(0, Math.min(10, Math.floor(centerUnitsX)));
-    const tileRow = Math.max(0, Math.min(10, Math.floor(centerUnitsY)));
+    let leftPx = Number(centerPoint.x.toFixed(2));
+    let topPx = Number(centerPoint.y.toFixed(2));
+    let tileCol = Math.max(0, Math.min(10, Math.floor(centerUnitsX)));
+    let tileRow = Math.max(0, Math.min(10, Math.floor(centerUnitsY)));
     const widthPxRaw =
       unscaledUnitPx === null
-        ? widthUnits
-        : widthUnits * unscaledUnitPx * BOARD_SURFACE_SCALE * zoomScale;
+        ? frame.width
+        : frame.width * unscaledUnitPx * BOARD_SURFACE_SCALE * zoomScale;
     const heightPxRaw =
       unscaledUnitPx === null
-        ? heightUnits
-        : heightUnits * unscaledUnitPx * BOARD_SURFACE_SCALE * zoomScale;
+        ? frame.height
+        : frame.height * unscaledUnitPx * BOARD_SURFACE_SCALE * zoomScale;
     const widthPx = Number(widthPxRaw.toFixed(2));
     const heightPx = Number(heightPxRaw.toFixed(2));
-    const localX = centerUnitsX - 5.5;
-    const localZ = centerUnitsY - 5.5;
+
+    if (isHeldAttachmentBillboardHref(href)) {
+      const parent = image.parentElement;
+      if (parent instanceof SVGGElement && unscaledUnitPx !== null) {
+        const siblingImages = Array.from(parent.children).filter(
+          (node): node is SVGImageElement => node instanceof SVGImageElement,
+        );
+        const holderImage = siblingImages.find((candidate) => {
+          if (candidate === image) {
+            return false;
+          }
+          const candidateHref =
+            candidate.getAttribute('href') ?? candidate.href.baseVal ?? '';
+          return isMonBillboardHref(candidateHref);
+        });
+        if (holderImage !== undefined) {
+          const holderFrame = getSvgImageFrame(holderImage);
+          if (holderFrame !== null) {
+            const holderCenterPoint = new DOMPoint(
+              holderFrame.centerX,
+              holderFrame.centerY,
+            ).matrixTransform(svgCtm);
+            const dxUnits = frame.centerX - holderFrame.centerX;
+            const dyUnits = frame.centerY - holderFrame.centerY;
+            const unitPx = unscaledUnitPx * BOARD_SURFACE_SCALE * zoomScale;
+            leftPx = Number((holderCenterPoint.x + dxUnits * unitPx).toFixed(2));
+            topPx = Number((holderCenterPoint.y + dyUnits * unitPx).toFixed(2));
+            depthCenterUnitsX = holderFrame.centerX;
+            depthCenterUnitsY = holderFrame.centerY;
+            tileCol = Math.max(0, Math.min(10, Math.floor(depthCenterUnitsX)));
+            tileRow = Math.max(0, Math.min(10, Math.floor(depthCenterUnitsY)));
+            isHeldAttachment = true;
+          }
+        }
+      }
+    }
+    const localX = depthCenterUnitsX - 5.5;
+    const localZ = depthCenterUnitsY - 5.5;
     const rotatedZ = -localX * sinY + localZ * cosY;
-    const depthSort = rotatedZ * cosX;
+    const depthSort = rotatedZ * cosX + (isHeldAttachment ? 0.0008 : 0);
     depthSprites.push({
-      key: `${href}-${index}-${xUnits.toFixed(3)}-${yUnits.toFixed(3)}-${widthUnits.toFixed(
+      key: `${trackKey}-${frame.x.toFixed(3)}-${frame.y.toFixed(3)}-${frame.width.toFixed(
         3,
-      )}-${heightUnits.toFixed(3)}`,
+      )}-${frame.height.toFixed(3)}`,
+      trackKey,
       href,
       leftPx,
       topPx,
@@ -483,6 +718,8 @@ function extractBillboardSprites(
       tileRow,
       opacity,
       isRotatedQuarterTurn,
+      isHeldAttachment,
+      isAttackTargeted,
       depthSort,
     });
   });
@@ -497,6 +734,7 @@ function extractBillboardSprites(
   });
   return depthSprites.map((sprite, index) => ({
     key: sprite.key,
+    trackKey: sprite.trackKey,
     href: sprite.href,
     leftPx: sprite.leftPx,
     topPx: sprite.topPx,
@@ -507,6 +745,8 @@ function extractBillboardSprites(
     tileRow: sprite.tileRow,
     opacity: sprite.opacity,
     isRotatedQuarterTurn: sprite.isRotatedQuarterTurn,
+    isHeldAttachment: sprite.isHeldAttachment,
+    isAttackTargeted: sprite.isAttackTargeted,
   }));
 }
 
@@ -522,10 +762,13 @@ function areBillboardSpritesEquivalent(
     const right = next[index];
     if (
       left.key !== right.key ||
+      left.trackKey !== right.trackKey ||
       left.zIndex !== right.zIndex ||
       left.tileCol !== right.tileCol ||
       left.tileRow !== right.tileRow ||
-      left.isRotatedQuarterTurn !== right.isRotatedQuarterTurn
+      left.isRotatedQuarterTurn !== right.isRotatedQuarterTurn ||
+      left.isHeldAttachment !== right.isHeldAttachment ||
+      left.isAttackTargeted !== right.isAttackTargeted
     ) {
       return false;
     }
@@ -563,6 +806,33 @@ function extractBoardSurfaceClipPath(boardHost: HTMLElement): string | null {
   return `polygon(${corners
     .map((point) => `${point.x.toFixed(1)}px ${point.y.toFixed(1)}px`)
     .join(', ')})`;
+}
+
+function extractBoardTileCenters(
+  boardHost: HTMLElement,
+): Record<string, {leftPx: number; topPx: number}> {
+  const svg = boardHost.querySelector<SVGSVGElement>('.super-mons-board svg');
+  if (svg === null) {
+    return {};
+  }
+  const svgCtm = svg.getScreenCTM();
+  if (svgCtm === null) {
+    return {};
+  }
+  const centers: Record<string, {leftPx: number; topPx: number}> = {};
+  for (let row = 0; row <= 10; row += 1) {
+    for (let col = 0; col <= 10; col += 1) {
+      const projected = new DOMPoint(col + 0.5, row + 0.5).matrixTransform(svgCtm);
+      if (!Number.isFinite(projected.x) || !Number.isFinite(projected.y)) {
+        continue;
+      }
+      centers[`${col}-${row}`] = {
+        leftPx: Number(projected.x.toFixed(2)),
+        topPx: Number(projected.y.toFixed(2)),
+      };
+    }
+  }
+  return centers;
 }
 
 const topBarStyle: CSSProperties = {
@@ -626,6 +896,17 @@ const sceneViewportStyle: CSSProperties = {
   touchAction: 'none',
 };
 
+const sceneParticleLayerStyle: CSSProperties = {
+  position: 'absolute',
+  inset: 0,
+  border: 0,
+  width: '100%',
+  height: '100%',
+  pointerEvents: 'none',
+  backgroundColor: '#000',
+  zIndex: 0,
+};
+
 const sceneFrameStyle: CSSProperties = {
   position: 'relative',
   width: PRISM_WIDTH_PX + 260,
@@ -633,6 +914,7 @@ const sceneFrameStyle: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
+  zIndex: 1,
 };
 
 const zoomLayerBaseStyle: CSSProperties = {
@@ -788,6 +1070,18 @@ const billboardReflectionLayerStyle: CSSProperties = {
   zIndex: 13,
 };
 
+const billboardGroundShadowLayerStyle: CSSProperties = {
+  ...billboardLayerStyle,
+  zIndex: 12,
+};
+
+const billboardGroundShadowBlobStyle: CSSProperties = {
+  position: 'absolute',
+  transform: 'translate(-50%, -50%)',
+  borderRadius: '999px',
+  pointerEvents: 'none',
+};
+
 const billboardSpritePlaneBaseStyle: CSSProperties = {
   position: 'absolute',
   transformStyle: 'flat',
@@ -803,6 +1097,22 @@ const billboardSpriteScaleWrapBaseStyle: CSSProperties = {
   height: '100%',
   transformOrigin: 'center bottom',
   willChange: 'transform',
+};
+
+const billboardAttackTargetGlowStyle: CSSProperties = {
+  position: 'absolute',
+  left: '50%',
+  top: '56%',
+  width: '78%',
+  height: '58%',
+  transform: 'translate(-50%, -50%)',
+  borderRadius: '999px',
+  pointerEvents: 'none',
+  zIndex: 0,
+  background:
+    'radial-gradient(ellipse at center, rgba(255, 68, 68, 0.62) 0%, rgba(255, 68, 68, 0.34) 44%, rgba(255, 68, 68, 0) 80%)',
+  filter: 'blur(2.4px)',
+  transition: 'opacity 140ms ease-out, transform 190ms cubic-bezier(0.22, 1, 0.36, 1)',
 };
 
 const billboardSpriteImageStyle: CSSProperties = {
@@ -935,8 +1245,10 @@ const bobToggleButtonStyle: CSSProperties = {
   borderRadius: 0,
   backgroundColor: '#fff',
   color: '#111',
-  fontSize: 12,
+  fontSize: 15,
   lineHeight: '22px',
+  fontFamily: "'VT323', 'IBM Plex Mono', 'Lucida Console', monospace",
+  letterSpacing: 0.35,
   padding: '0 10px',
   margin: 0,
   display: 'inline-flex',
@@ -944,6 +1256,8 @@ const bobToggleButtonStyle: CSSProperties = {
   justifyContent: 'center',
   whiteSpace: 'nowrap',
   cursor: 'pointer',
+  boxSizing: 'border-box',
+  width: 50,
 };
 
 const undoHudButtonStyle: CSSProperties = {
@@ -957,27 +1271,53 @@ const undoHudButtonStyle: CSSProperties = {
 
 const reflectionsToggleButtonStyle: CSSProperties = {
   ...bobToggleButtonStyle,
+  width: 86,
+};
+
+const rotateToggleButtonStyle: CSSProperties = {
+  ...bobToggleButtonStyle,
+  width: 64,
 };
 
 const shadowToggleButtonStyle: CSSProperties = {
   ...bobToggleButtonStyle,
+  width: 66,
 };
 
 const grassToggleButtonStyle: CSSProperties = {
   ...bobToggleButtonStyle,
+  width: 62,
 };
 
 const darkModeToggleButtonStyle: CSSProperties = {
   ...bobToggleButtonStyle,
+  width: 72,
+};
+
+const movementModeToggleButtonStyle: CSSProperties = {
+  ...bobToggleButtonStyle,
+  width: 78,
+};
+
+const particleToggleButtonStyle: CSSProperties = {
+  ...bobToggleButtonStyle,
+  width: 62,
 };
 
 const bottomControlsDockStyle: CSSProperties = {
   position: 'fixed',
   right: 14,
   bottom: 14,
-  display: 'inline-flex',
-  alignItems: 'center',
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'stretch',
+  gap: 8,
   zIndex: 24,
+};
+
+const bottomControlsUndoRowStyle: CSSProperties = {
+  display: 'flex',
+  justifyContent: 'flex-end',
 };
 
 const bottomControlsMainRowStyle: CSSProperties = {
@@ -990,12 +1330,92 @@ const bottomControlsJoinedButtonStyle: CSSProperties = {
   borderLeft: 0,
 };
 
-const undoToBobGapStyle: CSSProperties = {
+const bottomControlLabelWithIconStyle: CSSProperties = {
+  position: 'relative',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: '100%',
+  paddingRight: 12,
+  lineHeight: 1,
+};
+
+const bottomControlLabelTextStyle: CSSProperties = {
+  display: 'inline-block',
+};
+
+const bottomControlModeIconSlotStyle: CSSProperties = {
+  position: 'absolute',
+  right: 2,
+  top: '50%',
   width: 10,
-  minWidth: 10,
-  height: 1,
+  height: 10,
+  transform: 'translateY(calc(-50% + 0.5px))',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
   pointerEvents: 'none',
 };
+
+const bottomControlModeIconStyle: CSSProperties = {
+  width: 10,
+  height: 10,
+  display: 'block',
+  flexShrink: 0,
+};
+
+const ModeIconSparkle = (): ReactNode => (
+  <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false" style={bottomControlModeIconStyle}>
+    <path
+      fill="currentColor"
+      d="M8 1.6l1.15 3.25L12.4 6 9.15 7.15 8 10.4 6.85 7.15 3.6 6l3.25-1.15L8 1.6zm4.6 8.1l.6 1.7 1.7.6-1.7.6-.6 1.7-.6-1.7-1.7-.6 1.7-.6.6-1.7z"
+    />
+  </svg>
+);
+
+const ModeIconSwirl = (): ReactNode => (
+  <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false" style={bottomControlModeIconStyle}>
+    <path
+      d="M8 2.2a5.8 5.8 0 1 0 5.8 5.8 4.05 4.05 0 1 1-4.05-4.05"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <circle cx="9.8" cy="8" r="1.15" fill="currentColor" />
+  </svg>
+);
+
+const ModeIconSun = (): ReactNode => (
+  <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false" style={bottomControlModeIconStyle}>
+    <circle
+      cx="8"
+      cy="8"
+      r="2.7"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+    />
+    <path
+      d="M8 1.6v2M8 12.4v2M1.6 8h2M12.4 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M12.6 3.4l-1.4 1.4M4.8 11.2l-1.4 1.4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
+const ModeIconMoon = (): ReactNode => (
+  <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false" style={bottomControlModeIconStyle}>
+    <path
+      fillRule="evenodd"
+      fill="currentColor"
+      d="M8.2 1.9a6.1 6.1 0 1 0 5.58 8.56A4.8 4.8 0 1 1 8.2 1.9z"
+    />
+  </svg>
+);
 
 const playerHudStripBaseStyle: CSSProperties = {
   position: 'fixed',
@@ -1153,6 +1573,7 @@ export default function ThreeDBoardPage(): ReactNode {
   const [rotation, setRotation] = useState<Rotation>({x: -89, y: 0});
   const [zoomScale, setZoomScale] = useState(1.42);
   const [isBoardBobbing, setIsBoardBobbing] = useState(false);
+  const [isAutoRotateEnabled, setIsAutoRotateEnabled] = useState(false);
   const [hoveredBoardTile, setHoveredBoardTile] = useState<Tile | null>(null);
   const [hoveredSpriteTile, setHoveredSpriteTile] = useState<Tile | null>(null);
   const [selectedSpriteTile, setSelectedSpriteTile] = useState<Tile | null>(null);
@@ -1162,7 +1583,9 @@ export default function ThreeDBoardPage(): ReactNode {
   const [areReflectionsEnabled, setAreReflectionsEnabled] = useState(true);
   const [isBoardShadowEnabled, setIsBoardShadowEnabled] = useState(true);
   const [isGrassModeEnabled, setIsGrassModeEnabled] = useState(false);
+  const [isNoiseParticleEnabled, setIsNoiseParticleEnabled] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isSmoothMovementEnabled, setIsSmoothMovementEnabled] = useState(false);
   const [showRotationHint, setShowRotationHint] = useState(false);
   const [cloudEnabled, setCloudEnabled] = useState<boolean>(CLOUD_ENABLED_DEFAULT);
   const [cloudSpeedMultiplier, setCloudSpeedMultiplier] = useState<number>(CLOUD_SPEED_DEFAULT);
@@ -1187,11 +1610,19 @@ export default function ThreeDBoardPage(): ReactNode {
     lastY: number;
   } | null>(null);
   const [billboardSprites, setBillboardSprites] = useState<BillboardSprite[]>([]);
+  const [spriteMotionByTrackKey, setSpriteMotionByTrackKey] = useState<
+    Record<string, SpriteMotionState>
+  >({});
+  const [motionNowMs, setMotionNowMs] = useState(0);
   const [boardSurfaceClipPath, setBoardSurfaceClipPath] = useState<string | null>(null);
   const boardHostRef = useRef<HTMLDivElement | null>(null);
+  const previousBillboardByTrackKeyRef = useRef<Map<string, BillboardSprite>>(new Map());
+  const boardTileCenterByKeyRef = useRef<Record<string, {leftPx: number; topPx: number}>>({});
   const zoomScaleRef = useRef(zoomScale);
   const isDragActiveRef = useRef(false);
   const rotationRef = useRef(rotation);
+  const autoRotateFrameRef = useRef<number | null>(null);
+  const autoRotateLastTimestampRef = useRef<number | null>(null);
   const hasDismissedRotationHintRef = useRef(false);
   const itemStandeeSparklesByKeyRef = useRef<Record<string, ItemStandeeSparkleParticle[]>>({});
   const animationClockSecondsRef = useRef<number>(
@@ -1259,6 +1690,44 @@ export default function ThreeDBoardPage(): ReactNode {
   useEffect(() => {
     rotationRef.current = rotation;
   }, [rotation]);
+
+  useEffect(() => {
+    if (!isAutoRotateEnabled || typeof window === 'undefined') {
+      if (autoRotateFrameRef.current !== null) {
+        window.cancelAnimationFrame(autoRotateFrameRef.current);
+        autoRotateFrameRef.current = null;
+      }
+      autoRotateLastTimestampRef.current = null;
+      return;
+    }
+    let isMounted = true;
+    const tick = (nowMs: number) => {
+      if (!isMounted) {
+        return;
+      }
+      const previousTimestamp = autoRotateLastTimestampRef.current ?? nowMs;
+      autoRotateLastTimestampRef.current = nowMs;
+      const elapsedSeconds = Math.min(0.05, Math.max(0, (nowMs - previousTimestamp) / 1000));
+      if (elapsedSeconds > 0 && !isDragActiveRef.current) {
+        const deltaY = elapsedSeconds * AUTO_ROTATE_DEG_PER_SECOND;
+        setRotation((current) => ({
+          ...current,
+          y: current.y + deltaY,
+        }));
+      }
+      autoRotateFrameRef.current = window.requestAnimationFrame(tick);
+    };
+    autoRotateFrameRef.current = window.requestAnimationFrame(tick);
+    return () => {
+      isMounted = false;
+      if (autoRotateFrameRef.current !== null) {
+        window.cancelAnimationFrame(autoRotateFrameRef.current);
+        autoRotateFrameRef.current = null;
+      }
+      autoRotateLastTimestampRef.current = null;
+    };
+  }, [isAutoRotateEnabled]);
+
   useEffect(() => {
     if (!isItemPickupChoiceOpen) {
       return;
@@ -1326,7 +1795,9 @@ export default function ThreeDBoardPage(): ReactNode {
         rotationRef.current,
       );
       setBillboardSprites((current) =>
-        areBillboardSpritesEquivalent(current, nextSprites)
+        current.length > 0 && nextSprites.length === 0
+          ? current
+          : areBillboardSpritesEquivalent(current, nextSprites)
           ? current
           : nextSprites,
       );
@@ -1334,6 +1805,10 @@ export default function ThreeDBoardPage(): ReactNode {
       setBoardSurfaceClipPath((current) =>
         current === nextClipPath ? current : nextClipPath,
       );
+      const nextTileCenters = extractBoardTileCenters(boardHost);
+      if (Object.keys(nextTileCenters).length >= BOARD_TILE_CENTER_COUNT) {
+        boardTileCenterByKeyRef.current = nextTileCenters;
+      }
       rafId = window.requestAnimationFrame(tick);
     };
     rafId = window.requestAnimationFrame(tick);
@@ -1343,6 +1818,172 @@ export default function ThreeDBoardPage(): ReactNode {
       window.cancelAnimationFrame(rafId);
     };
   }, []);
+
+  useEffect(() => {
+    const nextByTrackKey = new Map(
+      billboardSprites.map((sprite) => [sprite.trackKey, sprite]),
+    );
+    const previousByTrackKey = previousBillboardByTrackKeyRef.current;
+    if (!isSmoothMovementEnabled) {
+      previousBillboardByTrackKeyRef.current = nextByTrackKey;
+      setSpriteMotionByTrackKey((current) =>
+        Object.keys(current).length === 0 ? current : {},
+      );
+      return;
+    }
+    const nowMs =
+      typeof window === 'undefined' ? Date.now() : window.performance.now();
+    const occupiedPreviousTileKeySet = new Set<string>();
+    previousByTrackKey.forEach((sprite) => {
+      if (sprite.isHeldAttachment) {
+        return;
+      }
+      occupiedPreviousTileKeySet.add(`${sprite.tileCol}-${sprite.tileRow}`);
+    });
+    setSpriteMotionByTrackKey((current) => {
+      let hasChanges = false;
+      const next = {...current};
+      Object.keys(next).forEach((trackKey) => {
+        if (!nextByTrackKey.has(trackKey)) {
+          delete next[trackKey];
+          hasChanges = true;
+        }
+      });
+      nextByTrackKey.forEach((sprite, trackKey) => {
+        const previousSprite = previousByTrackKey.get(trackKey);
+        if (previousSprite === undefined) {
+          return;
+        }
+        const existingMotion = next[trackKey];
+        const existingMotionProgress =
+          existingMotion === undefined
+            ? 1
+            : clamp((nowMs - existingMotion.startMs) / existingMotion.durationMs, 0, 1);
+        const changedTile =
+          previousSprite.tileCol !== sprite.tileCol ||
+          previousSprite.tileRow !== sprite.tileRow;
+        if (!changedTile) {
+          return;
+        }
+        if (
+          existingMotion !== undefined &&
+          existingMotion.toTileCol === sprite.tileCol &&
+          existingMotion.toTileRow === sprite.tileRow
+        ) {
+          return;
+        }
+        if (
+          existingMotion !== undefined &&
+          existingMotionProgress < BILLBOARD_SMOOTH_RETARGET_MIN_PROGRESS
+        ) {
+          return;
+        }
+        const fromPosition = existingMotion
+          ? getSpriteMotionFrame(existingMotion, nowMs)
+          : {
+              leftPx: previousSprite.leftPx,
+              topPx: previousSprite.topPx,
+              progress: 0,
+              eased: 0,
+            };
+        const fromZIndex = existingMotion
+          ? existingMotion.fromZIndex +
+            (existingMotion.toZIndex - existingMotion.fromZIndex) * fromPosition.eased
+          : previousSprite.zIndex;
+        const tileCenters = boardTileCenterByKeyRef.current;
+        const fromTileCenter = tileCenters[`${previousSprite.tileCol}-${previousSprite.tileRow}`];
+        const toTileCenter = tileCenters[`${sprite.tileCol}-${sprite.tileRow}`];
+        const fromBaseLeft = fromTileCenter?.leftPx ?? previousSprite.leftPx;
+        const fromBaseTop = fromTileCenter?.topPx ?? previousSprite.topPx;
+        const toBaseLeft = toTileCenter?.leftPx ?? sprite.leftPx;
+        const toBaseTop = toTileCenter?.topPx ?? sprite.topPx;
+        const deltaCol = sprite.tileCol - previousSprite.tileCol;
+        const deltaRow = sprite.tileRow - previousSprite.tileRow;
+        const steps = Math.max(Math.abs(deltaCol), Math.abs(deltaRow));
+        let shouldArc = false;
+        if (steps > 1) {
+          for (let step = 1; step < steps; step += 1) {
+            const pathCol =
+              previousSprite.tileCol + Math.round((deltaCol * step) / steps);
+            const pathRow =
+              previousSprite.tileRow + Math.round((deltaRow * step) / steps);
+            const pathTileKey = `${pathCol}-${pathRow}`;
+            if (
+              occupiedPreviousTileKeySet.has(pathTileKey) &&
+              !(pathCol === previousSprite.tileCol && pathRow === previousSprite.tileRow) &&
+              !(pathCol === sprite.tileCol && pathRow === sprite.tileRow)
+            ) {
+              shouldArc = true;
+              break;
+            }
+          }
+        }
+        next[trackKey] = {
+          fromLeftPx: fromPosition.leftPx,
+          fromTopPx: fromPosition.topPx,
+          toLeftPx: sprite.leftPx,
+          toTopPx: sprite.topPx,
+          fromZIndex,
+          toZIndex: sprite.zIndex,
+          fromOffsetX: fromPosition.leftPx - fromBaseLeft,
+          fromOffsetY: fromPosition.topPx - fromBaseTop,
+          toOffsetX: sprite.leftPx - toBaseLeft,
+          toOffsetY: sprite.topPx - toBaseTop,
+          fromTileCol: previousSprite.tileCol,
+          fromTileRow: previousSprite.tileRow,
+          toTileCol: sprite.tileCol,
+          toTileRow: sprite.tileRow,
+          startMs: nowMs,
+          durationMs: BILLBOARD_SMOOTH_MOVE_DURATION_MS,
+          arcPx: shouldArc ? BILLBOARD_SMOOTH_ARC_HEIGHT_PX : 0,
+        };
+        hasChanges = true;
+      });
+      return hasChanges ? next : current;
+    });
+    previousBillboardByTrackKeyRef.current = nextByTrackKey;
+  }, [billboardSprites, isSmoothMovementEnabled]);
+
+  useEffect(() => {
+    if (!isSmoothMovementEnabled || typeof window === 'undefined') {
+      return;
+    }
+    if (Object.keys(spriteMotionByTrackKey).length === 0) {
+      return;
+    }
+    let frameId = 0;
+    const tick = (nowMs: number) => {
+      setMotionNowMs(nowMs);
+      frameId = window.requestAnimationFrame(tick);
+    };
+    frameId = window.requestAnimationFrame(tick);
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [isSmoothMovementEnabled, spriteMotionByTrackKey]);
+
+  useEffect(() => {
+    if (!isSmoothMovementEnabled || Object.keys(spriteMotionByTrackKey).length === 0) {
+      return;
+    }
+    const nowMs =
+      motionNowMs > 0
+        ? motionNowMs
+        : typeof window === 'undefined'
+        ? Date.now()
+        : window.performance.now();
+    setSpriteMotionByTrackKey((current) => {
+      let hasChanges = false;
+      const next = {...current};
+      Object.entries(current).forEach(([trackKey, motion]) => {
+        if (nowMs - motion.startMs >= motion.durationMs) {
+          delete next[trackKey];
+          hasChanges = true;
+        }
+      });
+      return hasChanges ? next : current;
+    });
+  }, [isSmoothMovementEnabled, motionNowMs, spriteMotionByTrackKey]);
 
   const prismCoreStyle: CSSProperties = {
     ...prismCoreBaseStyle,
@@ -1537,15 +2178,19 @@ export default function ThreeDBoardPage(): ReactNode {
     (dragState !== null && zoomScale >= CLOSE_ZOOM_PERF_DRAG_THRESHOLD);
   const shouldSuspendGrassClouds =
     dragState !== null && zoomScale >= CLOSE_ZOOM_PERF_DRAG_THRESHOLD;
-  const shouldRenderReflections =
-    areReflectionsEnabled && !isCloseZoomPerformanceMode;
+  const shouldRenderReflections = areReflectionsEnabled;
   const grassEdgeFadeColor = isDarkMode ? '7,9,14' : '255,255,255';
-  const currentPageStyle: CSSProperties = isDarkMode
+  const currentPageStyle: CSSProperties = isNoiseParticleEnabled
     ? {
         ...pageStyle,
-        backgroundColor: '#07090e',
+        backgroundColor: '#000',
       }
-    : pageStyle;
+    : isDarkMode
+      ? {
+          ...pageStyle,
+          backgroundColor: '#07090e',
+        }
+      : pageStyle;
   const currentTopBarStyle: CSSProperties = isDarkMode
     ? {
         ...topBarStyle,
@@ -1667,12 +2312,13 @@ export default function ThreeDBoardPage(): ReactNode {
       ? '0 1px 0 rgba(0,0,0,0.56)'
       : '0 1px 0 rgba(255,255,255,0.84)',
   };
-  const currentHudScoreStyle: CSSProperties = isDarkMode
+  const currentHudScoreStyle: CSSProperties = isDarkMode || isNoiseParticleEnabled
     ? {
         ...playerHudScoreStyle,
         color: '#c4c8d6',
       }
     : playerHudScoreStyle;
+  const bobRotateDividerColor = isDarkMode ? 'rgba(255,255,255,0.52)' : 'rgba(0,0,0,0.72)';
   const themedHudButtonStyle: CSSProperties = isDarkMode
     ? {
         backgroundColor: '#121620',
@@ -1680,6 +2326,18 @@ export default function ThreeDBoardPage(): ReactNode {
         color: '#eef2ff',
       }
     : {};
+  const inactiveHudToggleStyle: CSSProperties = isDarkMode
+    ? {
+        borderColor: 'rgba(255,255,255,0.5)',
+      }
+    : {
+        borderColor: '#111',
+      };
+  const activeHudToggleStyle: CSSProperties = {
+    backgroundColor: ACTIVE_TOGGLE_BG_COLOR,
+    borderColor: ACTIVE_TOGGLE_BORDER_COLOR,
+    color: ACTIVE_TOGGLE_TEXT_COLOR,
+  };
   const boardGlossOverlayStyle: CSSProperties = {
     position: 'absolute',
     inset: 0,
@@ -1705,6 +2363,101 @@ export default function ThreeDBoardPage(): ReactNode {
   const billboardTranslateYPercent = -100 + 50 * topDownRecenterBlend;
   const billboardGroundOffsetPx = BILLBOARD_GROUND_OFFSET_PX * (1 - topDownRecenterBlend);
   const shouldUseSmoothBillboardRendering = zoomScale <= BILLBOARD_SMOOTH_RENDER_MAX_ZOOM;
+  const renderedBillboardSprites = useMemo(() => {
+    if (!isSmoothMovementEnabled || Object.keys(spriteMotionByTrackKey).length === 0) {
+      return billboardSprites;
+    }
+    const boardTileCenters = boardTileCenterByKeyRef.current;
+    const nowMs =
+      motionNowMs > 0
+        ? motionNowMs
+        : typeof window === 'undefined'
+        ? Date.now()
+        : window.performance.now();
+    return billboardSprites.map((sprite) => {
+      const motion = spriteMotionByTrackKey[sprite.trackKey];
+      if (motion === undefined) {
+        return sprite;
+      }
+      const fromTileCenter = boardTileCenters[`${motion.fromTileCol}-${motion.fromTileRow}`];
+      const toTileCenter = boardTileCenters[`${motion.toTileCol}-${motion.toTileRow}`];
+      const resolvedFromLeft =
+        (fromTileCenter?.leftPx ?? motion.fromLeftPx) + motion.fromOffsetX;
+      const resolvedFromTop =
+        (fromTileCenter?.topPx ?? motion.fromTopPx) + motion.fromOffsetY;
+      const resolvedToLeft = (toTileCenter?.leftPx ?? motion.toLeftPx) + motion.toOffsetX;
+      const resolvedToTop = (toTileCenter?.topPx ?? motion.toTopPx) + motion.toOffsetY;
+      const motionFrame = getSpriteMotionFrame(
+        {
+          ...motion,
+          fromLeftPx: resolvedFromLeft,
+          fromTopPx: resolvedFromTop,
+          toLeftPx: resolvedToLeft,
+          toTopPx: resolvedToTop,
+        },
+        nowMs,
+      );
+      const resolvedZIndex =
+        motion.fromZIndex + (motion.toZIndex - motion.fromZIndex) * motionFrame.eased;
+      return {
+        ...sprite,
+        leftPx: Number(motionFrame.leftPx.toFixed(2)),
+        topPx: Number(motionFrame.topPx.toFixed(2)),
+        zIndex: Number(resolvedZIndex.toFixed(3)),
+      };
+    });
+  }, [
+    billboardSprites,
+    isSmoothMovementEnabled,
+    motionNowMs,
+    spriteMotionByTrackKey,
+  ]);
+  const boardSurfaceViewScaleY = clamp(
+    Math.sin((Math.abs(rotation.x) * Math.PI) / 180),
+    0.24,
+    1,
+  );
+  const topDownShadowOpacityMultiplier = 1 - 0.42 * topDownRecenterBlend;
+  const groundPieceShadows = useMemo(() => {
+    if (!isBoardShadowEnabled) {
+      return [];
+    }
+    const shadowSpriteByTile = new Map<string, BillboardSprite>();
+    renderedBillboardSprites.forEach((sprite) => {
+      if (sprite.isHeldAttachment) {
+        return;
+      }
+      const tileKey = `${sprite.tileCol}-${sprite.tileRow}`;
+      const existing = shadowSpriteByTile.get(tileKey);
+      if (existing === undefined || sprite.zIndex > existing.zIndex) {
+        shadowSpriteByTile.set(tileKey, sprite);
+      }
+    });
+    const shadowHeightScale = clamp(boardSurfaceViewScaleY, 0.24, 1);
+    const shadowBlurPx = 1.6 + (1 - shadowHeightScale) * 1.15;
+    const baseShadowOpacity = isDarkMode ? 0.68 : 0.6;
+    const shadowOpacity = baseShadowOpacity * topDownShadowOpacityMultiplier;
+    return Array.from(shadowSpriteByTile.values()).map((sprite) => {
+      const diameterPx = clamp(sprite.widthPx * 0.69, 15, 33);
+      const heightPx = diameterPx * shadowHeightScale;
+      const offsetYPx = (1 - shadowHeightScale) * 0.7;
+      return {
+        key: sprite.trackKey,
+        leftPx: sprite.leftPx,
+        topPx: sprite.topPx + offsetYPx,
+        widthPx: diameterPx,
+        heightPx,
+        blurPx: shadowBlurPx,
+        opacity: shadowOpacity,
+      };
+    });
+  }, [
+    renderedBillboardSprites,
+    boardSurfaceViewScaleY,
+    isBoardShadowEnabled,
+    isDarkMode,
+    topDownShadowOpacityMultiplier,
+  ]);
 
   return (
     <main
@@ -1802,7 +2555,7 @@ export default function ThreeDBoardPage(): ReactNode {
         }
       `}</style>
       <div aria-label="3d board top bar" style={currentTopBarStyle}>
-        <span style={currentTopBarTitleStyle}>mons future aesthetical research</span>
+        <span style={currentTopBarTitleStyle}>mons future aesthetical research dept.</span>
         <div style={topBarButtonsStyle}>
           <button
             type="button"
@@ -1827,9 +2580,20 @@ export default function ThreeDBoardPage(): ReactNode {
         aria-label="3d prism viewport"
         style={sceneViewportStyle}
         >
+        {isNoiseParticleEnabled ? (
+          <iframe
+            title="bst noise particles"
+            srcDoc={BST_NOISE_IFRAME_SRC_DOC}
+            style={sceneParticleLayerStyle}
+            tabIndex={-1}
+            aria-hidden="true"
+          />
+        ) : null}
         <div style={sceneFrameStyle}>
           <div style={zoomLayerStyle}>
-            {isBoardShadowEnabled ? <div style={currentBaseShadowStyle} /> : null}
+            {isBoardShadowEnabled && !isGrassModeEnabled ? (
+              <div style={currentBaseShadowStyle} />
+            ) : null}
             <div style={floatLayerDynamicStyle}>
               <div style={prismCoreStyle}>
                 {isGrassModeEnabled ? (
@@ -1939,6 +2703,33 @@ export default function ThreeDBoardPage(): ReactNode {
           </div>
         </div>
       </div>
+      {groundPieceShadows.length > 0 ? (
+        <div
+          aria-hidden="true"
+          style={{
+            ...billboardGroundShadowLayerStyle,
+            clipPath: boardSurfaceClipPath ?? undefined,
+            WebkitClipPath: boardSurfaceClipPath ?? undefined,
+            opacity: boardSurfaceClipPath === null ? 0 : 1,
+          }}>
+          {groundPieceShadows.map((shadow) => (
+            <div
+              key={`ground-shadow-${shadow.key}`}
+              style={{
+                ...billboardGroundShadowBlobStyle,
+                left: `${shadow.leftPx}px`,
+                top: `${shadow.topPx}px`,
+                width: `${shadow.widthPx}px`,
+                height: `${shadow.heightPx}px`,
+                filter: `blur(${shadow.blurPx.toFixed(2)}px)`,
+                opacity: shadow.opacity,
+                background:
+                  'radial-gradient(ellipse at center, rgba(98, 98, 98, 0.4) 0%, rgba(98, 98, 98, 0.24) 52%, rgba(98, 98, 98, 0) 86%)',
+              }}
+            />
+          ))}
+        </div>
+      ) : null}
       {shouldRenderReflections ? (
         <div
           aria-hidden="true"
@@ -1948,13 +2739,15 @@ export default function ThreeDBoardPage(): ReactNode {
             WebkitClipPath: boardSurfaceClipPath ?? undefined,
             opacity: boardSurfaceClipPath === null ? 0 : reflectionVisibility,
           }}>
-          {billboardSprites.map((sprite) => (
+          {renderedBillboardSprites.map((sprite) => (
             (() => {
               const sharedLowAngleDropPx =
                 BILLBOARD_ALL_PIECES_LOW_ANGLE_DROP_PX * (1 - topDownRecenterBlend);
-              const extraManaItemDropPx = isManaOrItemBillboardHref(sprite.href)
-                ? BILLBOARD_MANA_ITEM_LOW_ANGLE_DROP_PX * (1 - topDownRecenterBlend)
-                : 0;
+              const extraManaItemDropPx = sprite.isHeldAttachment
+                ? BILLBOARD_HELD_ATTACHMENT_LOW_ANGLE_DROP_PX * (1 - topDownRecenterBlend)
+                : isManaOrItemBillboardHref(sprite.href)
+                  ? BILLBOARD_MANA_ITEM_LOW_ANGLE_DROP_PX * (1 - topDownRecenterBlend)
+                  : 0;
               const lowAngleDropPx = sharedLowAngleDropPx + extraManaItemDropPx;
               const reflectionOpacity = clamp(
                 sprite.opacity * BILLBOARD_REFLECTION_OPACITY * reflectionVisibility,
@@ -1965,7 +2758,7 @@ export default function ThreeDBoardPage(): ReactNode {
                 BILLBOARD_REFLECTION_BLUR_PX + topDownRecenterBlend * 0.65;
               return (
                 <div
-                  key={`reflection-${sprite.key}`}
+                  key={`reflection-${sprite.trackKey}`}
                   style={{
                     ...billboardSpritePlaneBaseStyle,
                     pointerEvents: 'none',
@@ -1998,9 +2791,9 @@ export default function ThreeDBoardPage(): ReactNode {
         </div>
       ) : null}
       <div aria-hidden="true" style={billboardLayerStyle}>
-        {billboardSprites.map((sprite) => (
+        {renderedBillboardSprites.map((sprite) => (
           (() => {
-            const isHoveredSprite = hoveredSpriteKey === sprite.key;
+            const isHoveredSprite = hoveredSpriteKey === sprite.trackKey;
             const isSelectedSprite =
               selectedSpriteTile !== null &&
               selectedSpriteTile.row === sprite.tileRow &&
@@ -2013,6 +2806,7 @@ export default function ThreeDBoardPage(): ReactNode {
               hoveredSpriteTile !== null &&
               hoveredSpriteTile.row === sprite.tileRow &&
               hoveredSpriteTile.col === sprite.tileCol;
+            const isAttackTargeted = sprite.isAttackTargeted && !sprite.isHeldAttachment;
             const isEmphasizedSprite =
               isHoveredSprite ||
               isHoveredSpriteByTile ||
@@ -2027,25 +2821,28 @@ export default function ThreeDBoardPage(): ReactNode {
             const resolvedSpriteFilter =
               typeof baseSpriteFilter === 'string' ? baseSpriteFilter : '';
             const finalSpriteFilter = sprite.isRotatedQuarterTurn
-              ? isCloseZoomPerformanceMode
-                ? resolvedSpriteFilter
-                : `${resolvedSpriteFilter} blur(${BILLBOARD_FAINTED_BLUR_PX}px)`.trim()
+              ? `${resolvedSpriteFilter} blur(${BILLBOARD_FAINTED_BLUR_PX}px)`.trim()
               : resolvedSpriteFilter;
+            const targetScale = isAttackTargeted ? BILLBOARD_ATTACK_TARGET_SCALE : 1;
+            const emphasizedScale = isEmphasizedSprite ? BILLBOARD_HOVER_SCALE : 1;
+            const effectiveSpriteScale = Math.max(targetScale, emphasizedScale);
             const isItemStandee = isItemStandeePotionHref(sprite.href);
             const itemStandeeSparkles =
               isItemStandee && !isCloseZoomPerformanceMode
-              ? getItemStandeeSparkles(sprite.key)
+              ? getItemStandeeSparkles(sprite.trackKey)
               : [];
             const spriteHitTargetStyle = getSpriteHitTargetStyle(sprite.href);
             const sharedLowAngleDropPx =
               BILLBOARD_ALL_PIECES_LOW_ANGLE_DROP_PX * (1 - topDownRecenterBlend);
-            const extraManaItemDropPx = isManaOrItemBillboardHref(sprite.href)
-              ? BILLBOARD_MANA_ITEM_LOW_ANGLE_DROP_PX * (1 - topDownRecenterBlend)
-              : 0;
+            const extraManaItemDropPx = sprite.isHeldAttachment
+              ? BILLBOARD_HELD_ATTACHMENT_LOW_ANGLE_DROP_PX * (1 - topDownRecenterBlend)
+              : isManaOrItemBillboardHref(sprite.href)
+                ? BILLBOARD_MANA_ITEM_LOW_ANGLE_DROP_PX * (1 - topDownRecenterBlend)
+                : 0;
             const lowAngleDropPx = sharedLowAngleDropPx + extraManaItemDropPx;
             return (
           <div
-            key={sprite.key}
+            key={sprite.trackKey}
             style={{
               ...billboardSpritePlaneBaseStyle,
               pointerEvents: 'none',
@@ -2064,15 +2861,15 @@ export default function ThreeDBoardPage(): ReactNode {
               event.stopPropagation();
             }}
             onPointerEnter={() => {
-              setHoveredSpriteKey(sprite.key);
+              setHoveredSpriteKey(sprite.trackKey);
               setHoveredSpriteTile({row: sprite.tileRow, col: sprite.tileCol});
             }}
             onPointerMove={() => {
-              setHoveredSpriteKey(sprite.key);
+              setHoveredSpriteKey(sprite.trackKey);
               setHoveredSpriteTile({row: sprite.tileRow, col: sprite.tileCol});
             }}
             onPointerLeave={() => {
-              setHoveredSpriteKey((current) => (current === sprite.key ? null : current));
+              setHoveredSpriteKey((current) => (current === sprite.trackKey ? null : current));
               setHoveredSpriteTile((current) =>
                 current !== null &&
                 current.row === sprite.tileRow &&
@@ -2089,9 +2886,19 @@ export default function ThreeDBoardPage(): ReactNode {
             <div
               style={{
                 ...billboardSpriteScaleWrapBaseStyle,
-                transform: `scale(${isEmphasizedSprite ? BILLBOARD_HOVER_SCALE : 1})`,
+                transform: `scale(${effectiveSpriteScale})`,
                 transition: 'transform 190ms cubic-bezier(0.22, 1, 0.36, 1)',
               }}>
+            {isAttackTargeted ? (
+              <div
+                aria-hidden="true"
+                style={{
+                  ...billboardAttackTargetGlowStyle,
+                  opacity: 0.9,
+                  transform: `translate(-50%, -50%) scale(${effectiveSpriteScale})`,
+                }}
+              />
+            ) : null}
             <div
               style={{
                 ...spriteHitTargetStyle,
@@ -2104,15 +2911,15 @@ export default function ThreeDBoardPage(): ReactNode {
                 event.stopPropagation();
               }}
               onPointerEnter={() => {
-                setHoveredSpriteKey(sprite.key);
+                setHoveredSpriteKey(sprite.trackKey);
                 setHoveredSpriteTile({row: sprite.tileRow, col: sprite.tileCol});
               }}
               onPointerMove={() => {
-                setHoveredSpriteKey(sprite.key);
+                setHoveredSpriteKey(sprite.trackKey);
                 setHoveredSpriteTile({row: sprite.tileRow, col: sprite.tileCol});
               }}
               onPointerLeave={() => {
-                setHoveredSpriteKey((current) => (current === sprite.key ? null : current));
+                setHoveredSpriteKey((current) => (current === sprite.trackKey ? null : current));
                 setHoveredSpriteTile((current) =>
                   current !== null &&
                   current.row === sprite.tileRow &&
@@ -2238,36 +3045,39 @@ export default function ThreeDBoardPage(): ReactNode {
         </div>
       </div>
       <div style={bottomControlsDockStyle}>
-        <button
-          type="button"
-          aria-label="Undo move"
-          disabled={!hudSnapshot.canReset || hudSnapshot.isResetAnimating}
-          style={{
-            ...undoHudButtonStyle,
-            ...themedHudButtonStyle,
-            opacity: hudSnapshot.canReset || hudSnapshot.isResetAnimating ? 0.92 : 0.52,
-            cursor: hudSnapshot.canReset || hudSnapshot.isResetAnimating ? 'pointer' : 'default',
-            color: hudSnapshot.canReset || hudSnapshot.isResetAnimating
-              ? (isDarkMode ? '#eef2ff' : '#111')
-              : '#808080',
-          }}
-          onClick={() => {
-            setExternalResetTrigger((current) => current + 1);
-          }}>
-          <svg viewBox="0 0 512 512" aria-hidden="true" style={{width: 16, height: 16, display: 'block'}}>
-            <path
-              d="M125.7 160H176c17.7 0 32 14.3 32 32s-14.3 32-32 32H48c-17.7 0-32-14.3-32-32V64c0-17.7 14.3-32 32-32s32 14.3 32 32v51.2L97.6 97.6c87.5-87.5 229.3-87.5 316.8 0s87.5 229.3 0 316.8s-229.3 87.5-316.8 0c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0c62.5 62.5 163.8 62.5 226.3 0s62.5-163.8 0-226.3s-163.8-62.5-226.3 0L125.7 160z"
-              fill="currentColor"
-            />
-          </svg>
-        </button>
-        <span aria-hidden="true" style={undoToBobGapStyle} />
+        <div style={bottomControlsUndoRowStyle}>
+          <button
+            type="button"
+            aria-label="Undo move"
+            disabled={!hudSnapshot.canReset || hudSnapshot.isResetAnimating}
+            style={{
+              ...undoHudButtonStyle,
+              ...themedHudButtonStyle,
+              opacity: hudSnapshot.canReset || hudSnapshot.isResetAnimating ? 0.92 : 0.52,
+              cursor: hudSnapshot.canReset || hudSnapshot.isResetAnimating ? 'pointer' : 'default',
+              color: hudSnapshot.canReset || hudSnapshot.isResetAnimating
+                ? (isDarkMode ? '#eef2ff' : '#111')
+                : '#808080',
+            }}
+            onClick={() => {
+              setExternalResetTrigger((current) => current + 1);
+            }}>
+            <svg viewBox="0 0 512 512" aria-hidden="true" style={{width: 16, height: 16, display: 'block'}}>
+              <path
+                d="M125.7 160H176c17.7 0 32 14.3 32 32s-14.3 32-32 32H48c-17.7 0-32-14.3-32-32V64c0-17.7 14.3-32 32-32s32 14.3 32 32v51.2L97.6 97.6c87.5-87.5 229.3-87.5 316.8 0s87.5 229.3 0 316.8s-229.3 87.5-316.8 0c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0c62.5 62.5 163.8 62.5 226.3 0s62.5-163.8 0-226.3s-163.8-62.5-226.3 0L125.7 160z"
+                fill="currentColor"
+              />
+            </svg>
+          </button>
+        </div>
         <div style={bottomControlsMainRowStyle}>
           <button
             type="button"
             style={{
               ...bobToggleButtonStyle,
               ...themedHudButtonStyle,
+              borderRight: 0,
+              ...(isBoardBobbing ? activeHudToggleStyle : inactiveHudToggleStyle),
             }}
             onClick={() => {
               setIsBoardBobbing((current) => {
@@ -2278,7 +3088,21 @@ export default function ThreeDBoardPage(): ReactNode {
                 return next;
               });
             }}>
-            {isBoardBobbing ? 'bob: on' : 'bob: off'}
+            bob
+          </button>
+          <button
+            type="button"
+            style={{
+              ...rotateToggleButtonStyle,
+              ...themedHudButtonStyle,
+              ...bottomControlsJoinedButtonStyle,
+              ...(isAutoRotateEnabled ? activeHudToggleStyle : inactiveHudToggleStyle),
+              borderLeft: `1px solid ${bobRotateDividerColor}`,
+            }}
+            onClick={() => {
+              setIsAutoRotateEnabled((current) => !current);
+            }}>
+            rotate
           </button>
           <button
             type="button"
@@ -2286,11 +3110,12 @@ export default function ThreeDBoardPage(): ReactNode {
               ...reflectionsToggleButtonStyle,
               ...themedHudButtonStyle,
               ...bottomControlsJoinedButtonStyle,
+              ...(areReflectionsEnabled ? activeHudToggleStyle : inactiveHudToggleStyle),
             }}
             onClick={() => {
               setAreReflectionsEnabled((current) => !current);
             }}>
-            {areReflectionsEnabled ? 'reflections: on' : 'reflections: off'}
+            reflections
           </button>
           <button
             type="button"
@@ -2298,17 +3123,14 @@ export default function ThreeDBoardPage(): ReactNode {
               ...shadowToggleButtonStyle,
               ...themedHudButtonStyle,
               ...bottomControlsJoinedButtonStyle,
+              ...(isBoardShadowEnabled ? activeHudToggleStyle : inactiveHudToggleStyle),
             }}
             onClick={() => {
               setIsBoardShadowEnabled((current) => {
-                const next = !current;
-                if (next) {
-                  setIsGrassModeEnabled(false);
-                }
-                return next;
+                return !current;
               });
             }}>
-            {isBoardShadowEnabled ? 'shadow: on' : 'shadow: off'}
+            shadows
           </button>
           <button
             type="button"
@@ -2316,18 +3138,58 @@ export default function ThreeDBoardPage(): ReactNode {
               ...grassToggleButtonStyle,
               ...themedHudButtonStyle,
               ...bottomControlsJoinedButtonStyle,
+              ...(isGrassModeEnabled ? activeHudToggleStyle : inactiveHudToggleStyle),
             }}
             onClick={() => {
               setIsGrassModeEnabled((current) => {
                 const next = !current;
                 if (next) {
                   setIsBoardBobbing(false);
-                  setIsBoardShadowEnabled(false);
                 }
                 return next;
               });
             }}>
-            {isGrassModeEnabled ? 'grass: on' : 'grass: off'}
+            grass
+          </button>
+          <button
+            type="button"
+            style={{
+              ...particleToggleButtonStyle,
+              ...themedHudButtonStyle,
+              ...bottomControlsJoinedButtonStyle,
+              ...(isNoiseParticleEnabled ? activeHudToggleStyle : inactiveHudToggleStyle),
+            }}
+            onClick={() => {
+              setIsNoiseParticleEnabled((current) => !current);
+            }}>
+            astral
+          </button>
+          <button
+            type="button"
+            style={{
+              ...movementModeToggleButtonStyle,
+              ...themedHudButtonStyle,
+              ...bottomControlsJoinedButtonStyle,
+              ...inactiveHudToggleStyle,
+            }}
+            onClick={() => {
+              setIsSmoothMovementEnabled((current) => !current);
+            }}>
+            {isSmoothMovementEnabled ? (
+              <span style={bottomControlLabelWithIconStyle}>
+                <span style={bottomControlLabelTextStyle}>smooth</span>
+                <span style={bottomControlModeIconSlotStyle}>
+                  <ModeIconSwirl />
+                </span>
+              </span>
+            ) : (
+              <span style={bottomControlLabelWithIconStyle}>
+                <span style={bottomControlLabelTextStyle}>instant</span>
+                <span style={bottomControlModeIconSlotStyle}>
+                  <ModeIconSparkle />
+                </span>
+              </span>
+            )}
           </button>
           <button
             type="button"
@@ -2335,11 +3197,26 @@ export default function ThreeDBoardPage(): ReactNode {
               ...darkModeToggleButtonStyle,
               ...themedHudButtonStyle,
               ...bottomControlsJoinedButtonStyle,
+              ...inactiveHudToggleStyle,
             }}
             onClick={() => {
               setIsDarkMode((current) => !current);
             }}>
-            {isDarkMode ? 'mode: dark' : 'mode: light'}
+            {isDarkMode ? (
+              <span style={bottomControlLabelWithIconStyle}>
+                <span style={bottomControlLabelTextStyle}>dark</span>
+                <span style={bottomControlModeIconSlotStyle}>
+                  <ModeIconMoon />
+                </span>
+              </span>
+            ) : (
+              <span style={bottomControlLabelWithIconStyle}>
+                <span style={bottomControlLabelTextStyle}>light</span>
+                <span style={bottomControlModeIconSlotStyle}>
+                  <ModeIconSun />
+                </span>
+              </span>
+            )}
           </button>
         </div>
       </div>

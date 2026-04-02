@@ -1364,6 +1364,7 @@ export default function SuperMetalMonsBoard({
   const resetGhostFadeTimeoutRef = useRef<number | null>(null);
   const previouslyScoredManaIdsRef = useRef<Set<string>>(new Set());
   const previousBoardEntitiesByIdRef = useRef<Map<string, BoardEntity>>(new Map());
+  const forcedManaScoreSideByIdRef = useRef<Record<string, 'white' | 'black'>>({});
   const previewBelowBreakpointWidthRef = useRef<number | null>(null);
   const scaledFactorRef = useRef(1);
   const [waveSeedNonce, setWaveSeedNonce] = useState(1);
@@ -1408,6 +1409,9 @@ export default function SuperMetalMonsBoard({
     if (!enableFreeTileMove) {
       return false;
     }
+    if (isSandboxFreeMoveBoard && faintedMonIdSet.size > 0) {
+      return true;
+    }
     if (boardEntities.length !== initialBoardEntities.length) {
       return true;
     }
@@ -1425,7 +1429,13 @@ export default function SuperMetalMonsBoard({
         initial.isScored !== entity.isScored
       );
     });
-  }, [boardEntities, enableFreeTileMove, initialBoardEntities]);
+  }, [
+    boardEntities,
+    enableFreeTileMove,
+    faintedMonIdSet,
+    initialBoardEntities,
+    isSandboxFreeMoveBoard,
+  ]);
   useEffect(() => {
     if (onPuzzleBoardDirtyChange === undefined) {
       return;
@@ -1706,6 +1716,7 @@ export default function SuperMetalMonsBoard({
     setResetFadeInByEntityId({});
     setResetGhostFadeInByTileKey({});
     previouslyScoredManaIdsRef.current = getScoredManaEntityIdSet(nextBoardEntities);
+    forcedManaScoreSideByIdRef.current = {};
     previousBoardEntitiesByIdRef.current = new Map(
       nextBoardEntities.map((entity) => [entity.id, entity]),
     );
@@ -1756,6 +1767,16 @@ export default function SuperMetalMonsBoard({
       }
       nextScoredManaIds.add(entity.id);
       if (!previouslyScoredManaIdsRef.current.has(entity.id)) {
+        const forcedScoreSide = forcedManaScoreSideByIdRef.current[entity.id];
+        if (forcedScoreSide !== undefined) {
+          delete forcedManaScoreSideByIdRef.current[entity.id];
+          if (forcedScoreSide === 'black') {
+            opponentScoreDelta += getBlackDrainerManaScorePoints(entity.kind);
+          } else {
+            playerScoreDelta += getManaScorePoints(entity.kind);
+          }
+          return;
+        }
         const previousEntity = previousBoardEntitiesById.get(entity.id);
         const previousCarrierId =
           previousEntity !== undefined &&
@@ -2794,19 +2815,44 @@ export default function SuperMetalMonsBoard({
         ) {
           continue;
         }
-        if (!canEntityMoveToTile(target, optionCol, optionRow)) {
-          continue;
-        }
-        const isOccupied = visibleBoardEntities.some(
+        const destinationOccupants = visibleBoardEntities.filter(
           (entity) =>
             entity.id !== target.id &&
             entity.col === optionCol &&
             entity.row === optionRow,
         );
-        if (isOccupied) {
+        if (destinationOccupants.length === 0) {
+          if (!canEntityMoveToTile(target, optionCol, optionRow)) {
+            continue;
+          }
+          options.push({col: optionCol, row: optionRow});
           continue;
         }
-        options.push({col: optionCol, row: optionRow});
+        if (destinationOccupants.length > 1) {
+          continue;
+        }
+        const destinationOccupant = destinationOccupants[0];
+        const canPushManaIntoDrainerHands =
+          isManaEntityKind(target.kind) &&
+          destinationOccupant.kind === 'mon' &&
+          destinationOccupant.side !== undefined &&
+          destinationOccupant.monType === 'drainer' &&
+          destinationOccupant.heldItemKind !== 'bomb';
+        if (canPushManaIntoDrainerHands) {
+          options.push({col: optionCol, row: optionRow});
+          continue;
+        }
+        const canPushDrainerOntoMana =
+          target.kind === 'mon' &&
+          target.side !== undefined &&
+          target.monType === 'drainer' &&
+          target.heldItemKind !== 'bomb' &&
+          isManaEntityKind(destinationOccupant.kind) &&
+          canEntityMoveToTile(target, optionCol, optionRow);
+        if (canPushDrainerOntoMana) {
+          options.push({col: optionCol, row: optionRow});
+        }
+        continue;
       }
     }
     return options;
@@ -2845,7 +2891,7 @@ export default function SuperMetalMonsBoard({
       if (isSelectedAbilityBlockedOnOwnSpawn) {
         return [];
       }
-      return visibleBoardEntities
+      const spiritTargetsWithDestinations = visibleBoardEntities
         .filter((entity) => entity.id !== selectedEntity.id)
         .filter((targetEntity) => {
           if (
@@ -2866,16 +2912,55 @@ export default function SuperMetalMonsBoard({
             targetEntity.row,
           ),
         )
-        .filter(
-          (targetEntity) =>
-            getSpiritPushDestinationOptions(targetEntity).length > 0,
-        )
         .map((targetEntity) => ({
+          targetEntity,
+          destinationOptions: getSpiritPushDestinationOptions(targetEntity),
+        }))
+        .filter(({destinationOptions}) => destinationOptions.length > 0);
+      const indicators: Array<{id: string; col: number; row: number; color: string}> =
+        spiritTargetsWithDestinations.map(({targetEntity}) => ({
           id: targetEntity.id,
           col: targetEntity.col,
           row: targetEntity.row,
           color: SPIRIT_ABILITY_INDICATOR_COLOR,
         }));
+      spiritTargetsWithDestinations.forEach(({targetEntity, destinationOptions}) => {
+        if (
+          targetEntity.kind !== 'mon' ||
+          targetEntity.side === undefined ||
+          targetEntity.monType !== 'drainer' ||
+          targetEntity.heldItemKind === 'bomb'
+        ) {
+          return;
+        }
+        const drainerHoldsMana = boardEntities.some(
+          (entity) =>
+            !entity.isScored &&
+            entity.carriedByDrainerId === targetEntity.id &&
+            isManaEntityKind(entity.kind),
+        );
+        if (!drainerHoldsMana) {
+          return;
+        }
+        destinationOptions.forEach((option) => {
+          const destinationMana = visibleBoardEntities.find(
+            (entity) =>
+              entity.col === option.col &&
+              entity.row === option.row &&
+              isManaEntityKind(entity.kind),
+          );
+          if (destinationMana === undefined) {
+            return;
+          }
+          indicators.push({
+            id: `spirit-drainer-mana-destination-${targetEntity.id}-${option.col}-${option.row}`,
+            col: option.col,
+            row: option.row,
+            color: SPIRIT_ABILITY_INDICATOR_COLOR,
+          });
+        });
+      });
+      return indicators;
     }
 
     return visibleBoardEntities
@@ -3064,6 +3149,65 @@ export default function SuperMetalMonsBoard({
     enableFreeTileMove,
     faintedMonIdSet,
     isSandboxFreeMoveBoard,
+    isResetAnimating,
+    pendingDemonRebound,
+    pendingSpiritPush,
+    selectedMovableTile,
+    visibleBoardEntities,
+  ]);
+  const attackTargetHighlightMonIdSet = useMemo(() => {
+    if (
+      !enableFreeTileMove ||
+      isResetAnimating ||
+      pendingDemonRebound !== null ||
+      pendingSpiritPush !== null ||
+      selectedMovableTile === null
+    ) {
+      return new Set<string>();
+    }
+    const selectedEntity = visibleBoardEntities.find(
+      (entity) =>
+        entity.col === selectedMovableTile.col &&
+        entity.row === selectedMovableTile.row,
+    );
+    if (
+      selectedEntity === undefined ||
+      selectedEntity.kind !== 'mon' ||
+      selectedEntity.side === undefined ||
+      selectedEntity.monType === undefined
+    ) {
+      return new Set<string>();
+    }
+    if (selectedEntity.monType !== 'demon' && selectedEntity.monType !== 'mystic') {
+      return new Set<string>();
+    }
+    if (isAbilityUserBlockedOnOwnSpawn(selectedEntity)) {
+      return new Set<string>();
+    }
+    const monIdSet = new Set(
+      visibleBoardEntities
+        .filter(
+          (entity): entity is BoardEntity & {
+            kind: 'mon';
+            side: 'black' | 'white';
+            monType: MonType;
+          } =>
+            entity.kind === 'mon' &&
+            entity.side !== undefined &&
+            entity.monType !== undefined,
+        )
+        .map((entity) => entity.id),
+    );
+    const highlightedTargetIdSet = new Set<string>();
+    attackIndicatorTargets.forEach((target) => {
+      if (monIdSet.has(target.id)) {
+        highlightedTargetIdSet.add(target.id);
+      }
+    });
+    return highlightedTargetIdSet;
+  }, [
+    attackIndicatorTargets,
+    enableFreeTileMove,
     isResetAnimating,
     pendingDemonRebound,
     pendingSpiritPush,
@@ -3612,6 +3756,49 @@ export default function SuperMetalMonsBoard({
   }, [renderedAngelProtectionZones]);
   const pendingDemonReboundDots = pendingDemonRebound?.reboundOptions ?? [];
   const pendingSpiritPushDots = pendingSpiritPush?.destinationOptions ?? [];
+  const pendingSpiritPushAttackIndicators = useMemo(() => {
+    if (pendingSpiritPush === null) {
+      return [];
+    }
+    const targetEntity = visibleBoardEntities.find(
+      (entity) => entity.id === pendingSpiritPush.targetId,
+    );
+    if (
+      targetEntity === undefined ||
+      targetEntity.kind !== 'mon' ||
+      targetEntity.side === undefined ||
+      targetEntity.monType !== 'drainer' ||
+      targetEntity.heldItemKind === 'bomb'
+    ) {
+      return [];
+    }
+    const drainerHoldsMana = boardEntities.some(
+      (entity) =>
+        !entity.isScored &&
+        entity.carriedByDrainerId === targetEntity.id &&
+        isManaEntityKind(entity.kind),
+    );
+    if (!drainerHoldsMana) {
+      return [];
+    }
+    return pendingSpiritPush.destinationOptions
+      .filter((option) =>
+        visibleBoardEntities.some(
+          (entity) =>
+            !entity.isScored &&
+            entity.carriedByDrainerId === undefined &&
+            entity.col === option.col &&
+            entity.row === option.row &&
+            isManaEntityKind(entity.kind),
+        ),
+      )
+      .map((option) => ({
+        id: `pending-spirit-drainer-mana-${targetEntity.id}-${option.col}-${option.row}`,
+        col: option.col,
+        row: option.row,
+        color: SPIRIT_ABILITY_INDICATOR_COLOR,
+      }));
+  }, [boardEntities, pendingSpiritPush, visibleBoardEntities]);
   const selectedBoardScaleGroup: BoardScaleGroup | null =
     selectedTileKey === null
       ? null
@@ -4527,6 +4714,7 @@ export default function SuperMetalMonsBoard({
     setOpponentPotionCount(opponentStartingPotionCount);
     setFaintedMonIdSet(new Set());
     previouslyScoredManaIdsRef.current = new Set();
+    forcedManaScoreSideByIdRef.current = {};
     triggerResetFadeInForEntities(scoredManaEntityIds);
     triggerGhostFadeInForTiles(resetGhostFadeTileKeys);
     const hasAnimationSteps = Object.keys(nextAnimationById).length > 0;
@@ -5101,42 +5289,15 @@ export default function SuperMetalMonsBoard({
                 });
                 return;
               }
-              const spiritPushTargetEntity = visibleBoardEntities.find(
-                (entity) => entity.id === pendingSpiritPush.targetId,
-              );
               const isSpiritPushDestinationManaPool = cornerManaPoolTileKeySet.has(
                 toTileKey(destinationChoice.col, destinationChoice.row),
               );
-              const spiritPushTargetCarriedManaEntity =
-                spiritPushTargetEntity !== undefined &&
-                spiritPushTargetEntity.kind === 'mon' &&
-                spiritPushTargetEntity.monType === 'drainer'
-                  ? boardEntities.find(
-                      (entity) =>
-                        !entity.isScored &&
-                        entity.carriedByDrainerId === spiritPushTargetEntity.id &&
-                        isManaEntityKind(entity.kind),
-                    )
-                  : undefined;
-              const scoredSpiritPushedMana =
-                isSpiritPushDestinationManaPool &&
-                spiritPushTargetEntity !== undefined &&
-                isManaEntityKind(spiritPushTargetEntity.kind)
-                  ? {
-                      id: spiritPushTargetEntity.id,
-                      href: spiritPushTargetEntity.href,
-                      col: destinationChoice.col,
-                      row: destinationChoice.row,
-                    }
-                  : isSpiritPushDestinationManaPool &&
-                      spiritPushTargetCarriedManaEntity !== undefined
-                    ? {
-                        id: spiritPushTargetCarriedManaEntity.id,
-                        href: spiritPushTargetCarriedManaEntity.href,
-                        col: destinationChoice.col,
-                        row: destinationChoice.row,
-                      }
-                    : null;
+              let scoredSpiritPushedMana: {
+                id: string;
+                href: string;
+                col: number;
+                row: number;
+              } | null = null;
               setBoardEntities((currentEntities) => {
                 const spiritIndex = currentEntities.findIndex(
                   (entity) => entity.id === pendingSpiritPush.spiritId,
@@ -5157,10 +5318,7 @@ export default function SuperMetalMonsBoard({
                 ) {
                   return currentEntities;
                 }
-                if (!canEntityMoveToTile(target, destinationChoice.col, destinationChoice.row)) {
-                  return currentEntities;
-                }
-                const isDestinationOccupied = currentEntities.some(
+                const destinationOccupants = currentEntities.filter(
                   (entity) =>
                     entity.id !== target.id &&
                     !entity.isScored &&
@@ -5168,24 +5326,155 @@ export default function SuperMetalMonsBoard({
                     entity.col === destinationChoice.col &&
                     entity.row === destinationChoice.row,
                 );
-                if (isDestinationOccupied) {
+                if (destinationOccupants.length > 1) {
+                  return currentEntities;
+                }
+                const destinationOccupant =
+                  destinationOccupants.length === 1 ? destinationOccupants[0] : null;
+                const destinationDrainer =
+                  destinationOccupant !== null &&
+                  destinationOccupant.kind === 'mon' &&
+                  destinationOccupant.side !== undefined &&
+                  destinationOccupant.monType === 'drainer'
+                    ? destinationOccupant
+                    : null;
+                const destinationMana =
+                  destinationOccupant !== null && isManaEntityKind(destinationOccupant.kind)
+                    ? destinationOccupant
+                    : null;
+                const isManaPushedIntoDrainerHands =
+                  isManaEntityKind(target.kind) && destinationDrainer !== null;
+                const isDrainerPushedOntoAdjacentMana =
+                  target.kind === 'mon' &&
+                  target.side !== undefined &&
+                  target.monType === 'drainer' &&
+                  destinationMana !== null;
+                if (
+                  !isManaPushedIntoDrainerHands &&
+                  !canEntityMoveToTile(target, destinationChoice.col, destinationChoice.row)
+                ) {
+                  return currentEntities;
+                }
+                if (isManaPushedIntoDrainerHands && destinationDrainer.heldItemKind === 'bomb') {
+                  return currentEntities;
+                }
+                if (
+                  isDrainerPushedOntoAdjacentMana &&
+                  target.kind === 'mon' &&
+                  target.heldItemKind === 'bomb'
+                ) {
+                  return currentEntities;
+                }
+                if (
+                  destinationOccupant !== null &&
+                  !isManaPushedIntoDrainerHands &&
+                  !isDrainerPushedOntoAdjacentMana
+                ) {
                   return currentEntities;
                 }
                 const nextEntities = [...currentEntities];
-                const isDestinationManaPool = isSpiritPushDestinationManaPool;
+                if (isManaPushedIntoDrainerHands) {
+                  const pushedMana = target;
+                  const receiverDrainer = destinationDrainer;
+                  const receiverCarriedManaIndex = currentEntities.findIndex(
+                    (entity) =>
+                      !entity.isScored &&
+                      entity.carriedByDrainerId === receiverDrainer.id &&
+                      isManaEntityKind(entity.kind),
+                  );
+                  if (isSpiritPushDestinationManaPool) {
+                    nextEntities[targetIndex] = {
+                      ...pushedMana,
+                      col: destinationChoice.col,
+                      row: destinationChoice.row,
+                      carriedByDrainerId: undefined,
+                      isScored: true,
+                    };
+                    scoredSpiritPushedMana = {
+                      id: pushedMana.id,
+                      href: pushedMana.href,
+                      col: destinationChoice.col,
+                      row: destinationChoice.row,
+                    };
+                    forcedManaScoreSideByIdRef.current[pushedMana.id] = spirit.side;
+                    return nextEntities;
+                  }
+                  if (receiverCarriedManaIndex !== -1 && receiverCarriedManaIndex !== targetIndex) {
+                    const receiverCarriedMana = currentEntities[receiverCarriedManaIndex];
+                    nextEntities[receiverCarriedManaIndex] = {
+                      ...receiverCarriedMana,
+                      col: pushedMana.col,
+                      row: pushedMana.row,
+                      carriedByDrainerId: undefined,
+                    };
+                  }
+                  nextEntities[targetIndex] = {
+                    ...pushedMana,
+                    col: destinationChoice.col,
+                    row: destinationChoice.row,
+                    carriedByDrainerId: receiverDrainer.id,
+                  };
+                  return nextEntities;
+                }
+                if (isDrainerPushedOntoAdjacentMana && target.kind === 'mon') {
+                  const pushedDrainer = target;
+                  const pickedUpManaIndex = currentEntities.findIndex(
+                    (entity) => entity.id === destinationMana.id,
+                  );
+                  if (pickedUpManaIndex === -1) {
+                    return currentEntities;
+                  }
+                  const carriedManaIndex = currentEntities.findIndex(
+                    (entity) =>
+                      !entity.isScored &&
+                      entity.carriedByDrainerId === pushedDrainer.id &&
+                      (entity.kind === 'whiteMana' ||
+                        entity.kind === 'blackMana' ||
+                        entity.kind === 'superMana'),
+                  );
+                  nextEntities[targetIndex] = {
+                    ...pushedDrainer,
+                    col: destinationChoice.col,
+                    row: destinationChoice.row,
+                  };
+                  if (carriedManaIndex !== -1 && carriedManaIndex !== pickedUpManaIndex) {
+                    const carriedMana = currentEntities[carriedManaIndex];
+                    nextEntities[carriedManaIndex] = {
+                      ...carriedMana,
+                      col: pushedDrainer.col,
+                      row: pushedDrainer.row,
+                      carriedByDrainerId: undefined,
+                    };
+                  }
+                  nextEntities[pickedUpManaIndex] = {
+                    ...currentEntities[pickedUpManaIndex],
+                    col: destinationChoice.col,
+                    row: destinationChoice.row,
+                    carriedByDrainerId: pushedDrainer.id,
+                  };
+                  return nextEntities;
+                }
                 nextEntities[targetIndex] = {
                   ...target,
                   col: destinationChoice.col,
                   row: destinationChoice.row,
                   isScored:
-                    isDestinationManaPool && isManaEntityKind(target.kind)
+                    isSpiritPushDestinationManaPool && isManaEntityKind(target.kind)
                       ? true
                       : target.isScored,
                   carriedByDrainerId:
-                    isDestinationManaPool && isManaEntityKind(target.kind)
+                    isSpiritPushDestinationManaPool && isManaEntityKind(target.kind)
                       ? undefined
                       : target.carriedByDrainerId,
                 };
+                if (isSpiritPushDestinationManaPool && isManaEntityKind(target.kind)) {
+                  scoredSpiritPushedMana = {
+                    id: target.id,
+                    href: target.href,
+                    col: destinationChoice.col,
+                    row: destinationChoice.row,
+                  };
+                }
                 if (target.kind === 'mon' && target.monType === 'drainer') {
                   const carriedManaIndex = currentEntities.findIndex(
                     (entity) =>
@@ -5200,11 +5489,19 @@ export default function SuperMetalMonsBoard({
                       ...nextEntities[carriedManaIndex],
                       col: destinationChoice.col,
                       row: destinationChoice.row,
-                      isScored: isDestinationManaPool,
-                      carriedByDrainerId: isDestinationManaPool
+                      isScored: isSpiritPushDestinationManaPool,
+                      carriedByDrainerId: isSpiritPushDestinationManaPool
                         ? undefined
                         : nextEntities[carriedManaIndex].carriedByDrainerId,
                     };
+                    if (isSpiritPushDestinationManaPool) {
+                      scoredSpiritPushedMana = {
+                        id: nextEntities[carriedManaIndex].id,
+                        href: nextEntities[carriedManaIndex].href,
+                        col: destinationChoice.col,
+                        row: destinationChoice.row,
+                      };
+                    }
                   }
                 }
                 return nextEntities;
@@ -6259,9 +6556,10 @@ export default function SuperMetalMonsBoard({
                 ? null
                 : (
 		              <image
-	                key={`spawn-ghost-${index}`}
-                  className="spawn-ghost-image"
-	                href={ghost.href}
+		                key={`spawn-ghost-${index}`}
+	                  data-billboard-ignore="true"
+	                  className="spawn-ghost-image"
+		                href={ghost.href}
 	                x={ghost.col + spawnGhostInsetUnits}
 	                y={ghost.row + spawnGhostInsetUnits}
                 width={spawnGhostSizeUnits}
@@ -6280,9 +6578,10 @@ export default function SuperMetalMonsBoard({
                 puzzleStartGhostHiddenTileKeySet.has(toTileKey(ghost.col, ghost.row))
                   ? null
                   : (
-	                <image
-	                  key={`puzzle-start-ghost-${index}`}
-	                  href={ghost.href}
+		                <image
+		                  key={`puzzle-start-ghost-${index}`}
+		                  data-billboard-ignore="true"
+		                  href={ghost.href}
 	                  x={ghost.col + puzzleStartGhostInsetUnits}
 	                  y={ghost.row + puzzleStartGhostInsetUnits}
                   width={puzzleStartGhostSizeUnits}
@@ -6403,6 +6702,7 @@ export default function SuperMetalMonsBoard({
             return (
               <image
                 key={entity.id}
+                data-billboard-id={entity.id}
                 href={boardAssets.manaB}
                 x={frame.x}
                 y={frame.y}
@@ -6421,6 +6721,7 @@ export default function SuperMetalMonsBoard({
             return (
               <image
                 key={entity.id}
+                data-billboard-id={entity.id}
                 href={boardAssets.mana}
                 x={frame.x}
                 y={frame.y}
@@ -6439,6 +6740,7 @@ export default function SuperMetalMonsBoard({
             return (
               <image
                 key={entity.id}
+                data-billboard-id={entity.id}
                 href={boardAssets.supermana}
                 x={frame.x}
                 y={frame.y}
@@ -6455,6 +6757,7 @@ export default function SuperMetalMonsBoard({
           return (
             <image
               key={`scored-mana-fade-${sprite.id}`}
+              data-billboard-ignore="true"
               href={sprite.href}
               x={frame.x}
               y={frame.y}
@@ -6541,6 +6844,7 @@ export default function SuperMetalMonsBoard({
             return (
               <image
                 key={item.id}
+                data-billboard-id={item.id}
                 href={item.href}
                 x={frame.x}
                 y={frame.y}
@@ -6556,6 +6860,7 @@ export default function SuperMetalMonsBoard({
           (() => {
             const {col, row} = getRenderedEntityCoords(mon);
             const frame = getPieceFrame(row, col);
+            const isAttackTargetHighlighted = attackTargetHighlightMonIdSet.has(mon.id);
             const rotationCenterX = frame.x + frame.size / 2;
             const rotationCenterY = frame.y + frame.size / 2;
             const heldManaData =
@@ -6602,6 +6907,8 @@ export default function SuperMetalMonsBoard({
             return (
               <g key={mon.id}>
                 <image
+                  data-billboard-id={mon.id}
+                  data-attack-targeted={isAttackTargetHighlighted ? 'true' : undefined}
                   href={mon.href}
                   x={frame.x}
                   y={frame.y}
@@ -6620,6 +6927,7 @@ export default function SuperMetalMonsBoard({
                 />
                 {heldPieceHref !== undefined ? (
                   <image
+                    data-billboard-id={`${mon.id}-held`}
                     href={heldPieceHref}
                     x={heldManaX}
                     y={heldManaY}
@@ -6637,6 +6945,7 @@ export default function SuperMetalMonsBoard({
           (() => {
             const {col, row} = getRenderedEntityCoords(mon);
             const frame = getPieceFrame(row, col);
+            const isAttackTargetHighlighted = attackTargetHighlightMonIdSet.has(mon.id);
             const rotationCenterX = frame.x + frame.size / 2;
             const rotationCenterY = frame.y + frame.size / 2;
             const heldManaData =
@@ -6683,6 +6992,8 @@ export default function SuperMetalMonsBoard({
             return (
               <g key={mon.id}>
                 <image
+                  data-billboard-id={mon.id}
+                  data-attack-targeted={isAttackTargetHighlighted ? 'true' : undefined}
                   href={mon.href}
                   x={frame.x}
                   y={frame.y}
@@ -6701,6 +7012,7 @@ export default function SuperMetalMonsBoard({
                 />
                 {heldPieceHref !== undefined ? (
                   <image
+                    data-billboard-id={`${mon.id}-held`}
                     href={heldPieceHref}
                     x={heldManaX}
                     y={heldManaY}
@@ -7018,6 +7330,33 @@ export default function SuperMetalMonsBoard({
           const bottom = target.row + 1;
           return (
             <g key={`attack-indicator-${target.id}`} pointerEvents="none" opacity={0.92}>
+              <polygon
+                points={`${left},${top} ${left + cornerSize},${top} ${left},${top + cornerSize}`}
+                fill={target.color}
+              />
+              <polygon
+                points={`${right},${top} ${right - cornerSize},${top} ${right},${top + cornerSize}`}
+                fill={target.color}
+              />
+              <polygon
+                points={`${left},${bottom} ${left + cornerSize},${bottom} ${left},${bottom - cornerSize}`}
+                fill={target.color}
+              />
+              <polygon
+                points={`${right},${bottom} ${right - cornerSize},${bottom} ${right},${bottom - cornerSize}`}
+                fill={target.color}
+              />
+            </g>
+          );
+        })}
+        {pendingSpiritPushAttackIndicators.map((target) => {
+          const cornerSize = 0.24;
+          const left = target.col;
+          const top = target.row;
+          const right = target.col + 1;
+          const bottom = target.row + 1;
+          return (
+            <g key={`pending-spirit-attack-indicator-${target.id}`} pointerEvents="none" opacity={0.92}>
               <polygon
                 points={`${left},${top} ${left + cornerSize},${top} ${left},${top + cornerSize}`}
                 fill={target.color}
