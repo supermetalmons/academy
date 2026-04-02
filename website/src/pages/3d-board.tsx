@@ -1718,7 +1718,7 @@ export default function ThreeDBoardPage(): ReactNode {
         }
       `}</style>
       <div aria-label="3d board top bar" style={currentTopBarStyle}>
-        <span style={currentTopBarTitleStyle}>mons future aesthetic research</span>
+        <span style={currentTopBarTitleStyle}>mons future aesthetical research</span>
         <div style={topBarButtonsStyle}>
           <button
             type="button"
