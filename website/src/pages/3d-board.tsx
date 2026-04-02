@@ -68,6 +68,7 @@ const GRASS_TILE_LAYER_Z_PX = 0.02;
 const GRASS_CLOUD_LAYER_Z_PX = 0.14;
 const GRASS_ANTI_SHIMMER_MAX_TILE_SCALE = 1.55;
 const GRASS_ANTI_SHIMMER_MAX_BLUR_PX = 0.58;
+const GRASS_STABLE_BLUR_PX = 0.24;
 const GRASS_LOW_ANGLE_PATTERN_FADE_MAX = 0.9;
 const GRASS_LOW_ANGLE_BASE_FILL_MAX = 0.92;
 const BOARD_LOW_ANGLE_STABILITY_BLUR_MAX_PX = 0.72;
@@ -1462,48 +1463,16 @@ export default function ThreeDBoardPage(): ReactNode {
   );
   const boardLowAngleBlurPx =
     BOARD_LOW_ANGLE_STABILITY_BLUR_MAX_PX * Math.pow(lowAngleAntiShimmerBlend, 1.08);
-  const boardSvgCompositeFilter =
-    boardLowAngleBlurPx > 0.01
-      ? `contrast(${boardStabilizedContrast.toFixed(
-          3,
-        )}) saturate(${boardStabilizedSaturate.toFixed(
-          3,
-        )}) blur(${boardLowAngleBlurPx.toFixed(3)}px)`
-      : 'none';
-  const boardSvgShapeRendering = 'auto';
+  const boardSvgCompositeFilter = 'none';
+  const boardSvgShapeRendering = 'geometricPrecision';
   const boardSvgImageRendering = 'auto';
   const boardGlossOpacity = clamp(1 - antiFlickerSmoothBlend * 0.72, 0.16, 1);
-  const grassAntiShimmerBlend = clamp(
-    Math.max(antiFlickerSmoothBlend, lowAngleAntiShimmerBlend),
-    0,
-    1,
-  );
-  const shouldUseSmoothGrassRendering = grassAntiShimmerBlend > 0.03 || zoomScale <= 0.92;
-  const grassTextureTileScale =
-    1 + grassAntiShimmerBlend * (GRASS_ANTI_SHIMMER_MAX_TILE_SCALE - 1);
-  const grassTextureTileSizePx = Math.round(GRASS_PLANE_TILE_SIZE_PX * grassTextureTileScale);
-  const grassTextureBlurPx =
-    GRASS_ANTI_SHIMMER_MAX_BLUR_PX *
-    clamp(
-      Math.max(grassAntiShimmerBlend, Math.pow(lowAngleAntiShimmerBlend, 1.15)),
-      0,
-      1,
-    );
-  const grassPatternOpacity = clamp(
-    1 - lowAngleAntiShimmerBlend * GRASS_LOW_ANGLE_PATTERN_FADE_MAX,
-    0.12,
-    1,
-  );
-  const grassBaseFillOpacity = clamp(
-    lowAngleAntiShimmerBlend * GRASS_LOW_ANGLE_BASE_FILL_MAX,
-    0,
-    GRASS_LOW_ANGLE_BASE_FILL_MAX,
-  );
-  const grassCloudOpacityMultiplier = clamp(
-    1 - Math.max(antiFlickerSmoothBlend, lowAngleAntiShimmerBlend * 1.22) * 1.15,
-    0,
-    1,
-  );
+  const shouldUseSmoothGrassRendering = true;
+  const grassTextureTileSizePx = GRASS_PLANE_TILE_SIZE_PX;
+  const grassTextureBlurPx = GRASS_STABLE_BLUR_PX;
+  const grassPatternOpacity = 1;
+  const grassBaseFillOpacity = 0;
+  const grassCloudOpacityMultiplier = 1;
   const grassEdgeFadeColor = isDarkMode ? '7,9,14' : '255,255,255';
   const currentPageStyle: CSSProperties = isDarkMode
     ? {
