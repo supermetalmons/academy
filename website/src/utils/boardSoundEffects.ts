@@ -43,20 +43,36 @@ const SOUND_FILE_BY_KEY: Record<BoardSoundEffectKey, string> = {
 const DEFAULT_VOLUME_BY_KEY: Partial<Record<BoardSoundEffectKey, number>> = {};
 
 const audioCache = new Map<BoardSoundEffectKey, HTMLAudioElement>();
+const preloadedSoundHrefs = new Set<string>();
 
 function getSoundUrl(key: BoardSoundEffectKey): string {
   return `${SOUND_BASE_URL}${SOUND_FILE_BY_KEY[key]}.mp3`;
+}
+
+function preloadSoundHref(href: string): void {
+  if (typeof document === 'undefined' || preloadedSoundHrefs.has(href)) {
+    return;
+  }
+  preloadedSoundHrefs.add(href);
+  const link = document.createElement('link');
+  link.rel = 'preload';
+  link.as = 'audio';
+  link.href = href;
+  link.type = 'audio/mpeg';
+  document.head.append(link);
 }
 
 function getBaseAudio(key: BoardSoundEffectKey): HTMLAudioElement | null {
   if (typeof window === 'undefined') {
     return null;
   }
+  const soundUrl = getSoundUrl(key);
+  preloadSoundHref(soundUrl);
   const cached = audioCache.get(key);
   if (cached !== undefined) {
     return cached;
   }
-  const audio = new Audio(getSoundUrl(key));
+  const audio = new Audio(soundUrl);
   audio.preload = 'auto';
   audio.load();
   audioCache.set(key, audio);

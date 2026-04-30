@@ -1991,11 +1991,8 @@ export default function SuperMetalMonsBoard({
     enableInstructionAbilityDemos && !enableFreeTileMove && boardPreset === 'default';
 
   useEffect(() => {
-    if (!enableFreeTileMove && !enableInstructionAbilityDemos) {
-      return;
-    }
     preloadBoardSoundEffects();
-  }, [enableFreeTileMove, enableInstructionAbilityDemos]);
+  }, []);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const boardRowRef = useRef<HTMLDivElement | null>(null);
   const boardContainerRef = useRef<HTMLDivElement | null>(null);
@@ -2165,6 +2162,8 @@ export default function SuperMetalMonsBoard({
   const [pendingSpiritPush, setPendingSpiritPush] =
     useState<PendingSpiritPush | null>(null);
   const [hoveredItemChoice, setHoveredItemChoice] = useState<'bomb' | 'potion' | null>(null);
+  const isItemPickupChoiceOpen =
+    pendingItemPickupChoice !== null || instructionItemPickupChoiceTile !== null;
   const [resetFadeInByEntityId, setResetFadeInByEntityId] = useState<Record<string, boolean>>({});
   const [resetGhostFadeInByTileKey, setResetGhostFadeInByTileKey] = useState<Record<string, boolean>>({});
   const [winPiecePulsePhase, setWinPiecePulsePhase] = useState<'idle' | 'up' | 'down'>('idle');
@@ -2338,6 +2337,7 @@ export default function SuperMetalMonsBoard({
     isSameTile(selectedTile, instructionSelectedItemChoice.tile);
   const showInstructionPotionResource =
     instructionAbilityDemoState === null &&
+    !isItemPickupChoiceOpen &&
     isInstructionSelectedItemChoiceActive &&
     instructionSelectedItemChoice?.kind === 'potion';
   const exitingPlayerPotionResourceItems: MoveResourceDisplayItem[] =
@@ -3602,8 +3602,6 @@ export default function SuperMetalMonsBoard({
       window.clearInterval(intervalId);
     };
   }, []);
-  const isItemPickupChoiceOpen =
-    pendingItemPickupChoice !== null || instructionItemPickupChoiceTile !== null;
   useEffect(() => {
     onItemPickupChoiceOpenChange?.(isItemPickupChoiceOpen);
   }, [isItemPickupChoiceOpen, onItemPickupChoiceOpenChange]);
@@ -3647,6 +3645,7 @@ export default function SuperMetalMonsBoard({
       }
       setSelectedTile(null);
       setSelectedMoveResourceId(null);
+      setInstructionSelectedItemChoice(null);
     };
 
     document.addEventListener('pointerdown', clearSelectionOnOutsideClick);
@@ -4209,7 +4208,9 @@ export default function SuperMetalMonsBoard({
   activePickupItems.forEach((item) => {
     const itemTileKey = toTileKey(item.col, item.row);
     const selectedInstructionItemKind =
-      isInstructionSelectedItemChoiceActive && instructionSelectedItemTileKey === itemTileKey
+      !isItemPickupChoiceOpen &&
+      isInstructionSelectedItemChoiceActive &&
+      instructionSelectedItemTileKey === itemTileKey
         ? instructionSelectedItemChoice?.kind ?? null
         : null;
     const itemInfo =
@@ -5772,7 +5773,9 @@ export default function SuperMetalMonsBoard({
     return selectedEntity === undefined ? null : {id: selectedEntity.id};
   }, [boardEntities, canRunInstructionAbilityDemo, selectedTile]);
   const selectedInstructionItemDemo =
-    isInstructionSelectedItemChoiceActive ? instructionSelectedItemChoice?.kind ?? null : null;
+    !isItemPickupChoiceOpen && isInstructionSelectedItemChoiceActive
+      ? instructionSelectedItemChoice?.kind ?? null
+      : null;
 
   useEffect(() => {
     instructionAbilityDemoRunIdRef.current += 1;
@@ -6200,11 +6203,13 @@ export default function SuperMetalMonsBoard({
       const whiteDemonId = defaultInstructionDemoEntityIds.white.demon;
       const whiteSpiritId = defaultInstructionDemoEntityIds.white.spirit;
       const whiteDrainerId = defaultInstructionDemoEntityIds.white.drainer;
+      const blackAngelId = defaultInstructionDemoEntityIds.black.angel;
       const blackDrainerId = defaultInstructionDemoEntityIds.black.drainer;
       const superManaId = 'super-mana-default-0';
       const a6 = boardTile('A', 6);
       const b7 = boardTile('B', 7);
       const c10 = boardTile('C', 10);
+      const d10 = boardTile('D', 10);
       const f1 = boardTile('F', 1);
       const f6 = boardTile('F', 6);
       const h7 = boardTile('H', 7);
@@ -6253,6 +6258,7 @@ export default function SuperMetalMonsBoard({
             ...a6,
             heldItemKind: 'bomb',
           },
+          [blackAngelId]: d10,
           [blackDrainerId]: c10,
           ...(a6ItemId !== undefined ? {[a6ItemId]: {isScored: true}} : {}),
           [superManaId]: {
@@ -6402,6 +6408,11 @@ export default function SuperMetalMonsBoard({
                   {
                     id: `instruction-bomb-target-${blackDrainerId}`,
                     ...c10,
+                    color: DEFAULT_ATTACK_INDICATOR_COLOR,
+                  },
+                  {
+                    id: `instruction-bomb-target-${blackAngelId}`,
+                    ...d10,
                     color: DEFAULT_ATTACK_INDICATOR_COLOR,
                   },
                 ],
@@ -7039,6 +7050,9 @@ export default function SuperMetalMonsBoard({
             updateBoardEntity(entities, actorIds.demon, c2),
           transitionEntityIds: [actorIds.demon],
           movementResourceCost: 1,
+        },
+        {
+          update: (entities) => entities,
         },
         {
           update: (entities) =>
@@ -7753,6 +7767,7 @@ export default function SuperMetalMonsBoard({
                 event.stopPropagation();
                 setPendingItemPickupChoice(null);
                 setInstructionItemPickupChoiceTile(null);
+                setInstructionSelectedItemChoice(null);
                 setHoveredItemChoice(null);
               }}
             />
@@ -11171,6 +11186,7 @@ export default function SuperMetalMonsBoard({
             if (isInstructionBoard && clickedEntity?.kind === 'item') {
               setSelectedTile(targetTile);
               setSelectedMoveResourceId(null);
+              setInstructionSelectedItemChoice(null);
               setInstructionItemPickupChoiceTile(targetTile);
               setHoveredItemChoice(null);
               return;
