@@ -1,5 +1,5 @@
-import {useEffect, useRef, useState} from 'react';
-import type {CSSProperties, ReactNode} from 'react';
+import {useEffect, useMemo, useRef, useState} from 'react';
+import type {CSSProperties, PointerEvent as ReactPointerEvent, ReactNode} from 'react';
 import BlankSectionPage from '@site/src/components/BlankSectionPage';
 import ResourcesSubnav from '@site/src/components/ResourcesSubnav';
 import {otherPicsImages, selectedMemesImages} from '@site/src/data/resourcesGalleryImages';
@@ -8,6 +8,8 @@ const GALLERY_MIN_TILE_WIDTH_PX = 140;
 const GALLERY_GRID_GAP_PX = 9;
 const GALLERY_ROWS_PER_PAGE = 3;
 const DEFAULT_GALLERY_COLUMNS = 4;
+const GALLERY_IMAGE_ORDER_STORAGE_KEY = 'mons-academy-gallery-image-order-v1';
+const GALLERY_EDGE_PAGE_FLIP_DELAY_MS = 1000;
 
 const galleryWrapStyle: CSSProperties = {
   display: 'flex',
@@ -93,11 +95,19 @@ const imageLinkStyle: CSSProperties = {
   transition: 'transform 190ms ease, box-shadow 190ms ease, filter 190ms ease',
   transform: 'scale(1)',
   transformOrigin: 'center',
+  touchAction: 'none',
+  userSelect: 'none',
 };
 
 const imageLinkHoverStyle: CSSProperties = {
   transform: 'scale(1.035)',
   filter: 'brightness(1.03)',
+};
+
+const imageLinkDraggingStyle: CSSProperties = {
+  opacity: 0.46,
+  transform: 'scale(0.96)',
+  filter: 'brightness(0.98) saturate(0.86)',
 };
 
 const imageStyle: CSSProperties = {
@@ -110,6 +120,22 @@ const imageStyle: CSSProperties = {
   filter: 'saturate(1.02) contrast(0.99)',
   transform: 'translateZ(0)',
   backfaceVisibility: 'hidden',
+  pointerEvents: 'none',
+};
+
+const dragPreviewStyle: CSSProperties = {
+  position: 'fixed',
+  left: 0,
+  top: 0,
+  zIndex: 13000,
+  border: '1px solid #000',
+  backgroundColor: '#fff',
+  boxShadow: '0 14px 28px rgba(0, 0, 0, 0.24)',
+  lineHeight: 0,
+  pointerEvents: 'none',
+  overflow: 'hidden',
+  transform: 'translate(-50%, -50%) scale(1.035)',
+  opacity: 0.92,
 };
 
 const imagePlaceholderStyle: CSSProperties = {
@@ -227,12 +253,74 @@ const previewImageStyle: CSSProperties = {
   borderRadius: '9px',
 };
 
-const gallerySections = [
+const previewArrowButtonStyle: CSSProperties = {
+  position: 'fixed',
+  top: '50%',
+  zIndex: 1,
+  width: 'clamp(2.35rem, 6vw, 3.35rem)',
+  height: 'clamp(2.35rem, 6vw, 3.35rem)',
+  border: 'none',
+  borderRadius: '999px',
+  backgroundColor: 'transparent',
+  color: '#000',
+  cursor: 'pointer',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  lineHeight: 1,
+  padding: 0,
+  transform: 'translateY(-50%)',
+  userSelect: 'none',
+};
+
+const previewArrowVisualStyle: CSSProperties = {
+  width: 'clamp(1.72rem, 4.6vw, 2.36rem)',
+  height: 'clamp(1.72rem, 4.6vw, 2.36rem)',
+  border: '1px solid rgba(0, 0, 0, 0.22)',
+  borderRadius: '999px',
+  backgroundColor: 'rgba(255, 255, 255, 0.78)',
+  boxShadow: '0 5px 14px rgba(0, 0, 0, 0.11)',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  transition: 'background-color 150ms ease, transform 150ms ease',
+};
+
+const previewArrowGlyphStyle: CSSProperties = {
+  display: 'inline-block',
+  fontSize: 'clamp(1.08rem, 3vw, 1.52rem)',
+  lineHeight: 1,
+  transform: 'translateY(-2px)',
+};
+
+const gallerySectionsBase = [
   {id: 'selected-memes', title: 'Selected memes/edits', images: selectedMemesImages},
   {id: 'other-pics', title: 'Other pics', images: otherPicsImages},
 ] as const;
 
-const ALL_GALLERY_IMAGES = gallerySections.flatMap((section) => section.images) as readonly string[];
+type GalleryDragSession = {
+  sectionId: string;
+  src: string;
+  startX: number;
+  startY: number;
+  tileWidth: number;
+  tileHeight: number;
+  hasDragged: boolean;
+};
+
+type GalleryDragPreview = {
+  src: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+type GalleryOrderWindow = Window & {
+  __monsAcademyGalleryImageOrder?: Record<string, string[]>;
+  __monsAcademyGalleryImageOrderStorageKey?: string;
+};
+
 const galleryImageElementCache: Record<string, HTMLImageElement> = {};
 const galleryImagePromiseCache = new Map<string, Promise<void>>();
 const galleryImageLoadedCache = new Set<string>();
@@ -242,22 +330,351 @@ function getColumnCount(widthPx: number): number {
   return Math.max(2, raw);
 }
 
+function getDefaultGalleryImageOrder(): Record<string, string[]> {
+  return Object.fromEntries(
+    gallerySectionsBase.map((section) => [section.id, Array.from(section.images)]),
+  );
+}
+
+function normalizeGalleryImageOrder(rawOrder: unknown): Record<string, string[]> {
+  const orderRecord =
+    rawOrder !== null && typeof rawOrder === 'object'
+      ? (rawOrder as Record<string, unknown>)
+      : {};
+  const nextOrder: Record<string, string[]> = {};
+  gallerySectionsBase.forEach((section) => {
+    const defaultImages = Array.from(section.images);
+    const defaultImageSet = new Set(defaultImages);
+    const savedImages = Array.isArray(orderRecord[section.id])
+      ? (orderRecord[section.id] as unknown[])
+      : [];
+    const seen = new Set<string>();
+    const validSavedImages = savedImages.filter((image): image is string => {
+      if (
+        typeof image !== 'string' ||
+        !defaultImageSet.has(image) ||
+        seen.has(image)
+      ) {
+        return false;
+      }
+      seen.add(image);
+      return true;
+    });
+    nextOrder[section.id] = [
+      ...validSavedImages,
+      ...defaultImages.filter((image) => !seen.has(image)),
+    ];
+  });
+  return nextOrder;
+}
+
+function readGalleryImageOrderFromStorage(): Record<string, string[]> {
+  if (typeof window === 'undefined') {
+    return getDefaultGalleryImageOrder();
+  }
+  try {
+    return normalizeGalleryImageOrder(
+      JSON.parse(window.localStorage.getItem(GALLERY_IMAGE_ORDER_STORAGE_KEY) ?? 'null'),
+    );
+  } catch {
+    return getDefaultGalleryImageOrder();
+  }
+}
+
+function writeGalleryImageOrderToStorage(nextOrder: Record<string, string[]>): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  try {
+    window.localStorage.setItem(
+      GALLERY_IMAGE_ORDER_STORAGE_KEY,
+      JSON.stringify(normalizeGalleryImageOrder(nextOrder)),
+    );
+  } catch {
+    // Ignore storage write issues.
+  }
+}
+
 export default function ResourcesGalleryPage(): ReactNode {
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const [sectionColumnsById, setSectionColumnsById] = useState<Record<string, number>>({});
   const [sectionPageById, setSectionPageById] = useState<Record<string, number>>({});
+  const [orderedImagesBySectionId, setOrderedImagesBySectionId] = useState<Record<string, string[]>>(
+    () => getDefaultGalleryImageOrder(),
+  );
   const [hoveredImageSrc, setHoveredImageSrc] = useState<string | null>(null);
   const [hoveredPaginationButton, setHoveredPaginationButton] = useState<string | null>(null);
+  const [hoveredPreviewArrow, setHoveredPreviewArrow] = useState<'next' | 'previous' | null>(null);
   const [previewImageSrc, setPreviewImageSrc] = useState<string | null>(null);
   const [previewTilt, setPreviewTilt] = useState({rotateX: 0, rotateY: 0});
+  const [dragPreview, setDragPreview] = useState<GalleryDragPreview | null>(null);
+  const [draggedImageSrc, setDraggedImageSrc] = useState<string | null>(null);
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
   const pageGridRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const previousPageByIdRef = useRef<Record<string, number>>({});
   const requestedPageByIdRef = useRef<Record<string, number>>({});
+  const orderedImagesBySectionIdRef = useRef(orderedImagesBySectionId);
+  const sectionColumnsByIdRef = useRef(sectionColumnsById);
+  const sectionPageByIdRef = useRef(sectionPageById);
+  const dragSessionRef = useRef<GalleryDragSession | null>(null);
+  const lastDragPointerRef = useRef<{x: number; y: number} | null>(null);
+  const edgePageFlipTimeoutRef = useRef<number | null>(null);
+  const edgePageFlipHoldRef = useRef<{sectionId: string; direction: -1 | 1} | null>(null);
+  const suppressNextClickRef = useRef(false);
+
+  const gallerySections = useMemo(
+    () =>
+      gallerySectionsBase.map((section) => ({
+        ...section,
+        images: orderedImagesBySectionId[section.id] ?? Array.from(section.images),
+      })),
+    [orderedImagesBySectionId],
+  );
+
+  const allGalleryImages = useMemo(
+    () => gallerySections.flatMap((section) => section.images),
+    [gallerySections],
+  );
+
+  const previewGalleryContext = useMemo(() => {
+    if (!previewImageSrc) {
+      return null;
+    }
+    for (const section of gallerySections) {
+      const index = section.images.indexOf(previewImageSrc);
+      if (index >= 0) {
+        return {section, index};
+      }
+    }
+    return null;
+  }, [gallerySections, previewImageSrc]);
+
+  const previewGalleryImageCount = previewGalleryContext?.section.images.length ?? 0;
+  const previousPreviewImageSrc =
+    previewGalleryContext && previewGalleryImageCount > 1
+      ? previewGalleryContext.section.images[
+          (previewGalleryContext.index - 1 + previewGalleryImageCount) % previewGalleryImageCount
+        ] ?? null
+      : null;
+  const nextPreviewImageSrc =
+    previewGalleryContext && previewGalleryImageCount > 1
+      ? previewGalleryContext.section.images[
+          (previewGalleryContext.index + 1) % previewGalleryImageCount
+        ] ?? null
+      : null;
+
+  const showPreviewImage = (src: string): void => {
+    setPreviewTilt({rotateX: 0, rotateY: 0});
+    setPreviewImageSrc(src);
+    void preloadImage(src, 'high');
+  };
 
   const toggleSection = (sectionId: string): void => {
     setCollapsedSections((prev) => ({...prev, [sectionId]: !prev[sectionId]}));
   };
+
+  const getSectionImages = (sectionId: string): string[] => {
+    const savedImages = orderedImagesBySectionIdRef.current[sectionId];
+    if (savedImages) {
+      return savedImages;
+    }
+    const baseSection = gallerySectionsBase.find((section) => section.id === sectionId);
+    return baseSection ? Array.from(baseSection.images) : [];
+  };
+
+  const getSectionPageSize = (sectionId: string): number => {
+    const columns = sectionColumnsByIdRef.current[sectionId] ?? DEFAULT_GALLERY_COLUMNS;
+    return Math.max(1, columns * GALLERY_ROWS_PER_PAGE);
+  };
+
+  const clearEdgePageFlipTimer = (): void => {
+    if (edgePageFlipTimeoutRef.current !== null && typeof window !== 'undefined') {
+      window.clearTimeout(edgePageFlipTimeoutRef.current);
+    }
+    edgePageFlipTimeoutRef.current = null;
+    edgePageFlipHoldRef.current = null;
+  };
+
+  const getDropIndexForPointer = (sectionId: string, x: number, y: number): number | null => {
+    const grid = pageGridRefs.current[sectionId];
+    if (!grid) {
+      return null;
+    }
+    const rect = grid.getBoundingClientRect();
+    const verticalAllowance = Math.max(36, rect.height * 0.18);
+    if (y < rect.top - verticalAllowance || y > rect.bottom + verticalAllowance) {
+      return null;
+    }
+
+    const images = getSectionImages(sectionId);
+    const pageSize = getSectionPageSize(sectionId);
+    const totalPages = Math.max(1, Math.ceil(images.length / pageSize));
+    const currentPage = Math.min(sectionPageByIdRef.current[sectionId] ?? 0, totalPages - 1);
+    const startIndex = currentPage * pageSize;
+    const pageEndIndex = Math.min(images.length, startIndex + pageSize);
+    if (x < rect.left) {
+      return startIndex;
+    }
+    if (x > rect.right) {
+      return pageEndIndex;
+    }
+
+    const columns = sectionColumnsByIdRef.current[sectionId] ?? DEFAULT_GALLERY_COLUMNS;
+    const columnWidth = Math.max(1, (rect.width - GALLERY_GRID_GAP_PX * (columns - 1)) / columns);
+    const rowHeight = Math.max(1, (rect.height - GALLERY_GRID_GAP_PX * (GALLERY_ROWS_PER_PAGE - 1)) / GALLERY_ROWS_PER_PAGE);
+    const relativeX = Math.min(Math.max(x - rect.left, 0), Math.max(0, rect.width - 1));
+    const relativeY = Math.min(Math.max(y - rect.top, 0), Math.max(0, rect.height - 1));
+    const columnPitch = columnWidth + GALLERY_GRID_GAP_PX;
+    const rowPitch = rowHeight + GALLERY_GRID_GAP_PX;
+    const column = Math.min(columns - 1, Math.max(0, Math.floor(relativeX / columnPitch)));
+    const row = Math.min(GALLERY_ROWS_PER_PAGE - 1, Math.max(0, Math.floor(relativeY / rowPitch)));
+    const withinColumnX = relativeX - column * columnPitch;
+    const shouldInsertAfterCell = withinColumnX > columnWidth / 2;
+    const pageIndex = Math.min(pageSize, row * columns + column + (shouldInsertAfterCell ? 1 : 0));
+    return Math.min(images.length, startIndex + pageIndex);
+  };
+
+  const moveImageInSection = (sectionId: string, src: string, targetIndex: number): void => {
+    const currentOrder = orderedImagesBySectionIdRef.current;
+    const currentImages = currentOrder[sectionId] ?? getSectionImages(sectionId);
+    const sourceIndex = currentImages.indexOf(src);
+    if (sourceIndex < 0) {
+      return;
+    }
+    const withoutDraggedImage = currentImages.filter((image) => image !== src);
+    const adjustedTargetIndex = Math.min(
+      withoutDraggedImage.length,
+      Math.max(0, sourceIndex < targetIndex ? targetIndex - 1 : targetIndex),
+    );
+    if (sourceIndex === adjustedTargetIndex) {
+      return;
+    }
+    const nextImages = Array.from(withoutDraggedImage);
+    nextImages.splice(adjustedTargetIndex, 0, src);
+    const nextOrder = normalizeGalleryImageOrder({
+      ...currentOrder,
+      [sectionId]: nextImages,
+    });
+    orderedImagesBySectionIdRef.current = nextOrder;
+    writeGalleryImageOrderToStorage(nextOrder);
+    setOrderedImagesBySectionId(nextOrder);
+  };
+
+  const scheduleEdgePageFlip = (sectionId: string, direction: -1 | 1): void => {
+    const currentHold = edgePageFlipHoldRef.current;
+    if (
+      edgePageFlipTimeoutRef.current !== null &&
+      currentHold?.sectionId === sectionId &&
+      currentHold.direction === direction
+    ) {
+      return;
+    }
+    clearEdgePageFlipTimer();
+    edgePageFlipHoldRef.current = {sectionId, direction};
+    edgePageFlipTimeoutRef.current = window.setTimeout(() => {
+      edgePageFlipTimeoutRef.current = null;
+      edgePageFlipHoldRef.current = null;
+      const session = dragSessionRef.current;
+      const pointer = lastDragPointerRef.current;
+      if (!session || session.sectionId !== sectionId || !pointer) {
+        return;
+      }
+      const images = getSectionImages(sectionId);
+      const pageSize = getSectionPageSize(sectionId);
+      const totalPages = Math.max(1, Math.ceil(images.length / pageSize));
+      const currentPage = Math.min(sectionPageByIdRef.current[sectionId] ?? 0, totalPages - 1);
+      const targetPage = currentPage + direction;
+      if (targetPage < 0 || targetPage >= totalPages) {
+        return;
+      }
+      handlePageChange(sectionId, targetPage, getImagesForPage(images, targetPage, pageSize));
+      const targetStartIndex = targetPage * pageSize;
+      const targetEndIndex = Math.min(images.length, targetStartIndex + pageSize);
+      moveImageInSection(
+        sectionId,
+        session.src,
+        direction < 0 ? targetStartIndex : targetEndIndex,
+      );
+      updateEdgePageFlipHold(sectionId, pointer.x, pointer.y);
+    }, GALLERY_EDGE_PAGE_FLIP_DELAY_MS);
+  };
+
+  const updateEdgePageFlipHold = (sectionId: string, x: number, y: number): void => {
+    const grid = pageGridRefs.current[sectionId];
+    if (!grid) {
+      clearEdgePageFlipTimer();
+      return;
+    }
+    const rect = grid.getBoundingClientRect();
+    const verticalAllowance = Math.max(36, rect.height * 0.18);
+    if (y < rect.top - verticalAllowance || y > rect.bottom + verticalAllowance) {
+      clearEdgePageFlipTimer();
+      return;
+    }
+    const direction = x < rect.left ? -1 : x > rect.right ? 1 : null;
+    if (!direction) {
+      clearEdgePageFlipTimer();
+      return;
+    }
+    const images = getSectionImages(sectionId);
+    const pageSize = getSectionPageSize(sectionId);
+    const totalPages = Math.max(1, Math.ceil(images.length / pageSize));
+    const currentPage = Math.min(sectionPageByIdRef.current[sectionId] ?? 0, totalPages - 1);
+    const targetPage = currentPage + direction;
+    if (targetPage < 0 || targetPage >= totalPages) {
+      clearEdgePageFlipTimer();
+      return;
+    }
+    scheduleEdgePageFlip(sectionId, direction);
+  };
+
+  const handleImagePointerDown = (
+    event: ReactPointerEvent<HTMLButtonElement>,
+    sectionId: string,
+    src: string,
+  ): void => {
+    if (event.button !== 0 || previewImageSrc) {
+      return;
+    }
+    const rect = event.currentTarget.getBoundingClientRect();
+    dragSessionRef.current = {
+      sectionId,
+      src,
+      startX: event.clientX,
+      startY: event.clientY,
+      tileWidth: rect.width,
+      tileHeight: rect.height,
+      hasDragged: false,
+    };
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // Pointer capture can fail if the browser already released the pointer.
+    }
+  };
+
+  useEffect(() => {
+    const savedOrder = readGalleryImageOrderFromStorage();
+    orderedImagesBySectionIdRef.current = savedOrder;
+    setOrderedImagesBySectionId(savedOrder);
+  }, []);
+
+  useEffect(() => {
+    orderedImagesBySectionIdRef.current = orderedImagesBySectionId;
+    if (typeof window !== 'undefined') {
+      const galleryWindow = window as GalleryOrderWindow;
+      galleryWindow.__monsAcademyGalleryImageOrder = orderedImagesBySectionId;
+      galleryWindow.__monsAcademyGalleryImageOrderStorageKey = GALLERY_IMAGE_ORDER_STORAGE_KEY;
+    }
+  }, [orderedImagesBySectionId]);
+
+  useEffect(() => {
+    sectionColumnsByIdRef.current = sectionColumnsById;
+  }, [sectionColumnsById]);
+
+  useEffect(() => {
+    sectionPageByIdRef.current = sectionPageById;
+  }, [sectionPageById]);
 
   useEffect(() => {
     if (typeof ResizeObserver === 'undefined') {
@@ -284,7 +701,7 @@ export default function ResourcesGalleryPage(): ReactNode {
         return didChange ? next : prev;
       });
     });
-    gallerySections.forEach((section) => {
+    gallerySectionsBase.forEach((section) => {
       const node = sectionRefs.current[section.id];
       if (node) {
         observer.observe(node);
@@ -315,7 +732,7 @@ export default function ResourcesGalleryPage(): ReactNode {
       });
       return didChange ? next : prev;
     });
-  }, [sectionColumnsById]);
+  }, [gallerySections, sectionColumnsById]);
 
   const preloadImage = (src: string, priority: 'high' | 'auto' | 'low' = 'auto'): Promise<void> => {
     if (galleryImageLoadedCache.has(src)) {
@@ -392,7 +809,9 @@ export default function ResourcesGalleryPage(): ReactNode {
         if (currentPage === targetPage) {
           return prev;
         }
-        return {...prev, [sectionId]: targetPage};
+        const next = {...prev, [sectionId]: targetPage};
+        sectionPageByIdRef.current = next;
+        return next;
       });
     });
   };
@@ -401,8 +820,82 @@ export default function ResourcesGalleryPage(): ReactNode {
     const initialPageSize = DEFAULT_GALLERY_COLUMNS * GALLERY_ROWS_PER_PAGE;
     const initialVisibleImages = gallerySections.flatMap((section) => section.images.slice(0, initialPageSize));
     void preloadImages(initialVisibleImages, 'high').then(() => {
-      void preloadImages(ALL_GALLERY_IMAGES, 'low');
+      void preloadImages(allGalleryImages, 'low');
     });
+  }, [allGalleryImages, gallerySections]);
+
+  useEffect(() => {
+    const adjacentPreviewImages = [previousPreviewImageSrc, nextPreviewImageSrc].filter(
+      (src): src is string => Boolean(src),
+    );
+    if (adjacentPreviewImages.length > 0) {
+      void preloadImages(adjacentPreviewImages, 'high');
+    }
+  }, [nextPreviewImageSrc, previousPreviewImageSrc]);
+
+  useEffect(() => {
+    const handlePointerMove = (event: PointerEvent): void => {
+      const session = dragSessionRef.current;
+      if (!session) {
+        return;
+      }
+      const movedDistance = Math.hypot(event.clientX - session.startX, event.clientY - session.startY);
+      if (!session.hasDragged && movedDistance < 6) {
+        return;
+      }
+      event.preventDefault();
+      lastDragPointerRef.current = {x: event.clientX, y: event.clientY};
+      if (!session.hasDragged) {
+        session.hasDragged = true;
+        suppressNextClickRef.current = true;
+        setDraggedImageSrc(session.src);
+      }
+      setDragPreview({
+        src: session.src,
+        x: event.clientX,
+        y: event.clientY,
+        width: session.tileWidth,
+        height: session.tileHeight,
+      });
+      const dropIndex = getDropIndexForPointer(session.sectionId, event.clientX, event.clientY);
+      if (dropIndex !== null) {
+        moveImageInSection(session.sectionId, session.src, dropIndex);
+      }
+      updateEdgePageFlipHold(session.sectionId, event.clientX, event.clientY);
+    };
+
+    const handlePointerEnd = (event: PointerEvent): void => {
+      const session = dragSessionRef.current;
+      if (!session) {
+        return;
+      }
+      if (session.hasDragged) {
+        event.preventDefault();
+        const dropIndex = getDropIndexForPointer(session.sectionId, event.clientX, event.clientY);
+        if (dropIndex !== null) {
+          moveImageInSection(session.sectionId, session.src, dropIndex);
+        }
+        suppressNextClickRef.current = true;
+        window.setTimeout(() => {
+          suppressNextClickRef.current = false;
+        }, 80);
+      }
+      clearEdgePageFlipTimer();
+      dragSessionRef.current = null;
+      lastDragPointerRef.current = null;
+      setDragPreview(null);
+      setDraggedImageSrc(null);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove, {passive: false});
+    window.addEventListener('pointerup', handlePointerEnd, {passive: false});
+    window.addEventListener('pointercancel', handlePointerEnd, {passive: false});
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerEnd);
+      window.removeEventListener('pointercancel', handlePointerEnd);
+      clearEdgePageFlipTimer();
+    };
   }, []);
 
   useEffect(() => {
@@ -413,13 +906,23 @@ export default function ResourcesGalleryPage(): ReactNode {
     const handleEscape = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
         setPreviewImageSrc(null);
+        return;
+      }
+      if (event.key === 'ArrowLeft' && previousPreviewImageSrc) {
+        event.preventDefault();
+        showPreviewImage(previousPreviewImageSrc);
+        return;
+      }
+      if (event.key === 'ArrowRight' && nextPreviewImageSrc) {
+        event.preventDefault();
+        showPreviewImage(nextPreviewImageSrc);
       }
     };
     window.addEventListener('keydown', handleEscape);
     return () => {
       window.removeEventListener('keydown', handleEscape);
     };
-  }, [previewImageSrc]);
+  }, [nextPreviewImageSrc, previewImageSrc, previousPreviewImageSrc]);
 
   useEffect(() => {
     gallerySections.forEach((section) => {
@@ -525,13 +1028,21 @@ export default function ResourcesGalleryPage(): ReactNode {
                     style={{
                       ...imageLinkStyle,
                       ...(hoveredImageSrc === src ? imageLinkHoverStyle : undefined),
+                      ...(draggedImageSrc === src ? imageLinkDraggingStyle : undefined),
                     }}
                     aria-label={`${section.title} image ${startIndex + index + 1}`}
                     onMouseEnter={() => setHoveredImageSrc(src)}
                     onMouseLeave={() => setHoveredImageSrc((prev) => (prev === src ? null : prev))}
                     onFocus={() => setHoveredImageSrc(src)}
                     onBlur={() => setHoveredImageSrc((prev) => (prev === src ? null : prev))}
-                    onClick={() => setPreviewImageSrc(src)}>
+                    onPointerDown={(event) => handleImagePointerDown(event, section.id, src)}
+                    onClick={() => {
+                      if (suppressNextClickRef.current) {
+                        suppressNextClickRef.current = false;
+                        return;
+                      }
+                      showPreviewImage(src);
+                    }}>
                     <img
                       src={src}
                       alt={`${section.title} image ${startIndex + index + 1}`}
@@ -539,6 +1050,7 @@ export default function ResourcesGalleryPage(): ReactNode {
                       decoding="async"
                       fetchPriority="high"
                       style={imageStyle}
+                      draggable={false}
                     />
                   </button>
                 ))}
@@ -595,6 +1107,18 @@ export default function ResourcesGalleryPage(): ReactNode {
           );
         })}
       </div>
+      {dragPreview ? (
+        <span
+          style={{
+            ...dragPreviewStyle,
+            width: dragPreview.width,
+            height: dragPreview.height,
+            transform: `translate(${dragPreview.x}px, ${dragPreview.y}px) translate(-50%, -50%) scale(1.035)`,
+          }}
+          aria-hidden="true">
+          <img src={dragPreview.src} alt="" style={imageStyle} draggable={false} />
+        </span>
+      ) : null}
       {previewImageSrc ? (
         <div
           role="dialog"
@@ -602,6 +1126,28 @@ export default function ResourcesGalleryPage(): ReactNode {
           aria-label="Gallery image preview"
           style={previewOverlayStyle}
           onClick={() => setPreviewImageSrc(null)}>
+          {previousPreviewImageSrc ? (
+            <button
+              type="button"
+              aria-label={`Previous ${previewGalleryContext?.section.title ?? 'gallery'} image`}
+              style={{...previewArrowButtonStyle, left: 'clamp(0.7rem, 4vw, 3rem)'}}
+              onMouseEnter={() => setHoveredPreviewArrow('previous')}
+              onMouseLeave={() => setHoveredPreviewArrow((current) => (current === 'previous' ? null : current))}
+              onFocus={() => setHoveredPreviewArrow('previous')}
+              onBlur={() => setHoveredPreviewArrow((current) => (current === 'previous' ? null : current))}
+              onClick={(event) => {
+                event.stopPropagation();
+                showPreviewImage(previousPreviewImageSrc);
+              }}>
+              <span
+                style={{
+                  ...previewArrowVisualStyle,
+                  transform: hoveredPreviewArrow === 'previous' ? 'scale(1.16)' : 'scale(1)',
+                }}>
+                <span style={previewArrowGlyphStyle}>←</span>
+              </span>
+            </button>
+          ) : null}
           <div
             style={previewTiltRegionStyle}
             onClick={(event) => event.stopPropagation()}
@@ -628,6 +1174,28 @@ export default function ResourcesGalleryPage(): ReactNode {
               </div>
             </div>
           </div>
+          {nextPreviewImageSrc ? (
+            <button
+              type="button"
+              aria-label={`Next ${previewGalleryContext?.section.title ?? 'gallery'} image`}
+              style={{...previewArrowButtonStyle, right: 'clamp(0.7rem, 4vw, 3rem)'}}
+              onMouseEnter={() => setHoveredPreviewArrow('next')}
+              onMouseLeave={() => setHoveredPreviewArrow((current) => (current === 'next' ? null : current))}
+              onFocus={() => setHoveredPreviewArrow('next')}
+              onBlur={() => setHoveredPreviewArrow((current) => (current === 'next' ? null : current))}
+              onClick={(event) => {
+                event.stopPropagation();
+                showPreviewImage(nextPreviewImageSrc);
+              }}>
+              <span
+                style={{
+                  ...previewArrowVisualStyle,
+                  transform: hoveredPreviewArrow === 'next' ? 'scale(1.16)' : 'scale(1)',
+                }}>
+                <span style={previewArrowGlyphStyle}>→</span>
+              </span>
+            </button>
+          ) : null}
         </div>
       ) : null}
     </BlankSectionPage>

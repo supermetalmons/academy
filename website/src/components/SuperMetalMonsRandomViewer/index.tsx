@@ -1,4 +1,4 @@
-import {useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode} from 'react';
+import {useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode} from 'react';
 import {superMetalMonsNfts, type SuperMetalMonsNft} from '@site/src/data/superMetalMonsNfts';
 
 type GenKey = 'gen1' | 'gen2';
@@ -1955,7 +1955,7 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
       window.removeEventListener('resize', updateOpenSeaRowState);
     };
   }, [viewportWidth, isFavoritesSidebarOpen, showGenTogglesOnRow]);
-  useEffect(() => {
+  const measureWideClosedHeight = useCallback(() => {
     if (isThinLayoutActive || isFavoritesSidebarOpen) {
       return;
     }
@@ -1968,7 +1968,32 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
       return;
     }
     setWideClosedHeightPx((current) => (current === nextHeight ? current : nextHeight));
-  }, [isThinLayoutActive, isFavoritesSidebarOpen, viewportWidth]);
+  }, [isThinLayoutActive, isFavoritesSidebarOpen]);
+
+  useEffect(() => {
+    measureWideClosedHeight();
+  }, [measureWideClosedHeight, viewportWidth]);
+
+  useEffect(() => {
+    if (
+      isThinLayoutActive ||
+      isFavoritesSidebarOpen ||
+      typeof ResizeObserver === 'undefined'
+    ) {
+      return;
+    }
+    const sectionNode = viewerSectionRef.current;
+    if (sectionNode === null) {
+      return;
+    }
+    const resizeObserver = new ResizeObserver(() => {
+      measureWideClosedHeight();
+    });
+    resizeObserver.observe(sectionNode);
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [isThinLayoutActive, isFavoritesSidebarOpen, measureWideClosedHeight]);
 
   const shouldLockWideOpenHeight =
     isFavoritesSidebarOpen &&
@@ -2004,6 +2029,9 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
             : folderToggleButtonStyle
       }
       onClick={() => {
+        if (!isFavoritesSidebarOpen) {
+          measureWideClosedHeight();
+        }
         setIsFavoritesSidebarOpen((current) => {
           if (current) {
             commitPendingFavoriteRemovals();

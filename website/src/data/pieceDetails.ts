@@ -142,6 +142,20 @@ export const pieceDetailItems: PieceDetailItem[] = [
     kind: 'image',
   },
   {
+    slug: 'bomb',
+    title: 'Bomb',
+    text: 'Can be thrown at an enemy mon up to 3 tiles away. The bomb is spent when it hits.',
+    image: '/assets/mons/bomb.png',
+    kind: 'image',
+  },
+  {
+    slug: 'potion',
+    title: 'Potion',
+    text: 'Adds one extra active ability resource to your turn.',
+    image: '/assets/mons/potion.png',
+    kind: 'image',
+  },
+  {
     slug: 'movement-points',
     title: 'Movement Points',
     text: 'Each turn you have 5 movement points you can use on any mon.',

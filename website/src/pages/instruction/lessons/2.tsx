@@ -2,6 +2,10 @@ import type {CSSProperties, ReactNode} from 'react';
 import Link from '@docusaurus/Link';
 import BlankSectionPage from '@site/src/components/BlankSectionPage';
 import InstructionSubnav from '@site/src/components/InstructionSubnav';
+import {
+  LessonCompletionBadge,
+  LessonCompletionButton,
+} from '@site/src/components/LessonCompletion';
 import LessonFavoriteStar from '@site/src/components/LessonFavoriteStar';
 import {legacyContent} from '@site/src/data/legacyContent';
 
@@ -11,7 +15,7 @@ const contentWrapStyle: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   gap: '0.7rem',
-  padding: '15px 50px',
+  padding: '15px 50px 70px',
 };
 
 const bottomBackLinkStyle: CSSProperties = {
@@ -30,6 +34,7 @@ const lessonTitleRowStyle: CSSProperties = {
   justifyContent: 'center',
   gap: '0.45rem',
   margin: '0 auto',
+  position: 'relative',
 };
 
 const lessonTitleStyle: CSSProperties = {
@@ -42,6 +47,17 @@ const lessonTitleStyle: CSSProperties = {
 const lessonTitleStarOffsetWrapStyle: CSSProperties = {
   display: 'inline-flex',
   transform: 'translate(10px, -1px)',
+};
+
+const lessonTitleCompletionBadgeStyle: CSSProperties = {
+  position: 'absolute',
+  left: 'calc(100% + 19px)',
+  top: 'calc(50% - 1px)',
+  width: '1.76rem',
+  height: '1.76rem',
+  color: '#178B35',
+  pointerEvents: 'none',
+  zIndex: 2,
 };
 
 function formatLessonHtml(rawHtml: string): string {
@@ -60,6 +76,10 @@ function formatLessonHtml(rawHtml: string): string {
     .replaceAll('/docs/intro/overview', LESSONS_INDEX_PATH)
     .replace(
       /<p>\s*<i>\s*<a\s+href="\/instruction\/lessons">☜\s*back<\/a>\s*<\/i>\s*<\/p>/i,
+      '',
+    )
+    .replace(
+      /<p>\s*&nbsp;?\s*<\/p>/i,
       '',
     )
     .replace(
@@ -125,13 +145,18 @@ export default function InstructionLessonTwoPage(): ReactNode {
         <div style={lessonTitleRowStyle}>
           <h2 style={lessonTitleStyle}>~ 3 Strong Techniques to Look Out For ~</h2>
           <span style={lessonTitleStarOffsetWrapStyle}>
-          <LessonFavoriteStar lessonId="strong-techniques" size="1.68rem" />
-        </span>
+            <LessonFavoriteStar lessonId="strong-techniques" size="1.68rem" />
+          </span>
+          <LessonCompletionBadge
+            lessonId="strong-techniques"
+            style={lessonTitleCompletionBadgeStyle}
+          />
         </div>
         <div
           className="lesson-legacy-content lesson-legacy-content--techniques"
           dangerouslySetInnerHTML={{__html: techniquesHtml}}
         />
+        <LessonCompletionButton lessonId="strong-techniques" />
         <Link to={LESSONS_INDEX_PATH} style={bottomBackLinkStyle}>
           ☜ back
         </Link>

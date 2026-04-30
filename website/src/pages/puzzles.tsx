@@ -5,12 +5,15 @@ import PuzzleFavoriteStar from '@site/src/components/PuzzleFavoriteStar';
 import PuzzlePiecesThumbnail from '@site/src/components/PuzzlePiecesThumbnail';
 import type {SuperMetalMonsBoardPreset} from '@site/src/components/SuperMetalMonsBoard';
 import {
+  PUZZLE_COMPLETIONS_EVENT_NAME,
   PUZZLE_FAVORITES_EVENT_NAME,
+  readPuzzleCompletionsFromStorage,
   readPuzzleFavoritesFromStorage,
   type PuzzleId,
 } from '@site/src/constants/puzzleFavorites';
 
 type PuzzleSortMode = 'alphabetical' | 'created' | 'complexity';
+type PuzzleCompletionFilterMode = 'mixed' | 'uncompleted' | 'completed';
 type PuzzleCard = {
   id: PuzzleId;
   title: string;
@@ -90,12 +93,6 @@ const filterButtonActiveStyle: CSSProperties = {
   color: '#fff',
 };
 
-const filterButtonDisabledStyle: CSSProperties = {
-  ...filterButtonStyle,
-  cursor: 'not-allowed',
-  opacity: 0.45,
-};
-
 const sortButtonStyle: CSSProperties = {
   width: '34px',
   height: '34px',
@@ -148,6 +145,38 @@ const puzzlesGalleryStyle: CSSProperties = {
   display: 'grid',
   gridTemplateColumns: '1fr',
   gap: '1rem',
+};
+
+const puzzleGalleryNoteStyle: CSSProperties = {
+  margin: '-0.1rem 0 0',
+  color: '#000',
+  fontSize: '0.94rem',
+  lineHeight: 1.32,
+  fontStyle: 'italic',
+};
+
+const puzzleGalleryIntroStyle: CSSProperties = {
+  margin: 0,
+  color: '#000',
+  fontSize: '1rem',
+  lineHeight: 1.34,
+};
+
+const puzzleGalleryTelegramLinkStyle: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '0.18rem',
+  verticalAlign: 'baseline',
+  transform: 'translateY(1.5px)',
+};
+
+const puzzleGalleryTelegramIconStyle: CSSProperties = {
+  width: '0.9em',
+  height: '0.9em',
+  display: 'inline-block',
+  color: '#000',
+  transform: 'translateY(calc(0.08em - 2px))',
+  flex: '0 0 auto',
 };
 
 const puzzleCardStyle: CSSProperties = {
@@ -246,6 +275,7 @@ const puzzleCardTitleRowStyle: CSSProperties = {
   justifyContent: 'center',
   gap: '0.45rem',
   maxWidth: '100%',
+  position: 'relative',
 };
 
 const puzzleCardTitleBlockStyle: CSSProperties = {
@@ -292,6 +322,24 @@ const puzzleCardTitleStarOffsetStyle: CSSProperties = {
 const puzzleCardTitleStarOffsetBombproofStyle: CSSProperties = {
   ...puzzleCardTitleStarOffsetStyle,
   transform: 'translate(10px, -3px)',
+};
+
+const puzzleCardCompletionBadgeWrapStyle: CSSProperties = {
+  position: 'absolute',
+  left: 'calc(100% + 0.48rem + 2px)',
+  top: 'calc(50% - 3px)',
+  width: '1.56rem',
+  height: '1.56rem',
+  color: '#178B35',
+  pointerEvents: 'none',
+  zIndex: 2,
+};
+
+const puzzleCardCompletionBadgeSvgStyle: CSSProperties = {
+  display: 'block',
+  width: '100%',
+  height: '100%',
+  overflow: 'visible',
 };
 
 const puzzlesEmptyStateStyle: CSSProperties = {
@@ -354,6 +402,18 @@ const puzzleCards: PuzzleCard[] = [
 
 const DEFAULT_PUZZLE_SORT_MODE: PuzzleSortMode = 'created';
 
+function getNextCompletionFilterMode(
+  current: PuzzleCompletionFilterMode,
+): PuzzleCompletionFilterMode {
+  if (current === 'mixed') {
+    return 'uncompleted';
+  }
+  if (current === 'uncompleted') {
+    return 'completed';
+  }
+  return 'mixed';
+}
+
 function shouldApplyWidePuzzlePreviewPadding(): boolean {
   if (typeof window === 'undefined') {
     return false;
@@ -372,6 +432,65 @@ function shouldApplyWidePuzzlePreviewPadding(): boolean {
   return navRowCount < 3;
 }
 
+function PuzzleGalleryCompletionBadge(): ReactNode {
+  const [isEntered, setIsEntered] = useState(false);
+
+  useEffect(() => {
+    const frameId = window.requestAnimationFrame(() => {
+      setIsEntered(true);
+    });
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, []);
+
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        ...puzzleCardCompletionBadgeWrapStyle,
+        opacity: isEntered ? 1 : 0,
+        transform: isEntered
+          ? 'translateY(-50%) translateX(0) scale(1)'
+          : 'translateY(-50%) translateX(-4px) scale(0.58)',
+        transformOrigin: 'center center',
+        transition:
+          'opacity 180ms ease-out, transform 500ms cubic-bezier(0.16, 1.28, 0.32, 1)',
+      }}>
+      <svg viewBox="0 0 24 24" style={puzzleCardCompletionBadgeSvgStyle}>
+        <circle
+          cx="12"
+          cy="12"
+          r="9"
+          fill="#fff"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeDasharray="57"
+          strokeDashoffset={isEntered ? 0 : 57}
+          style={{
+            transition: 'stroke-dashoffset 500ms cubic-bezier(0.2, 0.9, 0.25, 1)',
+          }}
+        />
+        <path
+          d="M7.5 12.4L10.5 15.4L16.8 8.8"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.25"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeDasharray="15"
+          strokeDashoffset={isEntered ? 0 : 15}
+          style={{
+            transition:
+              'stroke-dashoffset 340ms cubic-bezier(0.2, 0.9, 0.25, 1) 210ms',
+          }}
+        />
+      </svg>
+    </span>
+  );
+}
+
 export default function PuzzlesPage(): ReactNode {
   const [shouldApplyPreviewPadding, setShouldApplyPreviewPadding] = useState<boolean>(() =>
     shouldApplyWidePuzzlePreviewPadding(),
@@ -379,7 +498,12 @@ export default function PuzzlesPage(): ReactNode {
   const [sortMode, setSortMode] = useState<PuzzleSortMode>(DEFAULT_PUZZLE_SORT_MODE);
   const [isSortReversed, setIsSortReversed] = useState(false);
   const [isFavoritesFilterEnabled, setIsFavoritesFilterEnabled] = useState(false);
+  const [completionFilterMode, setCompletionFilterMode] =
+    useState<PuzzleCompletionFilterMode>('mixed');
   const [favoritePuzzleIds, setFavoritePuzzleIds] = useState<Set<PuzzleId>>(new Set<PuzzleId>());
+  const [completedPuzzleIds, setCompletedPuzzleIds] = useState<Set<PuzzleId>>(
+    new Set<PuzzleId>(),
+  );
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -433,6 +557,22 @@ export default function PuzzlesPage(): ReactNode {
     };
   }, []);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const syncCompletions = () => {
+      setCompletedPuzzleIds(readPuzzleCompletionsFromStorage());
+    };
+    syncCompletions();
+    window.addEventListener('storage', syncCompletions);
+    window.addEventListener(PUZZLE_COMPLETIONS_EVENT_NAME, syncCompletions as EventListener);
+    return () => {
+      window.removeEventListener('storage', syncCompletions);
+      window.removeEventListener(PUZZLE_COMPLETIONS_EVENT_NAME, syncCompletions as EventListener);
+    };
+  }, []);
+
   const sortedPuzzleCards = useMemo(() => {
     const next = [...puzzleCards];
     if (sortMode === 'alphabetical') {
@@ -450,15 +590,75 @@ export default function PuzzlesPage(): ReactNode {
 
   const visiblePuzzleCards = useMemo(
     () =>
-      sortedPuzzleCards.filter((puzzle) =>
-        isFavoritesFilterEnabled ? favoritePuzzleIds.has(puzzle.id) : true,
-      ),
-    [favoritePuzzleIds, isFavoritesFilterEnabled, sortedPuzzleCards],
+      sortedPuzzleCards.filter((puzzle) => {
+        if (isFavoritesFilterEnabled && !favoritePuzzleIds.has(puzzle.id)) {
+          return false;
+        }
+        if (completionFilterMode === 'completed') {
+          return completedPuzzleIds.has(puzzle.id);
+        }
+        if (completionFilterMode === 'uncompleted') {
+          return !completedPuzzleIds.has(puzzle.id);
+        }
+        return true;
+      }),
+    [
+      completedPuzzleIds,
+      completionFilterMode,
+      favoritePuzzleIds,
+      isFavoritesFilterEnabled,
+      sortedPuzzleCards,
+    ],
   );
+  const isCompletionFilterActive = completionFilterMode !== 'mixed';
+  const isUncompletedFilterActive = completionFilterMode === 'uncompleted';
+  const completionFilterTitle =
+    completionFilterMode === 'mixed'
+      ? 'Show only uncompleted puzzles'
+      : completionFilterMode === 'uncompleted'
+        ? 'Show only completed puzzles'
+        : 'Show all puzzles';
+  const completionFilterAriaLabel =
+    completionFilterMode === 'mixed'
+      ? 'Completion filter: showing all puzzles. Click to show only uncompleted puzzles'
+      : completionFilterMode === 'uncompleted'
+        ? 'Completion filter: showing only uncompleted puzzles. Click to show only completed puzzles'
+        : 'Completion filter: showing only completed puzzles. Click to show all puzzles';
+  const emptyStateMessage =
+    completionFilterMode === 'completed'
+      ? 'No completed puzzles yet.'
+      : completionFilterMode === 'uncompleted'
+        ? 'No uncompleted puzzles.'
+        : isFavoritesFilterEnabled
+          ? 'No starred puzzles yet.'
+          : 'No puzzles to show.';
 
   return (
     <BlankSectionPage title="Puzzles">
       <section style={puzzlesWrapStyle}>
+        <p style={puzzleGalleryIntroStyle}>
+          <strong>Mate-in-1:</strong> in all of the following challenges, white is
+          up to play and you must find a position where no matter what black does
+          next, you can win on the following turn by reaching a mana score of 5+
+        </p>
+        <p style={puzzleGalleryNoteStyle}>
+          (<strong>Note:</strong> these puzzles have not yet been rigorously tested! If you believe you&apos;ve found an
+          alternate solution or error, please post it in our{' '}
+          <a
+            href="https://t.me/supermetalmons"
+            target="_blank"
+            rel="noreferrer"
+            style={puzzleGalleryTelegramLinkStyle}>
+            <svg
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              style={puzzleGalleryTelegramIconStyle}
+              fill="currentColor">
+              <path d="M21.4 4.6 3.7 11.5c-.8.3-.8 1.4 0 1.7l4.5 1.6 1.7 5.2c.2.7 1.1.8 1.5.3l2.7-3.3 4.8 3.5c.6.4 1.4.1 1.6-.6l2.1-14.1c.1-.8-.7-1.5-1.4-1.2Zm-2.6 2.3-8.9 7.8-.4 2.8-1.1-3.3L5 13.1l13.8-6.2Z" />
+            </svg>
+            <span>Telegram</span>
+          </a>)
+        </p>
         <div style={toolbarStyle} className="gallery-toolbar" aria-label="Puzzles sort toolbar">
           <div style={toolbarGroupStyle} className="gallery-toolbar-group gallery-toolbar-group--filter">
             <span style={toolbarLabelStyle} className="gallery-toolbar-label">Filter by:</span>
@@ -484,10 +684,15 @@ export default function PuzzlesPage(): ReactNode {
               <button
                 type="button"
                 className="gallery-toolbar-button"
-                aria-label="Show only completed puzzles (coming soon)"
-                aria-disabled="true"
-                title="Completed filter coming soon"
-                style={filterButtonDisabledStyle}>
+                aria-label={completionFilterAriaLabel}
+                title={completionFilterTitle}
+                aria-pressed={isCompletionFilterActive}
+                onClick={() =>
+                  setCompletionFilterMode((current) =>
+                    getNextCompletionFilterMode(current),
+                  )
+                }
+                style={isCompletionFilterActive ? filterButtonActiveStyle : filterButtonStyle}>
                 <svg viewBox="0 0 24 24" aria-hidden="true" style={filterIconStyle} className="gallery-toolbar-icon" fill="none">
                   <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.8" />
                   <path
@@ -497,6 +702,14 @@ export default function PuzzlesPage(): ReactNode {
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   />
+                  {isUncompletedFilterActive ? (
+                    <path
+                      d="M18.2 5.8L5.8 18.2"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                    />
+                  ) : null}
                 </svg>
               </button>
             </div>
@@ -643,6 +856,9 @@ export default function PuzzlesPage(): ReactNode {
                       className="gallery-card-title-star">
                       <PuzzleFavoriteStar puzzleId={puzzle.id} size="1.28rem" />
                     </span>
+                    {completedPuzzleIds.has(puzzle.id) ? (
+                      <PuzzleGalleryCompletionBadge />
+                    ) : null}
                   </div>
                   <span style={puzzleCardMetaRowStyle} className="puzzle-gallery-meta-row">
                     <span>{`${puzzle.startingScoreWhite} - ${puzzle.startingScoreBlack}`}</span>
@@ -671,7 +887,7 @@ export default function PuzzlesPage(): ReactNode {
             </article>
           ))}
           {visiblePuzzleCards.length === 0 ? (
-            <p style={puzzlesEmptyStateStyle}>No starred puzzles yet.</p>
+            <p style={puzzlesEmptyStateStyle}>{emptyStateMessage}</p>
           ) : null}
         </section>
       </section>

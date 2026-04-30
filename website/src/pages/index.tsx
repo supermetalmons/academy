@@ -1,4 +1,12 @@
-import {useEffect, useRef, useState, type CSSProperties, type ReactNode} from 'react';
+import {
+  memo,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type MutableRefObject,
+  type ReactNode,
+} from 'react';
 import NewTopLayout from '@site/src/components/NewTopLayout';
 
 type Point = {
@@ -10,6 +18,8 @@ type HomeSpriteKey = 'bosch' | 'omom';
 
 const BOSCH_SPRITE_SRC = '/assets/bosch-pixel.png';
 const OMOM_SPRITE_SRC = '/assets/omom-pixel.png';
+const WHITE_MANA_SPRITE_SRC = '/assets/mons/mana.png';
+const BLACK_MANA_SPRITE_SRC = '/assets/mons/manaB.png';
 const HOME_SPRITE_RETRY_COUNT = 1;
 const loadedHomeSpriteSrcSet = new Set<string>();
 
@@ -102,6 +112,7 @@ const SPRITE_BOUNCE_DURATION_MS = 420;
 const FOLLOW_DISTANCE_SCALE = 0.84;
 const BOSCH_STACK_WIDTH = 105;
 const OMOM_STACK_WIDTH = 68;
+const HOME_MANA_STACK_WIDTH = 70;
 const SPRITE_GAP_PX = 20;
 const SPRITE_ROW_VERTICAL_SHIFT_PX = -10;
 const OMOM_VERTICAL_OFFSET_PX = 20;
@@ -112,6 +123,20 @@ const TARGET_DOT_FADE_DISTANCE_PX = 220;
 const MOBILE_WELCOME_GUARD_BREAKPOINT_PX = 780;
 const HOME_WELCOME_TOP_CLEARANCE_PX = 18;
 const DEFAULT_WELCOME_BOX_HEIGHT_PX = 92;
+const HOME_MANA_MAX_COUNT = 11;
+const HOME_MANA_SPAWN_MIN_MS = 3000;
+const HOME_MANA_SPAWN_MAX_MS = 7000;
+const HOME_MANA_PICKUP_RADIUS_PX = 58;
+const HOME_MANA_SPAWN_AVOID_RADIUS_PX = 86;
+const HOME_MANA_EDGE_PADDING_PX = 72;
+const HOME_MANA_BURST_MS = 620;
+const HOME_MANA_BURST_SIZE_PX = 92;
+const HOME_MANA_FADE_MS = 320;
+const HOME_BLACK_MANA_CHANCE = 0.34;
+const HOME_COLLECTED_MANA_TRAIL_START_PX = 78;
+const HOME_COLLECTED_MANA_TRAIL_SPACING_PX = 46;
+const HOME_TRAIL_RETENTION_HEADROOM_MANA_COUNT = HOME_MANA_MAX_COUNT + 4;
+const HOME_TRAIL_RETENTION_PADDING_PX = 520;
 
 const targetDotStyle: CSSProperties = {
   position: 'absolute',
@@ -127,6 +152,96 @@ const targetDotStyle: CSSProperties = {
   pointerEvents: 'none',
 };
 
+const manaStackStyle: CSSProperties = {
+  ...spriteStackBaseStyle,
+  width: `${HOME_MANA_STACK_WIDTH}px`,
+  opacity: 0,
+  transition: `opacity ${HOME_MANA_FADE_MS}ms ease-out`,
+  willChange: 'opacity, transform',
+};
+
+const manaShadowStyle: CSSProperties = {
+  ...spriteShadowStyle,
+  width: '60%',
+  height: '10px',
+  marginTop: '-5px',
+  marginLeft: '1px',
+  opacity: 0.76,
+};
+
+const homeManaBurstLayerStyle: CSSProperties = {
+  position: 'absolute',
+  width: `${HOME_MANA_BURST_SIZE_PX}px`,
+  height: `${HOME_MANA_BURST_SIZE_PX}px`,
+  transform: 'translate(-50%, -50%)',
+  pointerEvents: 'none',
+};
+
+const homeManaBurstCoreStyle: CSSProperties = {
+  position: 'absolute',
+  left: '50%',
+  top: '50%',
+  width: '20px',
+  height: '20px',
+  marginLeft: '-10px',
+  marginTop: '-10px',
+  borderRadius: '9999px',
+  backgroundColor: '#8CB4FF',
+  transform: 'scale(1)',
+  opacity: 0.86,
+  transition: `transform ${HOME_MANA_BURST_MS}ms cubic-bezier(0.2, 0.9, 0.25, 1), opacity ${HOME_MANA_BURST_MS}ms ease-out`,
+};
+
+const homeManaBurstRingStyle: CSSProperties = {
+  position: 'absolute',
+  left: '50%',
+  top: '50%',
+  width: '28px',
+  height: '28px',
+  marginLeft: '-14px',
+  marginTop: '-14px',
+  borderRadius: '9999px',
+  border: '4px solid #DDEAFF',
+  transform: 'scale(1)',
+  opacity: 1,
+  transition: `transform ${HOME_MANA_BURST_MS}ms cubic-bezier(0.2, 0.9, 0.25, 1), opacity ${HOME_MANA_BURST_MS}ms ease-out`,
+};
+
+const homeManaAnimationStyle = `
+@keyframes homeManaFloat {
+  0%, 100% { transform: translateY(2px); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes homeManaShadowPulse {
+  0%, 100% {
+    transform: scaleX(1.08);
+    opacity: 0.76;
+  }
+  50% {
+    transform: scaleX(0.78);
+    opacity: 0.46;
+  }
+}
+
+.home-mana-float-core {
+  display: block;
+  width: 100%;
+  animation-name: homeManaFloat;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  will-change: transform;
+}
+
+.home-mana-float-shadow {
+  animation-name: homeManaShadowPulse;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  transform-origin: center;
+  will-change: transform, opacity;
+}
+`;
+
 type PathData = {
   points: Point[];
   cumulative: number[];
@@ -134,6 +249,29 @@ type PathData = {
 };
 
 type TrailPoint = Point & {distance: number};
+
+type HomeManaKind = 'black' | 'white';
+type HomeManaStatus = 'entering' | 'active' | 'leaving';
+
+type HomeManaSprite = Point & {
+  id: string;
+  kind: HomeManaKind;
+  status: HomeManaStatus;
+  floatDurationMs: number;
+  floatDelayMs: number;
+};
+
+type HomeManaBurst = Point & {
+  id: string;
+  isExpanding: boolean;
+};
+
+type HomeCollectedManaSprite = Point & {
+  id: string;
+  kind: HomeManaKind;
+  floatDurationMs: number;
+  floatDelayMs: number;
+};
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -323,7 +461,25 @@ function pointAtTrailDistance(trail: TrailPoint[], distance: number): Point {
   return {x: trailEnd.x, y: trailEnd.y};
 }
 
-function appendTrailPoint(trail: TrailPoint[], point: Point): void {
+function getHomeTrailRetentionDistancePx(
+  collectedManaCount: number,
+  followDistancePx: number,
+): number {
+  const furthestTailOffsetPx =
+    followDistancePx +
+    HOME_COLLECTED_MANA_TRAIL_START_PX +
+    Math.max(0, collectedManaCount - 1) * HOME_COLLECTED_MANA_TRAIL_SPACING_PX;
+  return Math.max(
+    MAX_TRAIL_DISTANCE_PX,
+    furthestTailOffsetPx + HOME_TRAIL_RETENTION_PADDING_PX,
+  );
+}
+
+function appendTrailPoint(
+  trail: TrailPoint[],
+  point: Point,
+  maxTrailDistancePx = MAX_TRAIL_DISTANCE_PX,
+): void {
   if (trail.length === 0) {
     trail.push({...point, distance: 0});
     return;
@@ -339,7 +495,7 @@ function appendTrailPoint(trail: TrailPoint[], point: Point): void {
   });
 
   const newest = trail[trail.length - 1];
-  const minAllowedDistance = newest.distance - MAX_TRAIL_DISTANCE_PX;
+  const minAllowedDistance = newest.distance - maxTrailDistancePx;
   while (trail.length > 2 && trail[1].distance < minAllowedDistance) {
     trail.shift();
   }
@@ -367,7 +523,128 @@ function getBounceScale(elapsedMs: number): number {
   return lerp(0.96, 1, easeOutCubic((progress - 0.72) / 0.28));
 }
 
-export default function Home(): ReactNode {
+function getRandomHomeManaSpawnDelayMs(): number {
+  return Math.round(
+    HOME_MANA_SPAWN_MIN_MS +
+      Math.random() * (HOME_MANA_SPAWN_MAX_MS - HOME_MANA_SPAWN_MIN_MS),
+  );
+}
+
+function getRandomHomeManaKind(): HomeManaKind {
+  return Math.random() < HOME_BLACK_MANA_CHANCE ? 'black' : 'white';
+}
+
+function getHomeManaSpriteSrc(kind: HomeManaKind): string {
+  return kind === 'black' ? BLACK_MANA_SPRITE_SRC : WHITE_MANA_SPRITE_SRC;
+}
+
+function getCollectedManaTransform(point: Point): string {
+  return `translate(${point.x}px, ${point.y}px) translate(-50%, -50%)`;
+}
+
+function applyCollectedManaElementPosition(
+  node: HTMLDivElement,
+  sprite: HomeCollectedManaSprite,
+): void {
+  node.style.transform = getCollectedManaTransform(sprite);
+  node.style.zIndex = `${Math.round(sprite.y) - 2}`;
+}
+
+function isPointInsideRectWithPadding(
+  point: Point,
+  rect: DOMRect,
+  padding: number,
+): boolean {
+  return (
+    point.x >= rect.left - padding &&
+    point.x <= rect.right + padding &&
+    point.y >= rect.top - padding &&
+    point.y <= rect.bottom + padding
+  );
+}
+
+type HomeCollectedManaTrailProps = {
+  currentSpritesRef: MutableRefObject<HomeCollectedManaSprite[]>;
+  elementRefs: MutableRefObject<Record<string, HTMLDivElement | null>>;
+  sprites: HomeCollectedManaSprite[];
+};
+
+const HomeCollectedManaTrail = memo(function HomeCollectedManaTrail({
+  currentSpritesRef,
+  elementRefs,
+  sprites,
+}: HomeCollectedManaTrailProps): ReactNode {
+  return (
+    <>
+      {sprites.map((sprite) => {
+        const floatAnimationStyle: CSSProperties = {
+          animationDuration: `${sprite.floatDurationMs}ms`,
+          animationDelay: `${sprite.floatDelayMs}ms`,
+        };
+        return (
+          <div
+            key={sprite.id}
+            ref={(node) => {
+              elementRefs.current[sprite.id] = node;
+              if (node !== null) {
+                const latestSprite =
+                  currentSpritesRef.current.find(
+                    (currentSprite) => currentSprite.id === sprite.id,
+                  ) ?? sprite;
+                applyCollectedManaElementPosition(node, latestSprite);
+              }
+            }}
+            style={{
+              ...manaStackStyle,
+              left: 0,
+              top: 0,
+              opacity: 1,
+              transform: getCollectedManaTransform(sprite),
+              zIndex: Math.round(sprite.y) - 2,
+            }}>
+            <span
+              className="home-mana-float-core"
+              aria-hidden="true"
+              style={floatAnimationStyle}>
+              <img
+                src={getHomeManaSpriteSrc(sprite.kind)}
+                alt=""
+                aria-hidden="true"
+                style={homePixelImageStyle}
+                loading="eager"
+                decoding="async"
+                draggable={false}
+              />
+            </span>
+            <span
+              aria-hidden="true"
+              className="home-mana-float-shadow"
+              style={{
+                ...manaShadowStyle,
+                ...floatAnimationStyle,
+              }}
+            />
+          </div>
+        );
+      })}
+    </>
+  );
+});
+
+type HomeExperienceProps = {
+  welcomeContent?: ReactNode;
+};
+
+const defaultHomeWelcomeContent = (
+  <>
+    Welcome to <strong>Mons Academy</strong>, this realm's #1 learning hub for
+    all things <strong>Super Metal Mons</strong>!
+  </>
+);
+
+export function HomeExperience({
+  welcomeContent = defaultHomeWelcomeContent,
+}: HomeExperienceProps): ReactNode {
   const initialPositions = createInitialPositions(
     typeof window === 'undefined' ? DEFAULT_VIEWPORT_WIDTH : window.innerWidth,
     typeof window === 'undefined' ? DEFAULT_VIEWPORT_HEIGHT : window.innerHeight,
@@ -378,6 +655,11 @@ export default function Home(): ReactNode {
   const [omomScale, setOmomScale] = useState(1);
   const [targetDotPosition, setTargetDotPosition] = useState<Point | null>(null);
   const [targetDotOpacity, setTargetDotOpacity] = useState(0);
+  const [homeManaSprites, setHomeManaSprites] = useState<HomeManaSprite[]>([]);
+  const [collectedHomeManaSprites, setCollectedHomeManaSprites] = useState<
+    HomeCollectedManaSprite[]
+  >([]);
+  const [homeManaBursts, setHomeManaBursts] = useState<HomeManaBurst[]>([]);
   const [homeWelcomeBoxHeight, setHomeWelcomeBoxHeight] = useState<number>(
     DEFAULT_WELCOME_BOX_HEIGHT_PX,
   );
@@ -421,9 +703,296 @@ export default function Home(): ReactNode {
   const activePathRef = useRef<PathData | null>(null);
   const activePathDistanceRef = useRef(0);
   const isMovingRef = useRef(false);
+  const activeGuidePointerIdRef = useRef<number | null>(null);
+  const lastGuideTargetRef = useRef<Point | null>(null);
   const bounceStartedAtRef = useRef<number | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const lastFrameTimestampRef = useRef<number | null>(null);
+  const homeManaSpritesRef = useRef<HomeManaSprite[]>([]);
+  const collectedHomeManaSpritesRef = useRef<HomeCollectedManaSprite[]>([]);
+  const collectedHomeManaElementRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const homeManaIdCounterRef = useRef(0);
+  const collectedHomeManaIdCounterRef = useRef(0);
+  const homeManaBurstIdCounterRef = useRef(0);
+  const homeManaSpawnTimerRef = useRef<number | null>(null);
+  const homeManaBurstFrameByIdRef = useRef<Record<string, number>>({});
+  const homeManaBurstTimeoutByIdRef = useRef<Record<string, number>>({});
+  const homeManaFadeFrameByIdRef = useRef<Record<string, number>>({});
+  const homeManaFadeTimeoutByIdRef = useRef<Record<string, number>>({});
+
+  const setHomeManaSpritesSynced = (sprites: HomeManaSprite[]): void => {
+    homeManaSpritesRef.current = sprites;
+    setHomeManaSprites(sprites);
+  };
+
+  const setCollectedHomeManaSpritesSynced = (
+    sprites: HomeCollectedManaSprite[],
+  ): void => {
+    collectedHomeManaSpritesRef.current = sprites;
+    setCollectedHomeManaSprites(sprites);
+  };
+
+  const getHomeTrailRetentionDistance = (): number =>
+    getHomeTrailRetentionDistancePx(
+      collectedHomeManaSpritesRef.current.length +
+        HOME_TRAIL_RETENTION_HEADROOM_MANA_COUNT,
+      followDistanceRef.current,
+    );
+
+  const clearHomeManaBurstTimerForId = (burstId: string): void => {
+    const frameId = homeManaBurstFrameByIdRef.current[burstId];
+    if (frameId !== undefined) {
+      window.cancelAnimationFrame(frameId);
+      delete homeManaBurstFrameByIdRef.current[burstId];
+    }
+    const timeoutId = homeManaBurstTimeoutByIdRef.current[burstId];
+    if (timeoutId !== undefined) {
+      window.clearTimeout(timeoutId);
+      delete homeManaBurstTimeoutByIdRef.current[burstId];
+    }
+  };
+
+  const clearHomeManaFadeTimerForId = (manaId: string): void => {
+    const frameId = homeManaFadeFrameByIdRef.current[manaId];
+    if (frameId !== undefined) {
+      window.cancelAnimationFrame(frameId);
+      delete homeManaFadeFrameByIdRef.current[manaId];
+    }
+    const timeoutId = homeManaFadeTimeoutByIdRef.current[manaId];
+    if (timeoutId !== undefined) {
+      window.clearTimeout(timeoutId);
+      delete homeManaFadeTimeoutByIdRef.current[manaId];
+    }
+  };
+
+  const triggerHomeManaPickupBurst = (point: Point): void => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    homeManaBurstIdCounterRef.current += 1;
+    const burstId = `home-mana-burst-${homeManaBurstIdCounterRef.current}`;
+    setHomeManaBursts((current) => [
+      ...current,
+      {
+        id: burstId,
+        x: point.x,
+        y: point.y,
+        isExpanding: false,
+      },
+    ]);
+    homeManaBurstFrameByIdRef.current[burstId] = window.requestAnimationFrame(() => {
+      setHomeManaBursts((current) =>
+        current.map((burst) =>
+          burst.id === burstId ? {...burst, isExpanding: true} : burst,
+        ),
+      );
+      delete homeManaBurstFrameByIdRef.current[burstId];
+    });
+    homeManaBurstTimeoutByIdRef.current[burstId] = window.setTimeout(() => {
+      setHomeManaBursts((current) =>
+        current.filter((burst) => burst.id !== burstId),
+      );
+      clearHomeManaBurstTimerForId(burstId);
+    }, HOME_MANA_BURST_MS + 90);
+  };
+
+  const getCollectedManaTrailPosition = (index: number): Point => {
+    const trail = trailRef.current;
+    if (trail.length === 0) {
+      return omomPositionRef.current;
+    }
+    const trailStart = trail[0];
+    const trailEndDistance = trail[trail.length - 1]?.distance ?? trailStart.distance;
+    const targetDistance =
+      trailEndDistance -
+      followDistanceRef.current -
+      HOME_COLLECTED_MANA_TRAIL_START_PX -
+      index * HOME_COLLECTED_MANA_TRAIL_SPACING_PX;
+    if (targetDistance > trailStart.distance || trail.length < 2) {
+      return pointAtTrailDistance(trail, targetDistance);
+    }
+
+    const nextTrailPoint = trail[1];
+    const directionLength = Math.max(
+      0.0001,
+      distanceBetween(trailStart, nextTrailPoint),
+    );
+    const distanceBehindStart =
+      trailStart.distance -
+      targetDistance +
+      HOME_COLLECTED_MANA_TRAIL_START_PX * 0.45;
+    return clampToViewport(
+      {
+        x: trailStart.x - ((nextTrailPoint.x - trailStart.x) / directionLength) * distanceBehindStart,
+        y: trailStart.y - ((nextTrailPoint.y - trailStart.y) / directionLength) * distanceBehindStart,
+      },
+      window.innerWidth,
+      window.innerHeight,
+    );
+  };
+
+  const updateCollectedManaTrailPositions = (): void => {
+    const currentSprites = collectedHomeManaSpritesRef.current;
+    if (currentSprites.length === 0) {
+      return;
+    }
+    const nextSprites = currentSprites.map((sprite, index) => ({
+      ...sprite,
+      ...getCollectedManaTrailPosition(index),
+    }));
+    collectedHomeManaSpritesRef.current = nextSprites;
+    nextSprites.forEach((sprite) => {
+      const node = collectedHomeManaElementRefs.current[sprite.id];
+      if (node !== undefined && node !== null) {
+        applyCollectedManaElementPosition(node, sprite);
+      }
+    });
+  };
+
+  const recalculateCollectedManaTrailState = (
+    sprites: HomeCollectedManaSprite[],
+  ): HomeCollectedManaSprite[] =>
+    sprites.map((sprite, index) => ({
+      ...sprite,
+      ...getCollectedManaTrailPosition(index),
+    }));
+
+  const createHomeManaSpawnPoint = (): Point => {
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const headerHeight = getCurrentHeaderHeight();
+    const minX = Math.min(HOME_MANA_EDGE_PADDING_PX, viewportWidth * 0.5);
+    const maxX = Math.max(minX, viewportWidth - HOME_MANA_EDGE_PADDING_PX);
+    const minY = Math.min(
+      Math.max(
+        HOME_MANA_EDGE_PADDING_PX,
+        headerHeight + HOME_MANA_STACK_WIDTH * 0.5 + 14,
+      ),
+      viewportHeight * 0.5,
+    );
+    const maxY = Math.max(minY, viewportHeight - HOME_MANA_EDGE_PADDING_PX);
+    const welcomeRect =
+      homeWelcomeBoxRef.current instanceof HTMLElement
+        ? homeWelcomeBoxRef.current.getBoundingClientRect()
+        : null;
+    let fallbackPoint: Point = {x: (minX + maxX) / 2, y: (minY + maxY) / 2};
+
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      const candidate = {
+        x: minX + Math.random() * (maxX - minX),
+        y: minY + Math.random() * (maxY - minY),
+      };
+      fallbackPoint = candidate;
+      if (
+        welcomeRect !== null &&
+        isPointInsideRectWithPadding(candidate, welcomeRect, HOME_MANA_STACK_WIDTH)
+      ) {
+        continue;
+      }
+      if (
+        distanceBetween(candidate, boschPositionRef.current) <
+          HOME_MANA_SPAWN_AVOID_RADIUS_PX ||
+        distanceBetween(candidate, omomPositionRef.current) <
+          HOME_MANA_SPAWN_AVOID_RADIUS_PX * 0.72
+      ) {
+        continue;
+      }
+      if (
+        homeManaSpritesRef.current.some(
+          (sprite) => distanceBetween(candidate, sprite) < HOME_MANA_STACK_WIDTH * 0.95,
+        )
+      ) {
+        continue;
+      }
+      return candidate;
+    }
+
+    return fallbackPoint;
+  };
+
+  const spawnHomeMana = (): boolean => {
+    if (
+      typeof window === 'undefined' ||
+      homeManaSpritesRef.current.length >= HOME_MANA_MAX_COUNT
+    ) {
+      return false;
+    }
+    homeManaIdCounterRef.current += 1;
+    const floatDurationMs = Math.round(2600 + Math.random() * 1300);
+    const nextMana = {
+      id: `home-mana-${homeManaIdCounterRef.current}`,
+      kind: getRandomHomeManaKind(),
+      status: 'entering' as const,
+      floatDurationMs,
+      floatDelayMs: -Math.round(Math.random() * floatDurationMs),
+      ...createHomeManaSpawnPoint(),
+    };
+    const nextSprites = [...homeManaSpritesRef.current, nextMana];
+    setHomeManaSpritesSynced(nextSprites);
+    homeManaFadeFrameByIdRef.current[nextMana.id] = window.requestAnimationFrame(() => {
+      setHomeManaSpritesSynced(
+        homeManaSpritesRef.current.map((sprite) =>
+          sprite.id === nextMana.id && sprite.status === 'entering'
+            ? {...sprite, status: 'active'}
+            : sprite,
+        ),
+      );
+      delete homeManaFadeFrameByIdRef.current[nextMana.id];
+    });
+    return true;
+  };
+
+  const collectTouchedHomeMana = (boschPoint: Point): void => {
+    const currentManaSprites = homeManaSpritesRef.current;
+    if (currentManaSprites.length === 0) {
+      return;
+    }
+
+    const collectedManaSprites = currentManaSprites.filter(
+      (sprite) =>
+        sprite.status !== 'leaving' &&
+        distanceBetween(sprite, boschPoint) <= HOME_MANA_PICKUP_RADIUS_PX,
+    );
+    if (collectedManaSprites.length === 0) {
+      return;
+    }
+
+    const collectedManaIdSet = new Set(
+      collectedManaSprites.map((sprite) => sprite.id),
+    );
+    setHomeManaSpritesSynced(
+      currentManaSprites.map((sprite) =>
+        collectedManaIdSet.has(sprite.id) ? {...sprite, status: 'leaving'} : sprite,
+      ),
+    );
+    const newlyCollectedManaSprites = collectedManaSprites.map((sprite, index) => {
+      collectedHomeManaIdCounterRef.current += 1;
+      const floatDurationMs = Math.round(2400 + Math.random() * 1200);
+      return {
+        id: `home-collected-mana-${collectedHomeManaIdCounterRef.current}`,
+        kind: sprite.kind,
+        floatDurationMs,
+        floatDelayMs: -Math.round(Math.random() * floatDurationMs),
+        ...getCollectedManaTrailPosition(index),
+      };
+    });
+    setCollectedHomeManaSpritesSynced(
+      recalculateCollectedManaTrailState([
+        ...collectedHomeManaSpritesRef.current,
+        ...newlyCollectedManaSprites,
+      ]),
+    );
+    collectedManaSprites.forEach((sprite) => {
+      clearHomeManaFadeTimerForId(sprite.id);
+      triggerHomeManaPickupBurst(sprite);
+      homeManaFadeTimeoutByIdRef.current[sprite.id] = window.setTimeout(() => {
+        setHomeManaSpritesSynced(
+          homeManaSpritesRef.current.filter((currentSprite) => currentSprite.id !== sprite.id),
+        );
+        clearHomeManaFadeTimerForId(sprite.id);
+      }, HOME_MANA_FADE_MS + 80);
+    });
+  };
 
   const markHomeSpriteLoaded = (key: HomeSpriteKey, src: string): void => {
     loadedHomeSpriteSrcSet.add(src);
@@ -431,6 +1000,51 @@ export default function Home(): ReactNode {
       current[key] ? current : {...current, [key]: true},
     );
   };
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const scheduleNextHomeManaSpawn = (): void => {
+      homeManaSpawnTimerRef.current = window.setTimeout(() => {
+        homeManaSpawnTimerRef.current = null;
+        spawnHomeMana();
+        scheduleNextHomeManaSpawn();
+      }, getRandomHomeManaSpawnDelayMs());
+    };
+
+    if (homeManaSpritesRef.current.some((sprite) => sprite.status === 'entering')) {
+      setHomeManaSpritesSynced(
+        homeManaSpritesRef.current.map((sprite) =>
+          sprite.status === 'entering' ? {...sprite, status: 'active'} : sprite,
+        ),
+      );
+    }
+    if (homeManaSpritesRef.current.length === 0) {
+      spawnHomeMana();
+    }
+    scheduleNextHomeManaSpawn();
+
+    return () => {
+      if (homeManaSpawnTimerRef.current !== null) {
+        window.clearTimeout(homeManaSpawnTimerRef.current);
+      }
+      homeManaSpawnTimerRef.current = null;
+      Object.keys(homeManaBurstFrameByIdRef.current).forEach((burstId) => {
+        clearHomeManaBurstTimerForId(burstId);
+      });
+      Object.keys(homeManaBurstTimeoutByIdRef.current).forEach((burstId) => {
+        clearHomeManaBurstTimerForId(burstId);
+      });
+      Object.keys(homeManaFadeFrameByIdRef.current).forEach((manaId) => {
+        clearHomeManaFadeTimerForId(manaId);
+      });
+      Object.keys(homeManaFadeTimeoutByIdRef.current).forEach((manaId) => {
+        clearHomeManaFadeTimerForId(manaId);
+      });
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -666,23 +1280,29 @@ export default function Home(): ReactNode {
     const previous = {
       htmlOverflow: htmlStyle.overflow,
       htmlOverscrollBehavior: htmlStyle.overscrollBehavior,
+      htmlTouchAction: htmlStyle.touchAction,
       bodyOverflow: bodyStyle.overflow,
       bodyOverscrollBehavior: bodyStyle.overscrollBehavior,
       bodyHeight: bodyStyle.height,
+      bodyTouchAction: bodyStyle.touchAction,
     };
 
     htmlStyle.overflow = 'hidden';
     htmlStyle.overscrollBehavior = 'none';
+    htmlStyle.touchAction = 'none';
     bodyStyle.overflow = 'hidden';
     bodyStyle.overscrollBehavior = 'none';
     bodyStyle.height = '100vh';
+    bodyStyle.touchAction = 'none';
 
     return () => {
       htmlStyle.overflow = previous.htmlOverflow;
       htmlStyle.overscrollBehavior = previous.htmlOverscrollBehavior;
+      htmlStyle.touchAction = previous.htmlTouchAction;
       bodyStyle.overflow = previous.bodyOverflow;
       bodyStyle.overscrollBehavior = previous.bodyOverscrollBehavior;
       bodyStyle.height = previous.bodyHeight;
+      bodyStyle.touchAction = previous.bodyTouchAction;
     };
   }, []);
 
@@ -717,8 +1337,13 @@ export default function Home(): ReactNode {
 
         const nextBoschPosition = pointAtPathDistance(path, nextPathDistance);
         boschPositionRef.current = nextBoschPosition;
-        appendTrailPoint(trailRef.current, nextBoschPosition);
+        appendTrailPoint(
+          trailRef.current,
+          nextBoschPosition,
+          getHomeTrailRetentionDistance(),
+        );
         setBoschPosition(nextBoschPosition);
+        collectTouchedHomeMana(nextBoschPosition);
 
         const trail = trailRef.current;
         const trailEndDistance = trail[trail.length - 1]?.distance ?? 0;
@@ -729,6 +1354,7 @@ export default function Home(): ReactNode {
         const nextOmomPosition = pointAtTrailDistance(trail, targetOmomTrailDistance);
         omomPositionRef.current = nextOmomPosition;
         setOmomPosition(nextOmomPosition);
+        updateCollectedManaTrailPositions();
 
         if (nextPathDistance >= path.totalLength) {
           isMovingRef.current = false;
@@ -808,45 +1434,86 @@ export default function Home(): ReactNode {
       animationFrameRef.current = window.requestAnimationFrame(tick);
     };
 
+    const guideBoschToPoint = (
+      point: Point,
+      options: {randomizePath: boolean; triggerBounce: boolean; minDistancePx: number},
+    ): void => {
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const start = boschPositionRef.current;
+      const clampedTarget = clampToViewport(point, viewportWidth, viewportHeight);
+      const previousTarget = lastGuideTargetRef.current;
+      if (
+        previousTarget !== null &&
+        activePathRef.current !== null &&
+        distanceBetween(previousTarget, clampedTarget) < options.minDistancePx
+      ) {
+        return;
+      }
+      if (distanceBetween(start, clampedTarget) < options.minDistancePx) {
+        return;
+      }
+
+      appendTrailPoint(trailRef.current, start, getHomeTrailRetentionDistance());
+      activePathRef.current = buildPathData(
+        options.randomizePath
+          ? createRandomPath(start, clampedTarget, viewportWidth, viewportHeight)
+          : [start, clampedTarget],
+      );
+      activePathDistanceRef.current = 0;
+      isMovingRef.current = true;
+      lastGuideTargetRef.current = clampedTarget;
+      if (options.triggerBounce) {
+        bounceStartedAtRef.current = performance.now();
+      }
+      setTargetDotPosition(clampedTarget);
+      targetDotOpacityRef.current = 1;
+      setTargetDotOpacity(1);
+      ensureAnimation();
+    };
+
     const handlePointerDown = (event: PointerEvent): void => {
+      if (event.pointerType === 'mouse' && event.button !== 0) {
+        return;
+      }
       const targetElement = event.target instanceof Element ? event.target : null;
       if (
         targetElement !== null &&
         (
           targetElement.closest('header') ||
           targetElement.closest('aside[aria-label="Site menu"]') ||
-          targetElement.closest('button[aria-label="Close site menu"]')
+          targetElement.closest('button[aria-label="Close site menu"]') ||
+          targetElement.closest('a[aria-label="Go to settings"]') ||
+          targetElement.closest('a[aria-label="Return to previous page"]')
         )
       ) {
         return;
       }
-      const viewportWidth = window.innerWidth;
-      const viewportHeight = window.innerHeight;
-      const start = boschPositionRef.current;
-      const clampedTarget = clampToViewport(
+      activeGuidePointerIdRef.current = event.pointerId;
+      guideBoschToPoint(
         {x: event.clientX, y: event.clientY},
-        viewportWidth,
-        viewportHeight,
+        {randomizePath: true, triggerBounce: true, minDistancePx: 4},
       );
-      if (distanceBetween(start, clampedTarget) < 4) {
+    };
+
+    const handlePointerMove = (event: PointerEvent): void => {
+      if (activeGuidePointerIdRef.current !== event.pointerId) {
         return;
       }
-
-      appendTrailPoint(trailRef.current, start);
-      const randomizedPath = createRandomPath(
-        start,
-        clampedTarget,
-        viewportWidth,
-        viewportHeight,
+      if (event.cancelable) {
+        event.preventDefault();
+      }
+      guideBoschToPoint(
+        {x: event.clientX, y: event.clientY},
+        {randomizePath: false, triggerBounce: false, minDistancePx: 6},
       );
-      activePathRef.current = buildPathData(randomizedPath);
-      activePathDistanceRef.current = 0;
-      isMovingRef.current = true;
-      bounceStartedAtRef.current = performance.now();
-      setTargetDotPosition(clampedTarget);
-      targetDotOpacityRef.current = 1;
-      setTargetDotOpacity(1);
-      ensureAnimation();
+    };
+
+    const endPointerGuide = (event: PointerEvent): void => {
+      if (activeGuidePointerIdRef.current !== event.pointerId) {
+        return;
+      }
+      activeGuidePointerIdRef.current = null;
     };
 
     const handleResize = (): void => {
@@ -866,13 +1533,21 @@ export default function Home(): ReactNode {
       omomPositionRef.current = nextOmom;
       setBoschPosition(nextBosch);
       setOmomPosition(nextOmom);
+      updateCollectedManaTrailPositions();
     };
 
     window.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', endPointerGuide);
+    window.addEventListener('pointercancel', endPointerGuide);
     window.addEventListener('resize', handleResize);
     return () => {
       window.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', endPointerGuide);
+      window.removeEventListener('pointercancel', endPointerGuide);
       window.removeEventListener('resize', handleResize);
+      activeGuidePointerIdRef.current = null;
       if (animationFrameRef.current !== null) {
         window.cancelAnimationFrame(animationFrameRef.current);
       }
@@ -885,6 +1560,7 @@ export default function Home(): ReactNode {
     <NewTopLayout
       underCloudChildren={
         <div style={homeSpriteLayerStyle}>
+          <style>{homeManaAnimationStyle}</style>
           {targetDotPosition ? (
             <span
               aria-hidden="true"
@@ -902,6 +1578,55 @@ export default function Home(): ReactNode {
               opacity: areHomeSpritesReady ? 1 : 0,
               transition: 'opacity 140ms ease-out',
             }}>
+            {homeManaSprites.map((sprite) => {
+              const manaSrc =
+                sprite.kind === 'black'
+                  ? BLACK_MANA_SPRITE_SRC
+                  : WHITE_MANA_SPRITE_SRC;
+              const floatAnimationStyle: CSSProperties = {
+                animationDuration: `${sprite.floatDurationMs}ms`,
+                animationDelay: `${sprite.floatDelayMs}ms`,
+              };
+              return (
+                <div
+                  key={sprite.id}
+                  style={{
+                    ...manaStackStyle,
+                    left: `${sprite.x}px`,
+                    top: `${sprite.y}px`,
+                    opacity: sprite.status === 'active' ? 1 : 0,
+                    zIndex: Math.round(sprite.y),
+                  }}>
+                  <span
+                    className="home-mana-float-core"
+                    aria-hidden="true"
+                    style={floatAnimationStyle}>
+                    <img
+                      src={manaSrc}
+                      alt=""
+                      aria-hidden="true"
+                      style={homePixelImageStyle}
+                      loading="eager"
+                      decoding="async"
+                      draggable={false}
+                    />
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    className="home-mana-float-shadow"
+                    style={{
+                      ...manaShadowStyle,
+                      ...floatAnimationStyle,
+                    }}
+                  />
+                </div>
+              );
+            })}
+            <HomeCollectedManaTrail
+              currentSpritesRef={collectedHomeManaSpritesRef}
+              elementRefs={collectedHomeManaElementRefs}
+              sprites={collectedHomeManaSprites}
+            />
             <div
               style={{
                 ...boschStackStyle,
@@ -948,14 +1673,44 @@ export default function Home(): ReactNode {
               />
               <span aria-hidden="true" style={omomShadowStyle} />
             </div>
+            {homeManaBursts.map((burst) => (
+              <span
+                key={burst.id}
+                aria-hidden="true"
+                style={{
+                  ...homeManaBurstLayerStyle,
+                  left: `${burst.x}px`,
+                  top: `${burst.y}px`,
+                  zIndex: Math.round(burst.y) + 120,
+                }}>
+                <span
+                  style={{
+                    ...homeManaBurstCoreStyle,
+                    transform: burst.isExpanding ? 'scale(2.7)' : 'scale(1)',
+                    opacity: burst.isExpanding ? 0 : 0.86,
+                  }}
+                />
+                <span
+                  style={{
+                    ...homeManaBurstRingStyle,
+                    transform: burst.isExpanding ? 'scale(3.4)' : 'scale(1)',
+                    opacity: burst.isExpanding ? 0 : 1,
+                  }}
+                />
+              </span>
+            ))}
           </div>
         </div>
       }>
       <div style={{...homeWelcomeLayerStyle, top: `${homeWelcomeTopPx}px`}}>
-        <div ref={homeWelcomeBoxRef} style={homeWelcomeBoxStyle}>
-          Welcome to <strong>Mons Academy</strong>, this world's #1 learning hub for all things <strong>Super Metal Mons</strong>!
+        <div ref={homeWelcomeBoxRef} className="home-welcome-box" style={homeWelcomeBoxStyle}>
+          {welcomeContent}
         </div>
       </div>
     </NewTopLayout>
   );
+}
+
+export default function Home(): ReactNode {
+  return <HomeExperience />;
 }

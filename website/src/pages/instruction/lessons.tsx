@@ -2,14 +2,18 @@ import {useEffect, useMemo, useState, type CSSProperties, type ReactNode} from '
 import Link from '@docusaurus/Link';
 import BlankSectionPage from '@site/src/components/BlankSectionPage';
 import InstructionSubnav from '@site/src/components/InstructionSubnav';
+import {LessonCompletionBadge} from '@site/src/components/LessonCompletion';
 import LessonFavoriteStar from '@site/src/components/LessonFavoriteStar';
 import {
+  LESSON_COMPLETIONS_EVENT_NAME,
   LESSON_FAVORITES_EVENT_NAME,
+  readLessonCompletionsFromStorage,
   readLessonFavoritesFromStorage,
   type LessonId,
 } from '@site/src/constants/lessonFavorites';
 
 type LessonSortMode = 'alphabetical' | 'created' | 'complexity';
+type LessonCompletionFilterMode = 'mixed' | 'uncompleted' | 'completed';
 type LessonCard = {
   id: LessonId;
   title: string;
@@ -122,12 +126,6 @@ const filterButtonActiveStyle: CSSProperties = {
   color: '#fff',
 };
 
-const filterButtonDisabledStyle: CSSProperties = {
-  ...filterButtonStyle,
-  cursor: 'not-allowed',
-  opacity: 0.45,
-};
-
 const sortIconStyle: CSSProperties = {
   width: '18px',
   height: '18px',
@@ -213,11 +211,35 @@ const lessonCardTitleRowStyle: CSSProperties = {
   justifyContent: 'center',
   gap: '0.45rem',
   maxWidth: '100%',
+  position: 'relative',
 };
 
 const lessonCardTitleStarOffsetStyle: CSSProperties = {
   display: 'inline-flex',
+  position: 'relative',
   transform: 'translate(10px, -2px)',
+};
+
+const lessonCardCompletionBadgeStyle: CSSProperties = {
+  position: 'absolute',
+  left: 'calc(100% + 0.48rem + 2px)',
+  top: 'calc(50% - 3px)',
+  width: '1.56rem',
+  height: '1.56rem',
+  color: '#178B35',
+  pointerEvents: 'none',
+  zIndex: 2,
+};
+
+const lessonCardStarCompletionBadgeStyle: CSSProperties = {
+  position: 'absolute',
+  left: 'calc(100% + 0.38rem)',
+  top: '50%',
+  width: '1.45rem',
+  height: '1.45rem',
+  color: '#178B35',
+  pointerEvents: 'none',
+  zIndex: 2,
 };
 
 const lessonsEmptyStateStyle: CSSProperties = {
@@ -250,11 +272,28 @@ const starterLessonCards: LessonCard[] = [
 
 const DEFAULT_LESSON_SORT_MODE: LessonSortMode = 'created';
 
+function getNextCompletionFilterMode(
+  current: LessonCompletionFilterMode,
+): LessonCompletionFilterMode {
+  if (current === 'mixed') {
+    return 'uncompleted';
+  }
+  if (current === 'uncompleted') {
+    return 'completed';
+  }
+  return 'mixed';
+}
+
 export default function InstructionLessonsPage(): ReactNode {
   const [sortMode, setSortMode] = useState<LessonSortMode>(DEFAULT_LESSON_SORT_MODE);
   const [isSortReversed, setIsSortReversed] = useState(false);
   const [isFavoritesFilterEnabled, setIsFavoritesFilterEnabled] = useState(false);
+  const [completionFilterMode, setCompletionFilterMode] =
+    useState<LessonCompletionFilterMode>('mixed');
   const [favoriteLessonIds, setFavoriteLessonIds] = useState<Set<LessonId>>(new Set<LessonId>());
+  const [completedLessonIds, setCompletedLessonIds] = useState<Set<LessonId>>(
+    new Set<LessonId>(),
+  );
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -269,6 +308,22 @@ export default function InstructionLessonsPage(): ReactNode {
     return () => {
       window.removeEventListener('storage', syncFavorites);
       window.removeEventListener(LESSON_FAVORITES_EVENT_NAME, syncFavorites as EventListener);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const syncCompletions = () => {
+      setCompletedLessonIds(readLessonCompletionsFromStorage());
+    };
+    syncCompletions();
+    window.addEventListener('storage', syncCompletions);
+    window.addEventListener(LESSON_COMPLETIONS_EVENT_NAME, syncCompletions as EventListener);
+    return () => {
+      window.removeEventListener('storage', syncCompletions);
+      window.removeEventListener(LESSON_COMPLETIONS_EVENT_NAME, syncCompletions as EventListener);
     };
   }, []);
 
@@ -289,11 +344,48 @@ export default function InstructionLessonsPage(): ReactNode {
 
   const visibleLessonCards = useMemo(
     () =>
-      sortedLessonCards.filter((lesson) =>
-        isFavoritesFilterEnabled ? favoriteLessonIds.has(lesson.id) : true,
-      ),
-    [favoriteLessonIds, isFavoritesFilterEnabled, sortedLessonCards],
+      sortedLessonCards.filter((lesson) => {
+        if (isFavoritesFilterEnabled && !favoriteLessonIds.has(lesson.id)) {
+          return false;
+        }
+        if (completionFilterMode === 'completed') {
+          return completedLessonIds.has(lesson.id);
+        }
+        if (completionFilterMode === 'uncompleted') {
+          return !completedLessonIds.has(lesson.id);
+        }
+        return true;
+      }),
+    [
+      completedLessonIds,
+      completionFilterMode,
+      favoriteLessonIds,
+      isFavoritesFilterEnabled,
+      sortedLessonCards,
+    ],
   );
+  const isCompletionFilterActive = completionFilterMode !== 'mixed';
+  const isUncompletedFilterActive = completionFilterMode === 'uncompleted';
+  const completionFilterTitle =
+    completionFilterMode === 'mixed'
+      ? 'Show only uncompleted lessons'
+      : completionFilterMode === 'uncompleted'
+        ? 'Show only completed lessons'
+        : 'Show all lessons';
+  const completionFilterAriaLabel =
+    completionFilterMode === 'mixed'
+      ? 'Completion filter: showing all lessons. Click to show only uncompleted lessons'
+      : completionFilterMode === 'uncompleted'
+        ? 'Completion filter: showing only uncompleted lessons. Click to show only completed lessons'
+        : 'Completion filter: showing only completed lessons. Click to show all lessons';
+  const emptyStateMessage =
+    completionFilterMode === 'completed'
+      ? 'No completed lessons yet.'
+      : completionFilterMode === 'uncompleted'
+        ? 'No uncompleted lessons.'
+        : isFavoritesFilterEnabled
+          ? 'No starred lessons yet.'
+          : 'No lessons to show.';
 
   return (
     <BlankSectionPage title="Instruction">
@@ -324,10 +416,15 @@ export default function InstructionLessonsPage(): ReactNode {
               <button
                 type="button"
                 className="gallery-toolbar-button"
-                aria-label="Show only completed lessons (coming soon)"
-                title="Completed filter coming soon"
-                style={filterButtonDisabledStyle}
-                disabled>
+                aria-label={completionFilterAriaLabel}
+                title={completionFilterTitle}
+                aria-pressed={isCompletionFilterActive}
+                onClick={() =>
+                  setCompletionFilterMode((current) =>
+                    getNextCompletionFilterMode(current),
+                  )
+                }
+                style={isCompletionFilterActive ? filterButtonActiveStyle : filterButtonStyle}>
                 <svg viewBox="0 0 24 24" aria-hidden="true" style={filterIconStyle} className="gallery-toolbar-icon" fill="none">
                   <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.8" />
                   <path
@@ -337,6 +434,14 @@ export default function InstructionLessonsPage(): ReactNode {
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   />
+                  {isUncompletedFilterActive ? (
+                    <path
+                      d="M18.2 5.8L5.8 18.2"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                    />
+                  ) : null}
                 </svg>
               </button>
             </div>
@@ -466,6 +571,18 @@ export default function InstructionLessonsPage(): ReactNode {
                   </Link>
                   <span style={lessonCardTitleStarOffsetStyle} className="gallery-card-title-star">
                     <LessonFavoriteStar lessonId={lesson.id} size="1.28rem" />
+                    <span className="lesson-gallery-star-completion-badge">
+                      <LessonCompletionBadge
+                        lessonId={lesson.id}
+                        style={lessonCardStarCompletionBadgeStyle}
+                      />
+                    </span>
+                  </span>
+                  <span className="lesson-gallery-title-completion-badge">
+                    <LessonCompletionBadge
+                      lessonId={lesson.id}
+                      style={lessonCardCompletionBadgeStyle}
+                    />
                   </span>
                 </div>
               </div>
@@ -475,7 +592,7 @@ export default function InstructionLessonsPage(): ReactNode {
             </article>
           ))}
           {visibleLessonCards.length === 0 ? (
-            <p style={lessonsEmptyStateStyle}>No starred lessons yet.</p>
+            <p style={lessonsEmptyStateStyle}>{emptyStateMessage}</p>
           ) : null}
         </section>
       </section>

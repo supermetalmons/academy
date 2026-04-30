@@ -1,5 +1,5 @@
-import {useEffect, useRef, useState} from 'react';
-import type {CSSProperties, ReactNode} from 'react';
+import {Fragment, useEffect, useRef, useState} from 'react';
+import type {CSSProperties, MouseEvent, ReactNode} from 'react';
 import BlankSectionPage from '@site/src/components/BlankSectionPage';
 
 type FaqEntry = {
@@ -12,6 +12,11 @@ type PersonLinkProps = {
   imageSrc: string;
   name: string;
   imageStyle?: CSSProperties;
+};
+
+type FaqPreviewImage = {
+  src: string;
+  alt: string;
 };
 
 const externalLinkProps = {
@@ -31,6 +36,36 @@ const faqItemStyle: CSSProperties = {
   color: '#000',
   fontSize: '1rem',
   lineHeight: 1.45,
+};
+
+const faqAnswerContinuationStyle: CSSProperties = {
+  display: 'block',
+  marginTop: '0.68rem',
+  textIndent: 0,
+};
+
+const faqLearnParagraphStyle: CSSProperties = {
+  ...faqAnswerContinuationStyle,
+  display: 'flex',
+  alignItems: 'flex-start',
+  gap: 'calc(0.85rem + 50px)',
+};
+
+const faqLearnParagraphTextStyle: CSSProperties = {
+  flex: '1 1 auto',
+  minWidth: 0,
+};
+
+const faqLearnImageStyle: CSSProperties = {
+  display: 'block',
+  flex: '0 0 auto',
+  width: 'clamp(88px, 16vw, 132px)',
+  maxWidth: '34%',
+  height: 'auto',
+  objectFit: 'contain',
+  imageRendering: 'auto',
+  transform: 'translate(-0.32rem, -0.48rem)',
+  cursor: 'zoom-in',
 };
 
 const faqTopLogoStyle: CSSProperties = {
@@ -53,6 +88,94 @@ const faqWindowImageStyle: CSSProperties = {
   objectFit: 'contain',
   transform: 'translateZ(0)',
   backfaceVisibility: 'hidden',
+  cursor: 'pointer',
+};
+
+const faqGalleryImageStyle: CSSProperties = {
+  display: 'block',
+  width: 'auto',
+  maxWidth: 'min(50%, 310px)',
+  height: 'auto',
+  margin: '0 auto',
+  imageRendering: 'auto',
+  objectFit: 'contain',
+  cursor: 'zoom-in',
+};
+
+const faqPreviewOverlayStyle: CSSProperties = {
+  position: 'fixed',
+  inset: 0,
+  backgroundColor: 'rgba(255, 255, 255, 0.04)',
+  backdropFilter: 'blur(7px)',
+  WebkitBackdropFilter: 'blur(7px)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: '2.2rem 1.4rem',
+  zIndex: 12050,
+  cursor: 'zoom-out',
+};
+
+const faqPreviewPanelShellStyle: CSSProperties = {
+  position: 'relative',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  transformStyle: 'preserve-3d',
+  transition: 'transform 130ms ease-out',
+  willChange: 'transform',
+};
+
+const faqPreviewTiltRegionStyle: CSSProperties = {
+  position: 'relative',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: '15px',
+};
+
+const faqPreviewPanelStyle: CSSProperties = {
+  position: 'relative',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: 'fit-content',
+  height: 'fit-content',
+  maxWidth: '92vw',
+  maxHeight: '90vh',
+  backgroundColor: 'rgba(255, 255, 255, 0.7)',
+  border: '1px solid rgba(0, 0, 0, 0.18)',
+  borderRadius: '14px',
+  padding: '0.92rem',
+  boxSizing: 'border-box',
+  boxShadow: 'none',
+  overflow: 'hidden',
+  cursor: 'default',
+};
+
+const faqPreviewImageStyle: CSSProperties = {
+  maxWidth: 'min(84vw, 1180px)',
+  maxHeight: 'min(78vh, 780px)',
+  width: 'auto',
+  height: 'auto',
+  objectFit: 'contain',
+  objectPosition: 'center',
+  imageRendering: 'auto',
+  backgroundColor: 'transparent',
+  borderRadius: '9px',
+};
+
+const faqPreviewLswImageStyle: CSSProperties = {
+  ...faqPreviewImageStyle,
+  width: 'min(78vw, 680px)',
+  maxWidth: 'min(78vw, 680px)',
+  maxHeight: 'min(78vh, 680px)',
+};
+
+const faqPreviewLswOmomImageStyle: CSSProperties = {
+  ...faqPreviewImageStyle,
+  maxWidth: 'min(70vw, 610px)',
+  maxHeight: 'min(70vh, 610px)',
 };
 
 const faqWindowLinkWrapStyle: CSSProperties = {
@@ -183,12 +306,26 @@ const wherePlayImageBaseStyle: CSSProperties = {
   objectFit: 'contain',
   imageRendering: 'auto',
   flex: '0 0 auto',
+  cursor: 'zoom-in',
 };
 
 const wherePlayImageStyle: CSSProperties = {
   ...wherePlayImageBaseStyle,
   transform: 'translate(-42px, -49px) scale(1.083333)',
   transformOrigin: 'top left',
+};
+
+const wherePlayTiltImageStyle: CSSProperties = {
+  display: 'block',
+  width: '100%',
+  maxWidth: '100%',
+  height: 'auto',
+  objectFit: 'contain',
+  imageRendering: 'auto',
+  transformOrigin: 'center center',
+  transformStyle: 'preserve-3d',
+  willChange: 'transform',
+  cursor: 'zoom-in',
 };
 
 const wherePlayItemStyle: CSSProperties = {
@@ -256,6 +393,7 @@ const lswMainImageStyle: CSSProperties = {
   objectFit: 'contain',
   imageRendering: 'auto',
   transform: 'translateY(-20px)',
+  cursor: 'zoom-in',
 };
 
 const lswMainImageWideStyle: CSSProperties = {
@@ -270,6 +408,7 @@ const lswOmomImageStyle: CSSProperties = {
   display: 'block',
   objectFit: 'contain',
   imageRendering: 'auto',
+  cursor: 'zoom-in',
 };
 
 const personLinkWrapStyle: CSSProperties = {
@@ -291,6 +430,7 @@ const personAvatarStyle: CSSProperties = {
   transform: 'translateY(3px) translateZ(0)',
   imageRendering: 'auto',
   filter: 'saturate(1.04) contrast(1.04)',
+  cursor: 'zoom-in',
 };
 
 const meinongAvatarStyle: CSSProperties = {
@@ -310,7 +450,13 @@ const leadingPersonInsetStyle: CSSProperties = {
 function PersonLink({href, imageSrc, name, imageStyle}: PersonLinkProps): ReactNode {
   return (
     <span style={personLinkWrapStyle}>
-      <img src={imageSrc} alt="" aria-hidden="true" style={{...personAvatarStyle, ...imageStyle}} />
+      <img
+        src={imageSrc}
+        alt=""
+        aria-hidden="true"
+        data-preview-alt={name}
+        style={{...personAvatarStyle, ...imageStyle}}
+      />
       <a href={href} {...externalLinkProps} style={personLinkTextStyle}>
         {name}
       </a>
@@ -352,13 +498,33 @@ const faqEntries: FaqEntry[] = [
     ),
   },
   {
+    question: "How do I play- you said it's like chess?",
+    answer: (
+      <>
+        We say it&apos;s a chesslike and it takes a similar mindset, but it doesn&apos;t quite share any
+        specific rules with chess. The game was more directly inspired by the ancient norse game
+        Hnefatafl as well as Yu-Gi-Oh! Dungeon Dice Monsters, tho it&apos;s mostly its own thing!
+        <span style={faqLearnParagraphStyle}>
+          <span style={faqLearnParagraphTextStyle}>
+            You can get started learning the Basic Rules over in our <a href="/instruction">Instruction Room</a>, or you
+            could head straight to our <a href="/instruction/video-tutorial">Video Tutorials</a> to get a run down
+            that way. Then head over to <a href="https://mons.link/" {...externalLinkProps}>mons.link</a> and there
+            you can either go up against the bot for some initial real game practice or go through the tutorial
+            puzzles there in the home menu.
+          </span>
+          <img src="/assets/learn.png" alt="Learn Super Metal Mons" style={faqLearnImageStyle} />
+        </span>
+      </>
+    ),
+  },
+  {
     question: 'Do I need a crypto wallet to play?',
     answer: (
       <>
-        No! The game is fully playable without connecting anything. You can play local or anon, but when
-        you sign in with ETH, Solana, or your Apple or Twitter accounts you can build your profile to start
-        climbing the elo leaderboard and mining daily rewards. If you do connect a wallet that holds certain
-        nfts (
+        No! The game is fully playable without signing in at all. You can play local or anon, and when
+        you do want to sign in you can do so with Ethereum, Solana, or your Apple or Twitter (X)
+        profile. An account allows you to build your profile to start climbing the elo leaderboard and
+        mining daily rewards. If you do connect a wallet that holds certain nfts (
         <a href="https://www.tensor.trade/trade/swag_pack" {...externalLinkProps}>Swag Pack</a>,{' '}
         <a href="https://www.tensor.trade/trade/smm_4_year_anniversary_set" {...externalLinkProps}>SMM 4yr Anniversary Set!</a>) you can
         use it on the site to access some exclusive cosmetic content.
@@ -366,13 +532,15 @@ const faqEntries: FaqEntry[] = [
     ),
   },
   {
-    question: "I'm sitting in the automatch queue, but nothing is happening- what gives?",
+    question: "I've beaten the bot! How do I find a real game?",
     answer: (
       <>
         We have a small but dedicated pool of players in our Telegram. The best way to organize games or
         get pinged whenever anyone else is looking for a match is to{' '}
         <a href="https://t.me/supermetalmons" {...externalLinkProps}>join us there!</a> It&apos;s also a great
-        place to get some pointers on how to play if you&apos;re just getting started.
+        place to get some pointers on how to play if you&apos;re just getting started. We periodically run
+        Sunday play sessions and competitive events you can stay up to date on there or by following{' '}
+        <a href="https://x.com/supermetalmons" {...externalLinkProps}>@supermetalmons</a>.
       </>
     ),
   },
@@ -392,8 +560,10 @@ const faqEntries: FaqEntry[] = [
     question: 'Is there a physical version of the game?',
     answer: (
       <>
-        Yes! Production is currently paused, but once resumed they will be available{' '}
-        <a href="https://www.supermetalmons.com/collections/all/" {...externalLinkProps}>here</a>.
+        Yes! Production is currently paused as our limited{' '}
+        <a href="https://www.supermetalmons.com/" {...externalLinkProps}>Base Set Kits</a> have sold out,
+        but once resumed they will be available at <a href="https://mons.shop/" {...externalLinkProps}>mons.shop</a>,
+        which also hosts various related drops+products.
       </>
     ),
   },
@@ -436,10 +606,17 @@ export default function FaqPage(): ReactNode {
   const [isWindowHovered, setIsWindowHovered] = useState(false);
   const [isNavBelowRowMode, setIsNavBelowRowMode] = useState(false);
   const [isNavBelowButtonsWrapped, setIsNavBelowButtonsWrapped] = useState(false);
+  const [wherePlayTilt, setWherePlayTilt] = useState({
+    isActive: false,
+    rotateX: 0,
+    rotateY: 0,
+  });
   const [viewportWidth, setViewportWidth] = useState<number>(
     typeof window === 'undefined' ? Number.POSITIVE_INFINITY : window.innerWidth,
   );
   const [windowLabelScale, setWindowLabelScale] = useState(1);
+  const [previewImage, setPreviewImage] = useState<FaqPreviewImage | null>(null);
+  const [previewTilt, setPreviewTilt] = useState({rotateX: 0, rotateY: 0});
   const windowLinkRef = useRef<HTMLAnchorElement | null>(null);
   const windowLabelRef = useRef<HTMLSpanElement | null>(null);
 
@@ -560,6 +737,22 @@ export default function FaqPage(): ReactNode {
   }, []);
 
   useEffect(() => {
+    if (!previewImage) {
+      setPreviewTilt({rotateX: 0, rotateY: 0});
+      return undefined;
+    }
+    const handleEscape = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        setPreviewImage(null);
+      }
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => {
+      window.removeEventListener('keydown', handleEscape);
+    };
+  }, [previewImage]);
+
+  useEffect(() => {
     if (typeof window === 'undefined') {
       return;
     }
@@ -580,11 +773,87 @@ export default function FaqPage(): ReactNode {
   const whoMadeSiteEntryIndex = faqEntries.findIndex(
     (entry) => entry.question === 'Who made this site?',
   );
+  const handleWherePlayTiltMove = (event: MouseEvent<HTMLImageElement>): void => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const xPercent = (event.clientX - rect.left) / rect.width;
+    const yPercent = (event.clientY - rect.top) / rect.height;
+    const maxTiltDegrees = 20;
+    setWherePlayTilt({
+      isActive: true,
+      rotateX: (0.5 - yPercent) * maxTiltDegrees,
+      rotateY: (xPercent - 0.5) * maxTiltDegrees,
+    });
+  };
+  const resetWherePlayTilt = (): void => {
+    setWherePlayTilt({
+      isActive: false,
+      rotateX: 0,
+      rotateY: 0,
+    });
+  };
+  const handleFaqImageClick = (event: MouseEvent<HTMLDivElement>): void => {
+    const target = event.target;
+    if (!(target instanceof HTMLImageElement)) {
+      return;
+    }
+    if (target.dataset.faqPreviewDisabled === 'true') {
+      return;
+    }
+    if (target.closest('a')) {
+      return;
+    }
+    const imageSrc = target.currentSrc || target.getAttribute('src');
+    if (!imageSrc) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    setPreviewImage({
+      src: imageSrc,
+      alt: target.alt || target.getAttribute('data-preview-alt') || 'FAQ image preview',
+    });
+  };
+  const handlePreviewTiltMove = (event: MouseEvent<HTMLDivElement>): void => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) {
+      return;
+    }
+    const x = (event.clientX - rect.left) / rect.width - 0.5;
+    const y = (event.clientY - rect.top) / rect.height - 0.5;
+    setPreviewTilt({
+      rotateX: Number((-y * 8.6).toFixed(2)),
+      rotateY: Number((x * 10.5).toFixed(2)),
+    });
+  };
+  const getPreviewImageStyle = (src: string): CSSProperties => {
+    if (src.includes('/assets/lsw.png')) {
+      return faqPreviewLswImageStyle;
+    }
+    if (src.includes('/assets/ceramic/drainer-omom.png')) {
+      return faqPreviewLswOmomImageStyle;
+    }
+    return faqPreviewImageStyle;
+  };
+  const wherePlayTiltedImageStyle: CSSProperties = {
+    ...wherePlayTiltImageStyle,
+    filter: wherePlayTilt.isActive
+      ? 'drop-shadow(0 10px 12px rgba(0, 0, 0, 0.16)) brightness(1.025)'
+      : 'drop-shadow(0 4px 5px rgba(0, 0, 0, 0.08))',
+    transform: `rotateX(${wherePlayTilt.rotateX.toFixed(2)}deg) rotateY(${wherePlayTilt.rotateY.toFixed(2)}deg) translateZ(${wherePlayTilt.isActive ? 18 : 0}px)`,
+    transition: wherePlayTilt.isActive
+      ? 'transform 80ms ease-out, filter 160ms ease-out'
+      : 'transform 280ms cubic-bezier(0.22, 1, 0.36, 1), filter 220ms ease-out',
+  };
 
   return (
     <BlankSectionPage title="FAQ">
-      <div style={faqWrapStyle}>
-        <img src="/assets/smmlogo.png" alt="Super Metal Mons logo" style={faqTopLogoStyle} />
+      <div style={faqWrapStyle} onClick={handleFaqImageClick}>
+        <img
+          src="/assets/smmlogo.png"
+          alt="Super Metal Mons logo"
+          data-faq-preview-disabled="true"
+          style={faqTopLogoStyle}
+        />
         {faqEntries.map((entry, entryIndex) => {
           const shouldLiftWideEntry =
             !isThinFaqLayout && whoMadeSiteEntryIndex !== -1 && entryIndex >= whoMadeSiteEntryIndex;
@@ -656,14 +925,25 @@ export default function FaqPage(): ReactNode {
                 ) : (
                   <div style={wherePlayWideLayoutStyle}>
                     <span style={wherePlayTextColumnStyle}>{entry.answer}</span>
-                    <img src="/assets/id.png" alt="" aria-hidden="true" style={wherePlayImageStyle} />
+                    <span style={{...wherePlayImageStyle, perspective: '620px'}} aria-hidden="true">
+                      <img
+                        src="/assets/id.png"
+                        alt=""
+                        draggable={false}
+                        style={wherePlayTiltedImageStyle}
+                        onMouseMove={handleWherePlayTiltMove}
+                        onMouseEnter={handleWherePlayTiltMove}
+                        onMouseLeave={resetWherePlayTilt}
+                        onBlur={resetWherePlayTilt}
+                      />
+                    </span>
                   </div>
                 )}
               </div>
             );
           }
 
-          return (
+          const defaultEntryNode = (
             <p
               key={entry.question}
               style={
@@ -680,6 +960,21 @@ export default function FaqPage(): ReactNode {
               {entry.answer}
             </p>
           );
+
+          if (entry.question === 'Is the game still in development?') {
+            return (
+              <Fragment key={`${entry.question}-with-gallery`}>
+                {defaultEntryNode}
+                <img
+                  src="/assets/gallery/other-pics/001.jpg"
+                  alt="Super Metal Mons gallery"
+                  style={faqGalleryImageStyle}
+                />
+              </Fragment>
+            );
+          }
+
+          return defaultEntryNode;
         })}
         <div
           style={
@@ -725,6 +1020,34 @@ export default function FaqPage(): ReactNode {
           </a>
         </div>
       </div>
+      {previewImage ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="FAQ image preview"
+          style={faqPreviewOverlayStyle}
+          onClick={() => setPreviewImage(null)}>
+          <div
+            style={faqPreviewTiltRegionStyle}
+            onClick={(event) => event.stopPropagation()}
+            onMouseMove={handlePreviewTiltMove}
+            onMouseLeave={() => setPreviewTilt({rotateX: 0, rotateY: 0})}>
+            <div
+              style={{
+                ...faqPreviewPanelShellStyle,
+                transform: `perspective(1500px) rotateX(${previewTilt.rotateX}deg) rotateY(${previewTilt.rotateY}deg)`,
+              }}>
+              <div style={faqPreviewPanelStyle}>
+                <img
+                  src={previewImage.src}
+                  alt={previewImage.alt}
+                  style={getPreviewImageStyle(previewImage.src)}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </BlankSectionPage>
   );
 }

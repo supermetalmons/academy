@@ -256,10 +256,10 @@ export default function PieceDetailEntryPage({
       <div style={contentStyle}>
         <InstructionSubnav active="basic-rules" />
         <div style={navRowStyle}>
-          <Link to="/piece-details" style={navLinkStyle}>
+          <Link to="/piece-details" className="mons-box-button" style={navLinkStyle}>
             ← back to piece details
           </Link>
-          <Link to="/instruction" style={navLinkStyle}>
+          <Link to="/instruction" className="mons-box-button" style={navLinkStyle}>
             ↑ back to board
           </Link>
         </div>
@@ -291,14 +291,20 @@ export default function PieceDetailEntryPage({
             ) : null}
             {previousDetail && nextDetail ? (
               <div style={bottomNavRowStyle}>
-                <Link to={`/piece-details/${previousDetail.slug}`} style={navLinkStyle}>
+                <Link
+                  to={`/piece-details/${previousDetail.slug}`}
+                  className="mons-box-button"
+                  style={navLinkStyle}>
                   <span style={bottomNavLinkContentStyle}>
                     <span aria-hidden="true" style={bottomNavArrowStyle}>←</span>
                     {renderBottomNavIcon(previousDetail)}
                     <span>{previousDetail.title}</span>
                   </span>
                 </Link>
-                <Link to={`/piece-details/${nextDetail.slug}`} style={navLinkStyle}>
+                <Link
+                  to={`/piece-details/${nextDetail.slug}`}
+                  className="mons-box-button"
+                  style={navLinkStyle}>
                   <span style={bottomNavLinkContentStyle}>
                     {renderBottomNavIcon(nextDetail)}
                     <span>{nextDetail.title}</span>

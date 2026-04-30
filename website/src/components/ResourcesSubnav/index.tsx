@@ -2,7 +2,7 @@ import type {CSSProperties, ReactNode} from 'react';
 import {useState} from 'react';
 import Link from '@docusaurus/Link';
 
-type ResourcesSection = 'super-metal-mons' | 'sandbox' | 'gallery' | 'other';
+type ResourcesSection = 'super-metal-mons' | 'sandbox' | 'gallery' | 'music' | 'other';
 
 type ResourcesSubnavProps = {
   active: ResourcesSection;
@@ -90,6 +90,26 @@ const galleryLabel: ReactNode = (
   </span>
 );
 
+const musicLabel: ReactNode = (
+  <span style={labelWithIconStyle}>
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className="section-subnav__label-icon section-subnav__label-icon--mobile"
+      style={mobileLabelIconStyle}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round">
+      <path d="M9 18V5.4l10-1.8v12.6" />
+      <circle cx="6.6" cy="18.2" r="2.4" />
+      <circle cx="16.6" cy="16.2" r="2.4" />
+    </svg>
+    <span className="section-subnav__label-text">Tunes</span>
+  </span>
+);
+
 const sandboxLabel: ReactNode = (
   <span style={labelWithIconStyle}>
     <svg
@@ -136,6 +156,7 @@ const items: Array<{key: ResourcesSection; label: ReactNode; to: string}> = [
   {key: 'super-metal-mons', label: monsLabel, to: '/resources'},
   {key: 'sandbox', label: sandboxLabel, to: '/resources/sandbox'},
   {key: 'gallery', label: galleryLabel, to: '/resources/gallery'},
+  {key: 'music', label: musicLabel, to: '/resources/music'},
   {key: 'other', label: linksLabel, to: '/resources/links'},
 ];
 

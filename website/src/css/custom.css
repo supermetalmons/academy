@@ -71,6 +71,75 @@ body,
   display: none !important;
 }
 
+.music-track-list-scrollbar::-webkit-scrollbar {
+  width: 10px !important;
+  display: block !important;
+}
+
+.music-track-list-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.12) !important;
+}
+
+.music-track-list-scrollbar::-webkit-scrollbar-thumb {
+  background: #000 !important;
+  border: 2px solid #fff !important;
+}
+
+button,
+button *,
+[role='button'],
+[role='button'] *,
+.mons-box-button,
+.mons-box-button *,
+.section-subnav__tab,
+.section-subnav__tab *,
+.puzzle-back-button,
+.puzzle-back-button *,
+.gallery-toolbar-button,
+.gallery-toolbar-button *,
+.instruction-lesson-card-link,
+.instruction-lesson-card-link *,
+.piece-details-gallery-card-link,
+.piece-details-gallery-card-link *,
+.pagination-nav__link,
+.pagination-nav__link * {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.home-welcome-box,
+.home-welcome-box *,
+.instruction-board-page-no-select,
+.instruction-board-page-no-select * {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.home-welcome-box img,
+.home-welcome-box svg,
+.instruction-board-page-no-select img,
+.instruction-board-page-no-select svg {
+  -webkit-user-drag: none;
+}
+
+.home-welcome-box::selection,
+.home-welcome-box *::selection,
+.instruction-board-page-no-select::selection,
+.instruction-board-page-no-select *::selection {
+  background: transparent;
+}
+
+.home-welcome-box::-webkit-selection,
+.home-welcome-box *::-webkit-selection,
+.instruction-board-page-no-select::-webkit-selection,
+.instruction-board-page-no-select *::-webkit-selection {
+  background: transparent;
+}
+
 img[src*='/assets/mons/'],
 image[href*='/assets/mons/'] {
   image-rendering: pixelated;
@@ -433,6 +502,14 @@ image[href*='/assets/mons/'] {
   display: none !important;
 }
 
+.lesson-gallery-title-completion-badge {
+  display: contents;
+}
+
+.lesson-gallery-star-completion-badge {
+  display: none;
+}
+
 .mons-shell--nav-below .gallery-card-title-row {
   flex-direction: column;
   gap: 0.32rem;
@@ -451,6 +528,16 @@ image[href*='/assets/mons/'] {
 .mons-shell--mobile-gallery-thin .lesson-gallery-card .gallery-card-title-star {
   display: inline-flex !important;
   transform: none !important;
+}
+
+.mons-shell--nav-below .lesson-gallery-title-completion-badge,
+.mons-shell--mobile-gallery-thin .lesson-gallery-title-completion-badge {
+  display: none !important;
+}
+
+.mons-shell--nav-below .lesson-gallery-star-completion-badge,
+.mons-shell--mobile-gallery-thin .lesson-gallery-star-completion-badge {
+  display: inline-flex !important;
 }
 
 .puzzle-gallery-meta-star {
@@ -952,6 +1039,19 @@ image[href*='/assets/mons/'] {
   overflow: hidden;
 }
 
+.mons-topbar,
+.mons-topbar * {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+.mons-topbar img,
+.mons-topbar svg {
+  -webkit-user-drag: none;
+}
+
 .topbar-marquee__track {
   transform: translateX(0);
   will-change: transform;
@@ -1082,8 +1182,33 @@ image[href*='/assets/mons/'] {
   outline: none;
 }
 
+@keyframes monsPotionResourcePopOut {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  42% {
+    opacity: 0.95;
+    transform: scale(1.55);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(2.15);
+  }
+}
+
+.mons-potion-resource-exit {
+  animation: monsPotionResourcePopOut 420ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transform-origin: center center;
+  will-change: transform, opacity;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .piece-details-gallery-card {
     transition: none;
+  }
+
+  .mons-potion-resource-exit {
+    animation-duration: 1ms;
   }
 }

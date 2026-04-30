@@ -4,6 +4,7 @@ import NewTopLayout from '@site/src/components/NewTopLayout';
 type BlankSectionPageProps = {
   title: string;
   children?: ReactNode;
+  boxClassName?: string;
 };
 
 const contentWrapStyle: CSSProperties = {
@@ -35,11 +36,15 @@ const boxContentStyle: CSSProperties = {
   marginTop: '1rem',
 };
 
-export default function BlankSectionPage({title, children}: BlankSectionPageProps): ReactNode {
+export default function BlankSectionPage({
+  title,
+  children,
+  boxClassName,
+}: BlankSectionPageProps): ReactNode {
   return (
     <NewTopLayout>
       <section style={contentWrapStyle}>
-        <div style={boxStyle}>
+        <div className={boxClassName} style={boxStyle}>
           <h2 style={boxTitleStyle}>{title}</h2>
           <div style={boxContentStyle}>{children}</div>
         </div>

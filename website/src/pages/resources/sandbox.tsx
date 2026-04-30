@@ -2,6 +2,7 @@ import type {CSSProperties, ReactNode} from 'react';
 import BlankSectionPage from '@site/src/components/BlankSectionPage';
 import ResourcesSubnav from '@site/src/components/ResourcesSubnav';
 import SuperMetalMonsBoard from '@site/src/components/SuperMetalMonsBoard';
+import {useSiteBoardTheme} from '@site/src/utils/siteBoardTheme';
 
 const sandboxWrapStyle: CSSProperties = {
   width: '100%',
@@ -13,16 +14,20 @@ const sandboxWrapStyle: CSSProperties = {
 };
 
 export default function ResourcesSandboxPage(): ReactNode {
+  const boardTheme = useSiteBoardTheme();
+
   return (
     <BlankSectionPage title="Resources">
       <ResourcesSubnav active="sandbox" />
       <section style={sandboxWrapStyle}>
         <SuperMetalMonsBoard
+          boardTheme={boardTheme}
           showPlayerHud
           boardPreset="default"
           showSpawnGhosts
           enableFreeTileMove
           enableHoverClickScaling={false}
+          threeDBoardViewportBottomExtensionPx={4}
         />
       </section>
     </BlankSectionPage>

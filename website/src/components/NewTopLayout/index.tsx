@@ -2,6 +2,10 @@ import type {CSSProperties, ReactNode} from 'react';
 import {useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react';
 import Link from '@docusaurus/Link';
 import {
+  MiniSiteMusicControls,
+  useSiteMusicPlayer,
+} from '@site/src/components/SiteMusicPlayer';
+import {
   CLOUD_ENABLED_DEFAULT,
   CLOUD_ENABLED_EVENT_NAME,
   CLOUD_ENABLED_STORAGE_KEY,
@@ -199,7 +203,8 @@ const titleRockIconStyle: CSSProperties = {
 const navStyle: CSSProperties = {
   display: 'flex',
   gap: '0.5rem',
-  flexWrap: 'wrap',
+  flex: '0 0 auto',
+  flexWrap: 'nowrap',
   justifyContent: 'flex-end',
 };
 
@@ -213,6 +218,7 @@ const navBelowRowStyle: CSSProperties = {
 const navBelowNavStyle: CSSProperties = {
   ...navStyle,
   width: '100%',
+  flexWrap: 'wrap',
   justifyContent: 'center',
 };
 
@@ -375,6 +381,7 @@ const buttonStyle: CSSProperties = {
   padding: '0.27rem 0.72rem',
   fontSize: '1.05rem',
   lineHeight: 1.1,
+  whiteSpace: 'nowrap',
   transition: 'transform 140ms ease, filter 140ms ease',
 };
 
@@ -471,15 +478,19 @@ const NAV_BELOW_RESTORE_HYSTERESIS_PX = 72;
 const SINGLE_WRAP_SPLIT_PX = 36;
 const SINGLE_WRAP_MODE_RESTORE_HYSTERESIS_PX = 24;
 const MOBILE_SIDEBAR_MAX_WIDTH_PX = 780;
-const MOBILE_GALLERY_THIN_MAX_WIDTH_PX = 620;
+const MOBILE_GALLERY_THIN_MAX_WIDTH_PX = MOBILE_SIDEBAR_MAX_WIDTH_PX;
+const DEFAULT_DESKTOP_LOGO_SIZE_PX = 73;
+const DEFAULT_MOBILE_LOGO_SIZE_PX = 55;
 const CLOUD_INTRO_SESSION_KEY = 'mons_cloud_intro_seen_v1';
 const TOPBAR_MARQUEE_DURATION_SECONDS = 18;
 const LAST_INSTRUCTION_ROUTE_STORAGE_KEY = 'mons_last_instruction_route_v1';
 const LAST_PUZZLES_ROUTE_STORAGE_KEY = 'mons_last_puzzles_route_v1';
 const LAST_RESOURCES_ROUTE_STORAGE_KEY = 'mons_last_resources_route_v1';
+const LAST_SETTINGS_RETURN_ROUTE_STORAGE_KEY = 'mons_last_settings_return_route_v1';
 const DEFAULT_INSTRUCTION_ROUTE = '/instruction';
 const DEFAULT_PUZZLES_ROUTE = '/puzzles';
 const DEFAULT_RESOURCES_ROUTE = '/resources';
+const DEFAULT_SETTINGS_RETURN_ROUTE = '/';
 const CLOUD_SPEED_SCALE = 3.25;
 const CLOUD_WAVE_PX = 34;
 const CLOUD_LOBE_COUNT = 6;
@@ -641,6 +652,10 @@ function isPuzzlesRoute(pathname: string): boolean {
   return pathname === '/puzzles' || pathname.startsWith('/puzzles/');
 }
 
+function isSettingsRoute(pathname: string): boolean {
+  return pathname === '/settings' || pathname.startsWith('/settings/');
+}
+
 function isInstructionContext(pathname: string): boolean {
   return (
     pathname === '/instruction' ||
@@ -672,6 +687,9 @@ function getLogoSrc(pathname: string): string {
 }
 
 const loadedLogoSources = new Set<string>();
+let cachedDesktopLogoSizePx = DEFAULT_DESKTOP_LOGO_SIZE_PX;
+let cachedMobileLogoSizePx = DEFAULT_MOBILE_LOGO_SIZE_PX;
+let lastMusicControlsRoutePathname: string | null = null;
 
 function preloadLogoSource(source: string): Promise<void> {
   if (loadedLogoSources.has(source) || typeof Image === 'undefined') {
@@ -710,6 +728,30 @@ function normalizePuzzlesRoute(value: string | null): string {
     return value;
   }
   return DEFAULT_PUZZLES_ROUTE;
+}
+
+function getCurrentReturnRoute(): string {
+  if (typeof window === 'undefined') {
+    return DEFAULT_SETTINGS_RETURN_ROUTE;
+  }
+  const nextRoute = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  return isSettingsRoute(window.location.pathname)
+    ? DEFAULT_SETTINGS_RETURN_ROUTE
+    : nextRoute;
+}
+
+function normalizeSettingsReturnRoute(value: string | null): string {
+  if (value === null || value.trim() === '') {
+    return DEFAULT_SETTINGS_RETURN_ROUTE;
+  }
+  if (!value.startsWith('/') || value.startsWith('//')) {
+    return DEFAULT_SETTINGS_RETURN_ROUTE;
+  }
+  const pathOnly = value.split(/[?#]/, 1)[0] || DEFAULT_SETTINGS_RETURN_ROUTE;
+  if (isSettingsRoute(pathOnly)) {
+    return DEFAULT_SETTINGS_RETURN_ROUTE;
+  }
+  return value;
 }
 
 function shouldResetOtherNavTargetsOnReload(): boolean {
@@ -760,6 +802,11 @@ export default function NewTopLayout({
 }: NewTopLayoutProps): ReactNode {
   const pathname = typeof window === 'undefined' ? '' : window.location.pathname;
   const isHomepageRoute = pathname === '/';
+  const isMusicRoute = pathname === '/resources/music';
+  const {
+    isPlaying: isSiteMusicPlaying,
+    hideMiniControls,
+  } = useSiteMusicPlayer();
   const shouldResetOtherTargetsThisLoad = useMemo(
     () => shouldResetOtherNavTargetsOnReload(),
     [],
@@ -800,8 +847,16 @@ export default function NewTopLayout({
     getTopbarMarqueeDelaySeconds(),
   );
   const [pressedItem, setPressedItem] = useState<string | null>(null);
-  const [isMobileSidebarMode, setIsMobileSidebarMode] = useState(false);
-  const [isMobileGalleryThinMode, setIsMobileGalleryThinMode] = useState(false);
+  const [isMobileSidebarMode, setIsMobileSidebarMode] = useState(() =>
+    typeof window === 'undefined'
+      ? false
+      : window.matchMedia(`(max-width: ${MOBILE_SIDEBAR_MAX_WIDTH_PX}px)`).matches,
+  );
+  const [isMobileGalleryThinMode, setIsMobileGalleryThinMode] = useState(() =>
+    typeof window === 'undefined'
+      ? false
+      : window.matchMedia(`(max-width: ${MOBILE_GALLERY_THIN_MAX_WIDTH_PX}px)`).matches,
+  );
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [hoveredTitleIcon, setHoveredTitleIcon] = useState<TitleIconKey | null>(null);
   const [cloudEnabled, setCloudEnabled] = useState<boolean>(CLOUD_ENABLED_DEFAULT);
@@ -869,8 +924,24 @@ export default function NewTopLayout({
       return DEFAULT_PUZZLES_ROUTE;
     }
   });
+  const [settingsReturnTarget, setSettingsReturnTarget] = useState<string>(() => {
+    if (!isSettingsRoute(pathname)) {
+      return getCurrentReturnRoute();
+    }
+    if (typeof window === 'undefined') {
+      return DEFAULT_SETTINGS_RETURN_ROUTE;
+    }
+    try {
+      return normalizeSettingsReturnRoute(
+        window.localStorage.getItem(LAST_SETTINGS_RETURN_ROUTE_STORAGE_KEY),
+      );
+    } catch {
+      return DEFAULT_SETTINGS_RETURN_ROUTE;
+    }
+  });
   const headerRowRef = useRef<HTMLDivElement | null>(null);
   const headerInnerRef = useRef<HTMLDivElement | null>(null);
+  const titleBlockRef = useRef<HTMLDivElement | null>(null);
   const titleHeadingRef = useRef<HTMLHeadingElement | null>(null);
   const navRef = useRef<HTMLElement | null>(null);
   const logoHideBreakpointWidthRef = useRef<number | null>(null);
@@ -878,7 +949,14 @@ export default function NewTopLayout({
   const navBelowBreakpointWidthRef = useRef<number | null>(null);
   const singleWrapBreakpointWidthRef = useRef<number | null>(null);
   const showNavBelowRowRef = useRef(false);
-  const [logoSizePx, setLogoSizePx] = useState(54);
+  const [logoSizePx, setLogoSizePx] = useState(() => {
+    if (typeof window === 'undefined') {
+      return DEFAULT_DESKTOP_LOGO_SIZE_PX;
+    }
+    return window.matchMedia(`(max-width: ${MOBILE_SIDEBAR_MAX_WIDTH_PX}px)`).matches
+      ? cachedMobileLogoSizePx
+      : cachedDesktopLogoSizePx;
+  });
   const [titleHeadingWidthPx, setTitleHeadingWidthPx] = useState<number | null>(null);
   const [hideLogoForSpace, setHideLogoForSpace] = useState(false);
   const [showNavBelowRow, setShowNavBelowRow] = useState(false);
@@ -888,6 +966,14 @@ export default function NewTopLayout({
   useEffect(() => {
     setPressedItem(null);
   }, [pathname]);
+
+  useEffect(() => {
+    const previousPathname = lastMusicControlsRoutePathname;
+    if (previousPathname !== null && previousPathname !== pathname && !isSiteMusicPlaying) {
+      hideMiniControls();
+    }
+    lastMusicControlsRoutePathname = pathname;
+  }, [hideMiniControls, isSiteMusicPlaying, pathname]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -1062,6 +1148,24 @@ export default function NewTopLayout({
         // Ignore storage failures.
       }
     }
+    if (isSettingsRoute(pathname)) {
+      try {
+        const next = normalizeSettingsReturnRoute(
+          window.localStorage.getItem(LAST_SETTINGS_RETURN_ROUTE_STORAGE_KEY),
+        );
+        setSettingsReturnTarget((current) => (current === next ? current : next));
+      } catch {
+        setSettingsReturnTarget(DEFAULT_SETTINGS_RETURN_ROUTE);
+      }
+    } else {
+      const next = getCurrentReturnRoute();
+      setSettingsReturnTarget((current) => (current === next ? current : next));
+      try {
+        window.localStorage.setItem(LAST_SETTINGS_RETURN_ROUTE_STORAGE_KEY, next);
+      } catch {
+        // Ignore storage failures.
+      }
+    }
   }, [pathname]);
 
   useEffect(() => {
@@ -1130,7 +1234,7 @@ export default function NewTopLayout({
       window.removeEventListener(CLOUD_SPEED_EVENT_NAME, handleSpeedUpdate as EventListener);
       window.removeEventListener(CLOUD_ENABLED_EVENT_NAME, handleEnabledUpdate as EventListener);
     };
-  }, []);
+  }, [isMobileSidebarMode]);
 
   useEffect(() => {
     if (!showCloudIntro || typeof window === 'undefined') {
@@ -1145,12 +1249,24 @@ export default function NewTopLayout({
 
   useLayoutEffect(() => {
     const innerNode = headerInnerRef.current;
+    const titleBlockNode = titleBlockRef.current;
     if (innerNode === null) {
       return;
     }
 
     const updateLogoSize = () => {
-      const nextSize = Math.max(32, Math.ceil(innerNode.clientHeight));
+      const computedStyle = window.getComputedStyle(innerNode);
+      const paddingY =
+        Number.parseFloat(computedStyle.paddingTop || '0') +
+        Number.parseFloat(computedStyle.paddingBottom || '0');
+      const measuredContentHeight =
+        titleBlockNode?.getBoundingClientRect().height ?? innerNode.clientHeight;
+      const nextSize = Math.max(32, Math.ceil(measuredContentHeight + paddingY));
+      if (isMobileSidebarMode) {
+        cachedMobileLogoSizePx = nextSize;
+      } else {
+        cachedDesktopLogoSizePx = nextSize;
+      }
       setLogoSizePx((current) => (current === nextSize ? current : nextSize));
     };
 
@@ -1161,6 +1277,9 @@ export default function NewTopLayout({
         updateLogoSize();
       });
       observer.observe(innerNode);
+      if (titleBlockNode !== null) {
+        observer.observe(titleBlockNode);
+      }
       return () => {
         observer.disconnect();
       };
@@ -1170,7 +1289,7 @@ export default function NewTopLayout({
     return () => {
       window.removeEventListener('resize', updateLogoSize);
     };
-  }, []);
+  }, [isMobileSidebarMode]);
 
   useLayoutEffect(() => {
     const headingNode = titleHeadingRef.current;
@@ -1408,6 +1527,23 @@ export default function NewTopLayout({
     : isCompactDesktopNav
       ? {...navStyle, gap: '0.36rem'}
       : navStyle;
+  const isSettingsPage = isSettingsRoute(pathname);
+  const settingsShortcutTarget = isSettingsPage ? settingsReturnTarget : '/settings';
+  const settingsShortcutLabel = isSettingsPage
+    ? 'Return to previous page'
+    : 'Go to settings';
+  const handleSettingsShortcutClick = (): void => {
+    if (typeof window === 'undefined' || isSettingsPage) {
+      return;
+    }
+    const next = getCurrentReturnRoute();
+    setSettingsReturnTarget(next);
+    try {
+      window.localStorage.setItem(LAST_SETTINGS_RETURN_ROUTE_STORAGE_KEY, next);
+    } catch {
+      // Ignore storage failures.
+    }
+  };
 
   const menuItems: MenuItem[] = BASE_MENU_ITEMS.map((item) => {
     if (item.to === '/instruction') {
@@ -1440,6 +1576,7 @@ export default function NewTopLayout({
           <Link
             key={item.label}
             to={item.navigateTo ?? item.to}
+            className="mons-box-button"
             onMouseDown={() => setPressedItem(item.to)}
             onMouseUp={() => setPressedItem(null)}
             onMouseLeave={() => setPressedItem(null)}
@@ -1491,7 +1628,7 @@ export default function NewTopLayout({
       ) : null}
       <div style={foregroundLayerStyle}>
         <div aria-hidden="true" style={topGapFillStyle} />
-        <header style={headerBarStyle}>
+        <header className="mons-topbar" style={headerBarStyle}>
           <div ref={headerRowRef} style={headerRowStyle}>
             {isMobileSidebarMode ? (
               <div style={mobileLogoShellStyle}>
@@ -1514,7 +1651,7 @@ export default function NewTopLayout({
               </Link>
             ) : null}
             <div ref={headerInnerRef} style={headerInnerStyle}>
-              <div style={titleBlockStyle}>
+              <div ref={titleBlockRef} style={titleBlockStyle}>
                 <Link to="/" style={homeLinkStyle}>
                   <h1
                     ref={titleHeadingRef}
@@ -1628,6 +1765,7 @@ export default function NewTopLayout({
           {!isMobileSidebarMode && showNavBelowRow ? (
             <div style={navBelowRowStyle}>{renderPrimaryNav(navBelowNavStyle)}</div>
           ) : null}
+          <MiniSiteMusicControls hidden={isMusicRoute} />
         </header>
         {isMobileSidebarMode ? (
           <>
@@ -1655,6 +1793,22 @@ export default function NewTopLayout({
                   ×
                 </button>
               </div>
+              <div className="topbar-marquee" style={mobileSidebarTickerViewportStyle} aria-hidden="true">
+                <span className="topbar-marquee__track" style={dynamicTitleTickerTrackStyle}>
+                  <span style={titleTickerChunkStyle}>
+                    <span>Swag is Eternal</span>
+                    <span>~</span>
+                  </span>
+                  <span style={titleTickerChunkStyle}>
+                    <span>Swag is Eternal</span>
+                    <span>~</span>
+                  </span>
+                  <span style={titleTickerChunkStyle}>
+                    <span>Swag is Eternal</span>
+                    <span>~</span>
+                  </span>
+                </span>
+              </div>
               <div aria-hidden="true" style={mobileSidebarHeaderDividerStyle} />
               <nav style={mobileSidebarNavStyle} aria-label="Mobile primary navigation">
                 {menuItems.map((item) => {
@@ -1664,6 +1818,7 @@ export default function NewTopLayout({
                     <Link
                       key={`mobile-${item.label}`}
                       to={item.navigateTo ?? item.to}
+                      className="mons-box-button"
                       onMouseDown={() => setPressedItem(item.to)}
                       onMouseUp={() => setPressedItem(null)}
                       onMouseLeave={() => setPressedItem(null)}
@@ -1742,28 +1897,15 @@ export default function NewTopLayout({
                   </svg>
                 </a>
               </div>
-              <div className="topbar-marquee" style={mobileSidebarTickerViewportStyle} aria-hidden="true">
-                <span className="topbar-marquee__track" style={dynamicTitleTickerTrackStyle}>
-                  <span style={titleTickerChunkStyle}>
-                    <span>Swag is Eternal</span>
-                    <span>~</span>
-                  </span>
-                  <span style={titleTickerChunkStyle}>
-                    <span>Swag is Eternal</span>
-                    <span>~</span>
-                  </span>
-                  <span style={titleTickerChunkStyle}>
-                    <span>Swag is Eternal</span>
-                    <span>~</span>
-                  </span>
-                </span>
-              </div>
               <div style={mobileSidebarSettingsWrapStyle}>
                 <Link
-                  to="/settings"
-                  aria-label="Go to settings"
+                  to={settingsShortcutTarget}
+                  aria-label={settingsShortcutLabel}
                   style={mobileSidebarSettingsShortcutStyle}
-                  onClick={() => setIsMobileSidebarOpen(false)}>
+                  onClick={() => {
+                    handleSettingsShortcutClick();
+                    setIsMobileSidebarOpen(false);
+                  }}>
                   ⚙️
                 </Link>
               </div>
@@ -1771,8 +1913,12 @@ export default function NewTopLayout({
           </>
         ) : null}
         {children}
-        {!isMobileSidebarMode ? (
-          <Link to="/settings" aria-label="Go to settings" style={settingsShortcutStyle}>
+        {!isMobileSidebarMode || isSettingsPage ? (
+          <Link
+            to={settingsShortcutTarget}
+            aria-label={settingsShortcutLabel}
+            style={settingsShortcutStyle}
+            onClick={handleSettingsShortcutClick}>
             ⚙️
           </Link>
         ) : null}
