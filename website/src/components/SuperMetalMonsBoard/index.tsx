@@ -11,7 +11,11 @@ import {
 import {createPortal} from 'react-dom';
 import Link from '@docusaurus/Link';
 import ThreeDBoardSurface from '@site/src/components/ThreeDBoardSurface';
-import {getPieceDetailPathByTitle} from '@site/src/data/pieceDetails';
+import {
+  getPieceDetailDiagramByTitle,
+  getPieceDetailPathByTitle,
+  pieceDetailDiagramImages,
+} from '@site/src/data/pieceDetails';
 import {
   playBoardSoundEffect,
   preloadBoardSoundEffects,
@@ -198,7 +202,7 @@ const moveResourceInfo: Record<HudResourceKey, {title: string; text: string}> = 
   },
   statusPotion: {
     title: 'Potion',
-    text: 'Adds one extra active ability resource to your turn.',
+    text: 'Can be consumed on any future turn to grant one extra active ability on that turn.',
   },
 };
 
@@ -490,47 +494,47 @@ const cornerManaPoolTileKeySet = new Set(
 const explanationText = {
   drainer: {
     title: 'Drainer',
-    text: 'Can move onto mana and carry mana.',
+    text: 'Only piece that can move onto the same tile as a mana and pick it up, and can walk through the center tile.',
   },
   angel: {
     title: 'Angel',
-    text: 'Protects adjacent friendly mons from incoming demon or mystic attacks.',
+    text: 'Protects adjacent friendly mons from incoming demon or mystic attacks- is itself vulnerable to attack.',
   },
   demon: {
     title: 'Demon',
-    text: 'Attacks two tiles away orthoganally. Moves to target location and cannot target through other pieces.',
+    text: 'Faints a target exactly two tiles away orthoganally- moves to the attack location and cannot target through other pieces.',
   },
   spirit: {
     title: 'Spirit',
-    text: 'Can target any piece exactly two tiles away and push it one tile in any direction.',
+    text: 'Can target any piece (mana, mon, or item) exactly two tiles away and push it one tile in any direction.',
   },
   mystic: {
     title: 'Mystic',
-    text: 'Attacks two tiles away diagonally. Can target through/over other pieces.',
+    text: 'Faints a target exactly two tiles away diagonally- can shoot through/over other pieces.',
   },
   whiteMana: {
     title: 'White Mana',
-    text: 'Bring mana to a corner pool to score 1 point. Can be mana moved at the end of your turn.',
+    text: 'Bring mana to any corner pool to score 1 point. Can be mana moved at the end of your turn.',
   },
   blackMana: {
     title: 'Black Mana',
-    text: 'Bring enemy mana to a corner pool to score 2 points. Cannot be mana moved.',
+    text: 'Bring enemy mana to any corner pool to score 2 points. Cannot be mana moved.',
   },
   supermana: {
     title: 'Super Mana',
-    text: 'Bring super mana to a corner pool to score 2 points. Returns to center tile if drainer is fainted while holding.',
+    text: 'Bring super mana to any corner pool to score 2 points. Returns to center tile if drainer is fainted while holding.',
   },
   item: {
     title: 'Item Pickup',
-    text: 'Move onto an item to pick it up. You must choose between either option.',
+    text: 'Move onto an item to pick it up. You must choose between either option. You cannot choose the bomb if your mon is already holding a bomb or a mana.',
   },
   bomb: {
     title: 'Bomb',
-    text: 'Can be thrown at an enemy mon up to 3 tiles away. The bomb is spent when it hits.',
+    text: "Can be thrown up to 3 tiles away, fainting an enemy mon even through an Angel's protection. If a Demon attacks a mon holding a bomb, it's lost and both mons get fainted in the blast.",
   },
   potion: {
     title: 'Potion',
-    text: 'Adds one extra active ability resource to your turn.',
+    text: 'Can be consumed on any future turn to grant one extra active ability on that turn.',
   },
 };
 
@@ -626,6 +630,7 @@ type PreviewContent = {
   text: string;
   href?: string;
   detailPath?: string;
+  diagramImage?: string;
 };
 
 export type BoardEntityKind = 'mon' | 'whiteMana' | 'blackMana' | 'superMana' | 'item';
@@ -2043,6 +2048,7 @@ export default function SuperMetalMonsBoard({
   const [fullscreenScale, setFullscreenScale] = useState(1);
   const [instructionAbilityDemoState, setInstructionAbilityDemoState] =
     useState<InstructionAbilityDemoState | null>(null);
+  const [isInstructionAbilityDemoPaused, setIsInstructionAbilityDemoPaused] = useState(false);
   const [
     instructionAbilityDemoTransitionProgress,
     setInstructionAbilityDemoTransitionProgress,
@@ -2072,6 +2078,16 @@ export default function SuperMetalMonsBoard({
   useEffect(() => {
     onHoveredTileChange?.(hoveredTile);
   }, [hoveredTile, onHoveredTileChange]);
+  useEffect(() => {
+    if (!showHoverPreview || typeof window === 'undefined') {
+      return;
+    }
+    pieceDetailDiagramImages.forEach((src) => {
+      const image = new Image();
+      image.decoding = 'async';
+      image.src = src;
+    });
+  }, [showHoverPreview]);
   const initialBoardEntities = useMemo(
     () => buildBoardEntitiesFromPreset(boardPreset),
     [boardPreset],
@@ -2174,6 +2190,8 @@ export default function SuperMetalMonsBoard({
   const instructionAbilityDemoTimeoutRef = useRef<number | null>(null);
   const instructionAbilityDemoTransitionFrameRef = useRef<number | null>(null);
   const instructionAbilityDemoRunIdRef = useRef(0);
+  const instructionAbilityDemoPausedRef = useRef(false);
+  const resumeInstructionAbilityDemoRef = useRef<(() => void) | null>(null);
   const suppressBoardClickUntilRef = useRef(0);
   const winPiecePulseUpTimeoutRef = useRef<number | null>(null);
   const winPiecePulseDownTimeoutRef = useRef<number | null>(null);
@@ -2183,6 +2201,29 @@ export default function SuperMetalMonsBoard({
   const forcedManaScoreSideByIdRef = useRef<Record<string, 'white' | 'black'>>({});
   const sandboxDirectManaScoreSideRef = useRef<'white' | 'black'>('white');
   const previewBelowBreakpointWidthRef = useRef<number | null>(null);
+  const clearInstructionAbilityDemoTimeout = () => {
+    if (instructionAbilityDemoTimeoutRef.current !== null) {
+      window.clearTimeout(instructionAbilityDemoTimeoutRef.current);
+      instructionAbilityDemoTimeoutRef.current = null;
+    }
+  };
+  const setInstructionAbilityDemoPausedState = (
+    isPaused: boolean,
+    shouldResume = true,
+  ) => {
+    instructionAbilityDemoPausedRef.current = isPaused;
+    setIsInstructionAbilityDemoPaused(isPaused);
+    if (isPaused) {
+      clearInstructionAbilityDemoTimeout();
+      return;
+    }
+    if (shouldResume) {
+      resumeInstructionAbilityDemoRef.current?.();
+    }
+  };
+  const toggleInstructionAbilityDemoPaused = () => {
+    setInstructionAbilityDemoPausedState(!instructionAbilityDemoPausedRef.current);
+  };
   const scaledFactorRef = useRef(1);
   const [waveSeedNonce, setWaveSeedNonce] = useState(1);
   const canUseBoardFullscreen = enableFreeTileMove;
@@ -2385,6 +2426,9 @@ export default function SuperMetalMonsBoard({
       if (resourceKind === 'statusMana' && !showPlayerManaMoveResource) {
         return [];
       }
+      if (isSandboxFreeMoveBoard && resourceKind === 'statusMana') {
+        return [];
+      }
       return [{id: `player-${resourceKind}-${resourceIndex}`, kind: resourceKind}];
     },
   );
@@ -2423,13 +2467,17 @@ export default function SuperMetalMonsBoard({
   const opponentHudResourceOrder: HudResourceKey[] =
     opponentPotionCount > 0
       ? [
-          ...moveResourceOrder,
+          ...(isSandboxFreeMoveBoard
+            ? moveResourceOrder.filter((resourceKind) => resourceKind !== 'statusMana')
+            : moveResourceOrder),
           ...Array.from(
             {length: opponentPotionCount},
             () => 'statusPotion' as const,
           ),
         ]
-      : moveResourceOrder;
+      : isSandboxFreeMoveBoard
+        ? moveResourceOrder.filter((resourceKind) => resourceKind !== 'statusMana')
+        : moveResourceOrder;
   const playerActiveAbilityResourceCount =
     (playerActiveAbilityStarAvailable ? 1 : 0) + playerPotionCount;
   const canUsePlayerActiveAbility =
@@ -3660,12 +3708,15 @@ export default function SuperMetalMonsBoard({
     selectedMoveResourceId,
   ]);
 
+  const isEmbeddedThreeDBoardActive = canUseThreeDBoardView && isThreeDBoardViewEnabled;
+  const shouldBlurSvgForItemChoice =
+    isItemPickupChoiceOpen && !isEmbeddedThreeDBoardActive;
   const svgStyle: CSSProperties = {
     width: `${renderWidth}px`,
     height: 'auto',
     display: 'block',
     imageRendering: 'pixelated',
-    filter: isItemPickupChoiceOpen ? 'blur(2.3px)' : 'none',
+    filter: shouldBlurSvgForItemChoice ? 'blur(2.3px)' : 'none',
     transition: 'filter 140ms ease-out',
     pointerEvents: isItemPickupChoiceOpen ? 'none' : 'auto',
   };
@@ -4163,41 +4214,51 @@ export default function SuperMetalMonsBoard({
   );
   const getPreviewDetailPath = (title: string): string | undefined =>
     getPieceDetailPathByTitle(title) ?? undefined;
+  const getPreviewDiagramImage = (title: string): string | undefined =>
+    getPieceDetailDiagramByTitle(title) ?? undefined;
 
   activeMonPositions.black.forEach((mon) => {
+    const title = explanationText[mon.type].title;
     pieceByTile[`${mon.row}-${mon.col}`] = {
       kind: 'image',
       href: mon.href,
-      title: explanationText[mon.type].title,
+      title,
       text: explanationText[mon.type].text,
-      detailPath: getPreviewDetailPath(explanationText[mon.type].title),
+      detailPath: getPreviewDetailPath(title),
+      diagramImage: getPreviewDiagramImage(title),
     };
   });
   activeMonPositions.white.forEach((mon) => {
+    const title = explanationText[mon.type].title;
     pieceByTile[`${mon.row}-${mon.col}`] = {
       kind: 'image',
       href: mon.href,
-      title: explanationText[mon.type].title,
+      title,
       text: explanationText[mon.type].text,
-      detailPath: getPreviewDetailPath(explanationText[mon.type].title),
+      detailPath: getPreviewDetailPath(title),
+      diagramImage: getPreviewDiagramImage(title),
     };
   });
   activeBlackManaPositions.forEach(([col, row]) => {
+    const title = explanationText.blackMana.title;
     pieceByTile[`${row}-${col}`] = {
       kind: 'image',
       href: boardAssets.manaB,
-      title: explanationText.blackMana.title,
+      title,
       text: explanationText.blackMana.text,
-      detailPath: getPreviewDetailPath(explanationText.blackMana.title),
+      detailPath: getPreviewDetailPath(title),
+      diagramImage: getPreviewDiagramImage(title),
     };
   });
   activeWhiteManaPositions.forEach(([col, row]) => {
+    const title = explanationText.whiteMana.title;
     pieceByTile[`${row}-${col}`] = {
       kind: 'image',
       href: boardAssets.mana,
-      title: explanationText.whiteMana.title,
+      title,
       text: explanationText.whiteMana.text,
-      detailPath: getPreviewDetailPath(explanationText.whiteMana.title),
+      detailPath: getPreviewDetailPath(title),
+      diagramImage: getPreviewDiagramImage(title),
     };
   });
   const instructionSelectedItemTileKey =
@@ -4230,15 +4291,18 @@ export default function SuperMetalMonsBoard({
       title: itemInfo.title,
       text: itemInfo.text,
       detailPath: getPreviewDetailPath(itemInfo.title),
+      diagramImage: getPreviewDiagramImage(itemInfo.title),
     };
   });
   activeSuperManaPositions.forEach(([col, row]) => {
+    const title = explanationText.supermana.title;
     pieceByTile[`${row}-${col}`] = {
       kind: 'image',
       href: boardAssets.supermana,
-      title: explanationText.supermana.title,
+      title,
       text: explanationText.supermana.text,
-      detailPath: getPreviewDetailPath(explanationText.supermana.title),
+      detailPath: getPreviewDetailPath(title),
+      diagramImage: getPreviewDiagramImage(title),
     };
   });
   cornerManaPoolPositions.forEach(([col, row]) => {
@@ -4251,6 +4315,7 @@ export default function SuperMetalMonsBoard({
       title: 'Mana Pool',
       text: 'Bring mana here to score points. 5 wins the game!',
       detailPath: getPreviewDetailPath('Mana Pool'),
+      diagramImage: getPreviewDiagramImage('Mana Pool'),
     };
   });
   [...moveResourceItems, instructionPotionMoveResourceItem].forEach((resource) => {
@@ -4261,6 +4326,7 @@ export default function SuperMetalMonsBoard({
       title: info.title,
       text: info.text,
       detailPath: getPreviewDetailPath(info.title),
+      diagramImage: getPreviewDiagramImage(info.title),
     };
   });
 
@@ -4293,6 +4359,7 @@ export default function SuperMetalMonsBoard({
               title: info.title,
               text: info.text,
               detailPath: getPreviewDetailPath(info.title),
+              diagramImage: getPreviewDiagramImage(info.title),
             };
           }
           if (instructionAbilityDemoState.key === 'superMana') {
@@ -4309,6 +4376,7 @@ export default function SuperMetalMonsBoard({
               title: info.title,
               text: info.text,
               detailPath: getPreviewDetailPath(info.title),
+              diagramImage: getPreviewDiagramImage(info.title),
             };
           }
           if (
@@ -4325,6 +4393,7 @@ export default function SuperMetalMonsBoard({
               title: info.title,
               text: info.text,
               detailPath: getPreviewDetailPath(info.title),
+              diagramImage: getPreviewDiagramImage(info.title),
             };
           }
           const selectedBaseEntity = boardEntities.find(
@@ -4348,6 +4417,7 @@ export default function SuperMetalMonsBoard({
             title: info.title,
             text: info.text,
             detailPath: getPreviewDetailPath(info.title),
+            diagramImage: getPreviewDiagramImage(info.title),
           };
         })()
       : null;
@@ -5776,13 +5846,53 @@ export default function SuperMetalMonsBoard({
     !isItemPickupChoiceOpen && isInstructionSelectedItemChoiceActive
       ? instructionSelectedItemChoice?.kind ?? null
       : null;
+  const hoveredInstructionDemoTarget = useMemo<InstructionDemoKey | null>(() => {
+    if (!canRunInstructionAbilityDemo || effectiveHoveredTile === null) {
+      return null;
+    }
+    const hoveredEntity = boardEntities.find(
+      (entity) =>
+        entity.col === effectiveHoveredTile.col &&
+        entity.row === effectiveHoveredTile.row,
+    );
+    if (hoveredEntity === undefined) {
+      return null;
+    }
+    if (
+      hoveredEntity.kind === 'mon' &&
+      hoveredEntity.monType !== undefined &&
+      (hoveredEntity.monType === 'angel' ||
+        hoveredEntity.monType === 'demon' ||
+        hoveredEntity.monType === 'drainer' ||
+        hoveredEntity.monType === 'spirit' ||
+        hoveredEntity.monType === 'mystic')
+    ) {
+      return hoveredEntity.monType;
+    }
+    if (hoveredEntity.kind === 'whiteMana') {
+      const demoConfig =
+        defaultInstructionDemoEntityIds.mana.byId[
+          hoveredEntity.id as keyof typeof defaultInstructionDemoEntityIds.mana.byId
+        ];
+      return demoConfig === undefined ? null : 'mana';
+    }
+    return hoveredEntity.kind === 'superMana' ? 'superMana' : null;
+  }, [boardEntities, canRunInstructionAbilityDemo, effectiveHoveredTile]);
+  const showInstructionDemoHoverPrompt =
+    hoveredInstructionDemoTarget !== null &&
+    instructionAbilityDemoState === null &&
+    selectedTile === null &&
+    selectedMoveResourceId === null;
+  const showInstructionDemoPlaybackControl =
+    canRunInstructionAbilityDemo &&
+    instructionAbilityDemoState !== null &&
+    instructionAbilityDemoState.key !== 'angel';
 
   useEffect(() => {
     instructionAbilityDemoRunIdRef.current += 1;
-    if (instructionAbilityDemoTimeoutRef.current !== null) {
-      window.clearTimeout(instructionAbilityDemoTimeoutRef.current);
-      instructionAbilityDemoTimeoutRef.current = null;
-    }
+    clearInstructionAbilityDemoTimeout();
+    resumeInstructionAbilityDemoRef.current = null;
+    setInstructionAbilityDemoPausedState(false, false);
 
     if (!enableInstructionAbilityDemos) {
       setInstructionAbilityDemoState(null);
@@ -5865,6 +5975,30 @@ export default function SuperMetalMonsBoard({
         playedSounds.add(sound);
         playBoardSoundEffect(sound);
       });
+    };
+    const scheduleInstructionAbilityDemoStep = (playNextStep: () => void) => {
+      if (
+        instructionAbilityDemoRunIdRef.current !== runId ||
+        instructionAbilityDemoPausedRef.current
+      ) {
+        return;
+      }
+      instructionAbilityDemoTimeoutRef.current = window.setTimeout(() => {
+        instructionAbilityDemoTimeoutRef.current = null;
+        playNextStep();
+      }, INSTRUCTION_ABILITY_DEMO_TICK_MS);
+    };
+    const registerInstructionAbilityDemoResume = (playNextStep: () => void) => {
+      resumeInstructionAbilityDemoRef.current = () => {
+        if (
+          instructionAbilityDemoRunIdRef.current !== runId ||
+          instructionAbilityDemoTimeoutRef.current !== null ||
+          instructionAbilityDemoPausedRef.current
+        ) {
+          return;
+        }
+        scheduleInstructionAbilityDemoStep(playNextStep);
+      };
     };
 
     if (selectedInstructionManaDemo !== null) {
@@ -5969,7 +6103,10 @@ export default function SuperMetalMonsBoard({
         faintedMonIds: [],
       });
       const playNextManaStep = () => {
-        if (instructionAbilityDemoRunIdRef.current !== runId) {
+        if (
+          instructionAbilityDemoRunIdRef.current !== runId ||
+          instructionAbilityDemoPausedRef.current
+        ) {
           return;
         }
         const step = steps[stepIndex];
@@ -5996,20 +6133,13 @@ export default function SuperMetalMonsBoard({
         });
         playInstructionDemoStepSound(step);
         stepIndex = (stepIndex + 1) % steps.length;
-        instructionAbilityDemoTimeoutRef.current = window.setTimeout(
-          playNextManaStep,
-          INSTRUCTION_ABILITY_DEMO_TICK_MS,
-        );
+        scheduleInstructionAbilityDemoStep(playNextManaStep);
       };
-      instructionAbilityDemoTimeoutRef.current = window.setTimeout(
-        playNextManaStep,
-        INSTRUCTION_ABILITY_DEMO_TICK_MS,
-      );
+      registerInstructionAbilityDemoResume(playNextManaStep);
+      scheduleInstructionAbilityDemoStep(playNextManaStep);
       return () => {
-        if (instructionAbilityDemoTimeoutRef.current !== null) {
-          window.clearTimeout(instructionAbilityDemoTimeoutRef.current);
-          instructionAbilityDemoTimeoutRef.current = null;
-        }
+        clearInstructionAbilityDemoTimeout();
+        resumeInstructionAbilityDemoRef.current = null;
         setInstructionAbilityDemoTransitionProgress(1);
         instructionAbilityDemoRunIdRef.current += 1;
       };
@@ -6152,7 +6282,10 @@ export default function SuperMetalMonsBoard({
         faintedMonIds: [],
       });
       const playNextSuperManaStep = () => {
-        if (instructionAbilityDemoRunIdRef.current !== runId) {
+        if (
+          instructionAbilityDemoRunIdRef.current !== runId ||
+          instructionAbilityDemoPausedRef.current
+        ) {
           return;
         }
         const step = steps[stepIndex];
@@ -6179,20 +6312,13 @@ export default function SuperMetalMonsBoard({
         });
         playInstructionDemoStepSound(step);
         stepIndex = (stepIndex + 1) % steps.length;
-        instructionAbilityDemoTimeoutRef.current = window.setTimeout(
-          playNextSuperManaStep,
-          INSTRUCTION_ABILITY_DEMO_TICK_MS,
-        );
+        scheduleInstructionAbilityDemoStep(playNextSuperManaStep);
       };
-      instructionAbilityDemoTimeoutRef.current = window.setTimeout(
-        playNextSuperManaStep,
-        INSTRUCTION_ABILITY_DEMO_TICK_MS,
-      );
+      registerInstructionAbilityDemoResume(playNextSuperManaStep);
+      scheduleInstructionAbilityDemoStep(playNextSuperManaStep);
       return () => {
-        if (instructionAbilityDemoTimeoutRef.current !== null) {
-          window.clearTimeout(instructionAbilityDemoTimeoutRef.current);
-          instructionAbilityDemoTimeoutRef.current = null;
-        }
+        clearInstructionAbilityDemoTimeout();
+        resumeInstructionAbilityDemoRef.current = null;
         setInstructionAbilityDemoTransitionProgress(1);
         instructionAbilityDemoRunIdRef.current += 1;
       };
@@ -6493,7 +6619,10 @@ export default function SuperMetalMonsBoard({
         faintedMonIds: [],
       });
       const playNextItemStep = () => {
-        if (instructionAbilityDemoRunIdRef.current !== runId) {
+        if (
+          instructionAbilityDemoRunIdRef.current !== runId ||
+          instructionAbilityDemoPausedRef.current
+        ) {
           return;
         }
         const step = itemSteps[stepIndex];
@@ -6536,20 +6665,13 @@ export default function SuperMetalMonsBoard({
           );
         }
         stepIndex = (stepIndex + 1) % itemSteps.length;
-        instructionAbilityDemoTimeoutRef.current = window.setTimeout(
-          playNextItemStep,
-          INSTRUCTION_ABILITY_DEMO_TICK_MS,
-        );
+        scheduleInstructionAbilityDemoStep(playNextItemStep);
       };
-      instructionAbilityDemoTimeoutRef.current = window.setTimeout(
-        playNextItemStep,
-        INSTRUCTION_ABILITY_DEMO_TICK_MS,
-      );
+      registerInstructionAbilityDemoResume(playNextItemStep);
+      scheduleInstructionAbilityDemoStep(playNextItemStep);
       return () => {
-        if (instructionAbilityDemoTimeoutRef.current !== null) {
-          window.clearTimeout(instructionAbilityDemoTimeoutRef.current);
-          instructionAbilityDemoTimeoutRef.current = null;
-        }
+        clearInstructionAbilityDemoTimeout();
+        resumeInstructionAbilityDemoRef.current = null;
         setInstructionAbilityDemoTransitionProgress(1);
         instructionAbilityDemoRunIdRef.current += 1;
       };
@@ -7363,7 +7485,10 @@ export default function SuperMetalMonsBoard({
     });
 
     const playNextStep = () => {
-      if (instructionAbilityDemoRunIdRef.current !== runId) {
+      if (
+        instructionAbilityDemoRunIdRef.current !== runId ||
+        instructionAbilityDemoPausedRef.current
+      ) {
         return;
       }
       const step = steps[stepIndex];
@@ -7454,22 +7579,15 @@ export default function SuperMetalMonsBoard({
       }
       playInstructionDemoStepSound(step);
       stepIndex = (stepIndex + 1) % steps.length;
-      instructionAbilityDemoTimeoutRef.current = window.setTimeout(
-        playNextStep,
-        INSTRUCTION_ABILITY_DEMO_TICK_MS,
-      );
+      scheduleInstructionAbilityDemoStep(playNextStep);
     };
 
-    instructionAbilityDemoTimeoutRef.current = window.setTimeout(
-      playNextStep,
-      INSTRUCTION_ABILITY_DEMO_TICK_MS,
-    );
+    registerInstructionAbilityDemoResume(playNextStep);
+    scheduleInstructionAbilityDemoStep(playNextStep);
 
     return () => {
-      if (instructionAbilityDemoTimeoutRef.current !== null) {
-        window.clearTimeout(instructionAbilityDemoTimeoutRef.current);
-        instructionAbilityDemoTimeoutRef.current = null;
-      }
+      clearInstructionAbilityDemoTimeout();
+      resumeInstructionAbilityDemoRef.current = null;
       if (instructionAbilityDemoTransitionFrameRef.current !== null) {
         window.cancelAnimationFrame(instructionAbilityDemoTransitionFrameRef.current);
         instructionAbilityDemoTransitionFrameRef.current = null;
@@ -8109,7 +8227,6 @@ export default function SuperMetalMonsBoard({
     flexDirection: 'column',
     alignItems: 'flex-end',
   };
-  const hideSandboxPlayerTurnResources = isSandboxFreeMoveBoard;
   const hudStatusIconStyle: CSSProperties = {
     width: `${hudStatusIconSize}px`,
     height: `${hudStatusIconSize}px`,
@@ -8976,12 +9093,23 @@ export default function SuperMetalMonsBoard({
     display: 'block',
     imageRendering: 'pixelated',
   };
-  const previewMessageBoxStyle: CSSProperties = {
+  const previewMessageStackStyle: CSSProperties = {
     width: `${Math.min(previewBoxWidthPx, renderWidth)}px`,
     position: 'absolute',
     left: `calc(50% - ${previewLeftOffsetPx}px)`,
-    top: `calc(50% - ${previewTitleCenterFromTopPx + previewBoxLiftPx}px)`,
+    top: `calc(50% - ${
+      previewTitleCenterFromTopPx + previewBoxLiftPx + (activePiece?.diagramImage ? 55 : 0)
+    }px)`,
     transform: 'translateX(-50%)',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: `${Math.max(4, Math.round(5 * previewScale))}px`,
+    visibility: activePiece ? 'visible' : 'hidden',
+    pointerEvents: activePiece ? 'auto' : 'none',
+  };
+  const previewMessageBoxStyle: CSSProperties = {
+    width: '100%',
     border: '1px solid #000',
     borderRadius: `${previewMessageRadius}px`,
     backgroundColor: '#fff',
@@ -8992,7 +9120,6 @@ export default function SuperMetalMonsBoard({
     alignItems: 'center',
     justifyContent: 'flex-start',
     gap: `${previewMessageGap}px`,
-    visibility: activePiece ? 'visible' : 'hidden',
   };
   const thinFloatingPreviewBoxStyle: CSSProperties = {
     width: `${thinFloatingPreviewWidthPx}px`,
@@ -9022,6 +9149,70 @@ export default function SuperMetalMonsBoard({
     fontSize: `${previewTextFontPx}px`,
     lineHeight: 1.25,
     width: `${previewTextWidthPx}px`,
+  };
+  const previewDiagramFrameStyle: CSSProperties = {
+    width: `${previewTextWidthPx}px`,
+    maxWidth: '100%',
+    aspectRatio: '1 / 1',
+    border: '1px solid #000',
+    borderRadius: `${Math.max(3, Math.round(5 * previewScale))}px`,
+    backgroundColor: '#d6d6d6',
+    overflow: 'hidden',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  };
+  const previewDiagramStyle: CSSProperties = {
+    width: '100%',
+    height: '100%',
+    objectFit: 'contain',
+    display: 'block',
+    imageRendering: 'auto',
+  };
+  const instructionDemoHintStyle: CSSProperties = {
+    margin: 0,
+    color: '#4b4b4b',
+    fontSize: `${Math.max(9, Math.round(previewTextFontPx * 0.82))}px`,
+    lineHeight: 1.15,
+    fontStyle: 'italic',
+    fontWeight: 700,
+    textAlign: 'center',
+    userSelect: 'none',
+  };
+  const instructionDemoControlButtonSizePx = Math.max(
+    25,
+    Math.round(28 * previewScale),
+  );
+  const instructionDemoControlButtonStyle: CSSProperties = {
+    width: `${instructionDemoControlButtonSizePx}px`,
+    height: `${instructionDemoControlButtonSizePx}px`,
+    border: '1px solid #000',
+    borderRadius: '50%',
+    backgroundColor: '#fff',
+    color: '#000',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 0,
+    cursor: 'pointer',
+    pointerEvents: 'auto',
+    userSelect: 'none',
+  };
+  const instructionDemoControlIconSizePx = Math.max(
+    12,
+    Math.round(14 * previewScale),
+  );
+  const instructionDemoControlIconStyle: CSSProperties = {
+    width: `${instructionDemoControlIconSizePx}px`,
+    height: `${instructionDemoControlIconSizePx}px`,
+    display: 'block',
+  };
+  const instructionDemoControlRowStyle: CSSProperties = {
+    minHeight: `${instructionDemoControlButtonSizePx}px`,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    pointerEvents: 'auto',
   };
   const previewTitleStyle: CSSProperties = {
     margin: 0,
@@ -9162,6 +9353,28 @@ export default function SuperMetalMonsBoard({
   const heldSuperManaOffsetYUnits = HELD_SUPER_MANA_OFFSET_Y_PX / tilePixels;
   const heldBombOffsetXUnits = HELD_BOMB_OFFSET_X_PX / tilePixels;
   const heldBombOffsetYUnits = HELD_BOMB_OFFSET_Y_PX / tilePixels;
+  const getHeldPieceFrame = (
+    holderFrame: {x: number; y: number; size: number},
+    heldSize: number,
+    offsetXUnits: number,
+    offsetYUnits: number,
+  ) => {
+    const holderCenterX = holderFrame.x + holderFrame.size / 2;
+    const holderCenterY = holderFrame.y + holderFrame.size / 2;
+    const unflippedX =
+      holderFrame.x + holderFrame.size - heldSize * 0.96 + offsetXUnits;
+    const unflippedY =
+      holderFrame.y + holderFrame.size - heldSize * 0.96 + offsetYUnits;
+    if (!isBoardPerspectiveFlipped) {
+      return {x: unflippedX, y: unflippedY};
+    }
+    const unflippedCenterX = unflippedX + heldSize / 2;
+    const unflippedCenterY = unflippedY + heldSize / 2;
+    return {
+      x: holderCenterX - (unflippedCenterX - holderCenterX) - heldSize / 2,
+      y: holderCenterY - (unflippedCenterY - holderCenterY) - heldSize / 2,
+    };
+  };
   function triggerResetFadeInForEntities(entityIds: string[]) {
     if (resetFadeFrameRef.current !== null) {
       window.cancelAnimationFrame(resetFadeFrameRef.current);
@@ -9343,30 +9556,28 @@ export default function SuperMetalMonsBoard({
         : isHeldBomb
           ? HELD_BOMB_SCALE_MULTIPLIER
           : 1);
-    const heldManaX =
-      frame.x +
-      frame.size -
-      heldManaSize * 0.96 +
+    const heldPieceFrame = getHeldPieceFrame(
+      frame,
+      heldManaSize,
       heldManaOffsetXUnits +
-      (isHeldSuperMana
-        ? heldSuperManaOffsetXUnits
-        : isHeldBomb
-          ? heldBombOffsetXUnits
-          : shouldApplyFullscreenHeldNormalManaOffset
-            ? fullscreenHeldNormalManaExtraOffsetXUnits
-            : 0);
-    const heldManaY =
-      frame.y +
-      frame.size -
-      heldManaSize * 0.96 +
+        (isHeldSuperMana
+          ? heldSuperManaOffsetXUnits
+          : isHeldBomb
+            ? heldBombOffsetXUnits
+            : shouldApplyFullscreenHeldNormalManaOffset
+              ? fullscreenHeldNormalManaExtraOffsetXUnits
+              : 0),
       heldManaOffsetYUnits +
-      (isHeldSuperMana
-        ? heldSuperManaOffsetYUnits
-        : isHeldBomb
-          ? heldBombOffsetYUnits
-          : shouldApplyFullscreenHeldNormalManaOffset
-            ? fullscreenHeldNormalManaExtraOffsetYUnits
-            : 0);
+        (isHeldSuperMana
+          ? heldSuperManaOffsetYUnits
+          : isHeldBomb
+            ? heldBombOffsetYUnits
+            : shouldApplyFullscreenHeldNormalManaOffset
+              ? fullscreenHeldNormalManaExtraOffsetYUnits
+              : 0),
+    );
+    const heldManaX = heldPieceFrame.x;
+    const heldManaY = heldPieceFrame.y;
     return (
       <g
         key={mon.id}
@@ -11322,7 +11533,7 @@ export default function SuperMetalMonsBoard({
           ) : null}
 
           <ThreeDBoardSurface
-            enabled={canUseThreeDBoardView && isThreeDBoardViewEnabled}
+            enabled={isEmbeddedThreeDBoardActive}
             renderWidth={renderWidth}
             viewportWidth={threeDBoardViewportWidth}
             viewportHeight={threeDBoardViewportHeight}
@@ -12474,6 +12685,16 @@ export default function SuperMetalMonsBoard({
               <p style={previewTextStyle}>
                 {activePiece?.text ?? ''}
               </p>
+              {activePiece?.diagramImage ? (
+                <div style={previewDiagramFrameStyle}>
+                  <img
+                    src={activePiece.diagramImage}
+                    alt={`${activePiece.title} diagram`}
+                    decoding="async"
+                    style={previewDiagramStyle}
+                  />
+                </div>
+              ) : null}
             </div>
           ) : null}
 
@@ -12548,26 +12769,30 @@ export default function SuperMetalMonsBoard({
                 <span ref={playerScoreRef} style={hudScoreTextStyle}>{playerScore}</span>
               </div>
               <div style={enableFreeTileMove ? hudStatusGroupStyle : undefined}>
-                {!hideSandboxPlayerTurnResources ? (
-                  <div
-                    className="player-hud-status-row"
-                    style={playerHudStatusRowStyle}
-                    aria-label="Player turn resources">
-                    {playerHudResourceItems.map((resource) => (
-                      <img
-                        key={resource.id}
-                        className={
-                          resource.isExiting ? 'mons-potion-resource-exit' : undefined
-                        }
-                        src={moveResourceAssets[resource.kind]}
-                        alt=""
-                        aria-hidden="true"
-                        draggable={false}
-                        style={hudStatusIconStyle}
-                      />
-                    ))}
-                  </div>
-                ) : null}
+                <div
+                  className="player-hud-status-row"
+                  style={playerHudStatusRowStyle}
+                  aria-label="Player turn resources">
+                  {playerHudResourceItems.map((resource) => (
+                    <img
+                      key={resource.id}
+                      className={
+                        resource.isExiting ? 'mons-potion-resource-exit' : undefined
+                      }
+                      src={moveResourceAssets[resource.kind]}
+                      alt=""
+                      aria-hidden="true"
+                      draggable={false}
+                      style={{
+                        ...hudStatusIconStyle,
+                        opacity:
+                          isSandboxFreeMoveBoard && resource.kind !== 'statusPotion'
+                            ? 0
+                            : undefined,
+                      }}
+                    />
+                  ))}
+                </div>
                 {enableFreeTileMove ? (
                   <div style={hudActionButtonsWrapStyle}>
                     <button
@@ -12768,70 +12993,132 @@ export default function SuperMetalMonsBoard({
                 </Link>
               </p>
             ) : null}
-            <div ref={previewMessageBoxRef} style={previewMessageBoxStyle}>
-              <div style={previewImageSlotStyle}>
-                {activePiece?.kind === 'manaPool' ? (
-                  <svg
-                    viewBox="0 0 1 1"
-                    style={previewPoolSvgStyle}
-                    shapeRendering="crispEdges"
-                    aria-label="Mana pool preview">
-                    <rect x={0} y={0} width={1} height={1} fill={boardColors.manaPool} />
-                    <g opacity={0.5}>
-                      {previewManaPoolWaves.map((line, lineIndex) => {
-                        const slide = getWaveSlideFrame(line, waveFrameIndex);
-                        return (
-                          <g key={`preview-wave-${lineIndex}`}>
-                            <rect
-                              x={line.x}
-                              y={line.y}
-                              width={line.width}
-                              height={WAVE_PIXEL}
-                              fill={line.color}
-                            />
-                            {slide.width > 0 ? (
-                              <>
-                                <rect
-                                  x={slide.x}
-                                  y={line.y - WAVE_PIXEL}
-                                  width={slide.width}
-                                  height={WAVE_PIXEL}
-                                  fill={line.color}
-                                />
-                                <rect
-                                  x={slide.x}
-                                  y={line.y}
-                                  width={slide.width}
-                                  height={WAVE_PIXEL}
-                                  fill={boardColors.manaPool}
-                                />
-                              </>
-                            ) : null}
-                          </g>
-                        );
-                      })}
-                    </g>
-                  </svg>
-                ) : activePiece ? (
-                  <img
-                    src={activePieceHref}
-                    alt={`${activePiece.title} preview`}
-                    style={activePreviewImageStyle}
-                  />
+            <div ref={previewMessageBoxRef} style={previewMessageStackStyle}>
+              <div style={previewMessageBoxStyle}>
+                <div style={previewImageSlotStyle}>
+                  {activePiece?.kind === 'manaPool' ? (
+                    <svg
+                      viewBox="0 0 1 1"
+                      style={previewPoolSvgStyle}
+                      shapeRendering="crispEdges"
+                      aria-label="Mana pool preview">
+                      <rect x={0} y={0} width={1} height={1} fill={boardColors.manaPool} />
+                      <g opacity={0.5}>
+                        {previewManaPoolWaves.map((line, lineIndex) => {
+                          const slide = getWaveSlideFrame(line, waveFrameIndex);
+                          return (
+                            <g key={`preview-wave-${lineIndex}`}>
+                              <rect
+                                x={line.x}
+                                y={line.y}
+                                width={line.width}
+                                height={WAVE_PIXEL}
+                                fill={line.color}
+                              />
+                              {slide.width > 0 ? (
+                                <>
+                                  <rect
+                                    x={slide.x}
+                                    y={line.y - WAVE_PIXEL}
+                                    width={slide.width}
+                                    height={WAVE_PIXEL}
+                                    fill={line.color}
+                                  />
+                                  <rect
+                                    x={slide.x}
+                                    y={line.y}
+                                    width={slide.width}
+                                    height={WAVE_PIXEL}
+                                    fill={boardColors.manaPool}
+                                  />
+                                </>
+                              ) : null}
+                            </g>
+                          );
+                        })}
+                      </g>
+                    </svg>
+                  ) : activePiece ? (
+                    <img
+                      src={activePieceHref}
+                      alt={`${activePiece.title} preview`}
+                      style={activePreviewImageStyle}
+                    />
+                  ) : null}
+                </div>
+                <h4 style={previewTitleStyle}>
+                  {activePiece?.detailPath ? (
+                    <Link to={activePiece.detailPath} style={previewTitleLinkStyle}>
+                      {activePiece.title}
+                    </Link>
+                  ) : (
+                    activePiece?.title ?? ''
+                  )}
+                </h4>
+                <p style={previewTextStyle}>
+                  {activePiece?.text ?? ''}
+                </p>
+                {activePiece?.diagramImage ? (
+                  <div style={previewDiagramFrameStyle}>
+                    <img
+                      src={activePiece.diagramImage}
+                      alt={`${activePiece.title} diagram`}
+                      decoding="async"
+                      style={previewDiagramStyle}
+                    />
+                  </div>
                 ) : null}
               </div>
-              <h4 style={previewTitleStyle}>
-                {activePiece?.detailPath ? (
-                  <Link to={activePiece.detailPath} style={previewTitleLinkStyle}>
-                    {activePiece.title}
-                  </Link>
-                ) : (
-                  activePiece?.title ?? ''
-                )}
-              </h4>
-              <p style={previewTextStyle}>
-                {activePiece?.text ?? ''}
-              </p>
+              {showInstructionDemoHoverPrompt || showInstructionDemoPlaybackControl ? (
+                <div
+                  style={instructionDemoControlRowStyle}
+                  onPointerDown={(event) => {
+                    event.stopPropagation();
+                  }}>
+                  {showInstructionDemoHoverPrompt ? (
+                    <p style={instructionDemoHintStyle}>click to watch demo</p>
+                  ) : null}
+                  {showInstructionDemoPlaybackControl ? (
+                    <button
+                      type="button"
+                      aria-label={
+                        isInstructionAbilityDemoPaused
+                          ? 'Resume demo animation'
+                          : 'Pause demo animation'
+                      }
+                      title={
+                        isInstructionAbilityDemoPaused
+                          ? 'Resume demo animation'
+                          : 'Pause demo animation'
+                      }
+                      style={instructionDemoControlButtonStyle}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        toggleInstructionAbilityDemoPaused();
+                      }}>
+                      {isInstructionAbilityDemoPaused ? (
+                        <svg
+                          viewBox="0 0 24 24"
+                          aria-hidden="true"
+                          focusable="false"
+                          style={instructionDemoControlIconStyle}>
+                          <path d="M8 5v14l11-7z" fill="currentColor" />
+                        </svg>
+                      ) : (
+                        <svg
+                          viewBox="0 0 24 24"
+                          aria-hidden="true"
+                          focusable="false"
+                          style={instructionDemoControlIconStyle}>
+                          <rect x="7" y="5" width="3.5" height="14" fill="currentColor" />
+                          <rect x="13.5" y="5" width="3.5" height="14" fill="currentColor" />
+                        </svg>
+                      )}
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           </div>
         ) : null}

@@ -12,9 +12,12 @@ export type PieceDetailItem = {
   title: string;
   text: string;
   image?: string;
+  diagramImage?: string;
   kind: PieceDetailKind;
   monEntries?: PieceDetailMonEntry[];
 };
+
+export const pieceDetailsBoardDiagram = '/assets/diagrams/optimized/board.jpg';
 
 const ceramicMonEntriesBySlug: Record<string, PieceDetailMonEntry[]> = {
   angel: [
@@ -76,83 +79,90 @@ export const pieceDetailItems: PieceDetailItem[] = [
   {
     slug: 'drainer',
     title: 'Drainer',
-    text: 'Can move onto mana and carry mana.',
+    text: 'Only piece that can move onto the same tile as a mana and pick it up, and can walk through the center tile.',
     image: '/assets/mons/drainer.png',
+    diagramImage: '/assets/diagrams/optimized/drainer.jpg',
     kind: 'image',
     monEntries: ceramicMonEntriesBySlug.drainer,
   },
   {
     slug: 'spirit',
     title: 'Spirit',
-    text: 'Can target any piece exactly two tiles away and push it one tile in any direction.',
+    text: 'Can target any piece (mana, mon, or item) exactly two tiles away and push it one tile in any direction.',
     image: '/assets/mons/spirit.png',
+    diagramImage: '/assets/diagrams/optimized/spirit.jpg',
     kind: 'image',
     monEntries: ceramicMonEntriesBySlug.spirit,
   },
   {
     slug: 'mystic',
     title: 'Mystic',
-    text: 'Attacks two tiles away diagonally. Can target through/over other pieces.',
+    text: 'Faints a target exactly two tiles away diagonally- can shoot through/over other pieces.',
     image: '/assets/mons/mystic.png',
+    diagramImage: '/assets/diagrams/optimized/mystic.jpg',
     kind: 'image',
     monEntries: ceramicMonEntriesBySlug.mystic,
   },
   {
     slug: 'demon',
     title: 'Demon',
-    text: 'Attacks two tiles away orthoganally. Moves to target location and cannot target through other pieces.',
+    text: 'Faints a target exactly two tiles away orthoganally- moves to the attack location and cannot target through other pieces.',
     image: '/assets/mons/demon.png',
+    diagramImage: '/assets/diagrams/optimized/demon.jpg',
     kind: 'image',
     monEntries: ceramicMonEntriesBySlug.demon,
   },
   {
     slug: 'angel',
     title: 'Angel',
-    text: 'Protects adjacent friendly mons from incoming demon or mystic attacks.',
+    text: 'Protects adjacent friendly mons from incoming demon or mystic attacks- is itself vulnerable to attack.',
     image: '/assets/mons/angel.png',
+    diagramImage: '/assets/diagrams/optimized/angel.jpg',
     kind: 'image',
     monEntries: ceramicMonEntriesBySlug.angel,
   },
   {
     slug: 'white-mana',
     title: 'White Mana',
-    text: 'Bring mana to a corner pool to score 1 point. Can be mana moved at the end of your turn.',
+    text: 'Bring mana to any corner pool to score 1 point. Can be mana moved at the end of your turn.',
     image: '/assets/mons/mana.png',
     kind: 'image',
   },
   {
     slug: 'black-mana',
     title: 'Black Mana',
-    text: 'Bring enemy mana to a corner pool to score 2 points. Cannot be mana moved.',
+    text: 'Bring enemy mana to any corner pool to score 2 points. Cannot be mana moved.',
     image: '/assets/mons/manaB.png',
     kind: 'image',
   },
   {
     slug: 'super-mana',
     title: 'Super Mana',
-    text: 'Bring super mana to a corner pool to score 2 points. Returns to center tile if drainer is fainted while holding.',
+    text: 'Bring super mana to any corner pool to score 2 points. Returns to center tile if drainer is fainted while holding.',
     image: '/assets/mons/supermana.png',
     kind: 'image',
   },
   {
     slug: 'item-pickup',
     title: 'Item Pickup',
-    text: 'Move onto an item to pick it up. You must choose between either option.',
+    text: 'Move onto an item to pick it up. You must choose between either option. You cannot choose the bomb if your mon is already holding a bomb or a mana.',
     image: '/assets/mons/bombOrPotion.png',
     kind: 'image',
   },
   {
     slug: 'bomb',
     title: 'Bomb',
-    text: 'Can be thrown at an enemy mon up to 3 tiles away. The bomb is spent when it hits.',
+    text: "Can be thrown up to 3 tiles away, fainting an enemy mon even through an Angel's protection. If a Demon attacks a mon holding a bomb, it's lost and both mons get fainted in the blast.",
     image: '/assets/mons/bomb.png',
+    diagramImage: '/assets/diagrams/optimized/bomb.jpg',
     kind: 'image',
   },
   {
     slug: 'potion',
     title: 'Potion',
-    text: 'Adds one extra active ability resource to your turn.',
+    text: 'Can be consumed on any future turn to grant one extra active ability on that turn.',
     image: '/assets/mons/potion.png',
+    diagramImage: '/assets/diagrams/optimized/potion.jpg',
     kind: 'image',
   },
   {
@@ -200,6 +210,23 @@ export const pieceDetailPathByTitle = pieceDetailItems.reduce<Record<string, str
   {},
 );
 
+export const pieceDetailDiagramByTitle = pieceDetailItems.reduce<Record<string, string>>(
+  (result, item) => {
+    if (item.diagramImage) {
+      result[item.title] = item.diagramImage;
+    }
+    return result;
+  },
+  {},
+);
+export const pieceDetailDiagramImages = pieceDetailItems.flatMap((item) =>
+  item.diagramImage ? [item.diagramImage] : [],
+);
+
 export function getPieceDetailPathByTitle(title: string): string | null {
   return pieceDetailPathByTitle[title] ?? null;
+}
+
+export function getPieceDetailDiagramByTitle(title: string): string | null {
+  return pieceDetailDiagramByTitle[title] ?? null;
 }

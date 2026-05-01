@@ -4,10 +4,26 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type FormEvent,
   type MutableRefObject,
   type ReactNode,
 } from 'react';
 import NewTopLayout from '@site/src/components/NewTopLayout';
+import {
+  GUESTBOOK_SIGNED_MESSAGE,
+  readGuestBookMinimizedFromStorage,
+  readGuestBookSignedFromStorage,
+  writeGuestBookMinimizedToStorage,
+  writeGuestBookSignedToStorage,
+} from '@site/src/constants/guestBook';
+import {
+  playBoardSoundEffect,
+  preloadBoardSoundEffects,
+} from '@site/src/utils/boardSoundEffects';
+import {
+  playSiteSoundEffect,
+  preloadSiteSoundEffects,
+} from '@site/src/utils/siteSoundEffects';
 
 type Point = {
   x: number;
@@ -22,6 +38,10 @@ const WHITE_MANA_SPRITE_SRC = '/assets/mons/mana.png';
 const BLACK_MANA_SPRITE_SRC = '/assets/mons/manaB.png';
 const HOME_SPRITE_RETRY_COUNT = 1;
 const loadedHomeSpriteSrcSet = new Set<string>();
+const GUESTBOOK_SUPABASE_URL = 'https://hzmtkjeopeeomrodkpaq.supabase.co';
+const GUESTBOOK_SUPABASE_ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh6bXRramVvcGVlb21yb2RrcGFxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc1NjAzNDMsImV4cCI6MjA5MzEzNjM0M30.Y2oU3rq0QaRDEbdUfoga7UvgQiwe1g64KQvvUIrw5_Q';
+const GUESTBOOK_ENTRY_MAX_LENGTH = 280;
 
 const homeWelcomeLayerStyle = {
   position: 'fixed' as const,
@@ -44,6 +64,184 @@ const homeWelcomeBoxStyle = {
   textAlign: 'center' as const,
   fontSize: '0.86rem',
   lineHeight: 1.25,
+};
+
+const homeGuestBookBoxStyle: CSSProperties = {
+  ...homeWelcomeBoxStyle,
+  backgroundColor: 'rgba(255, 255, 255, 0.68)',
+  position: 'absolute',
+  left: '50%',
+  top: 'calc(100% + 12px)',
+  transform: 'translateX(-50%)',
+  width: 'min(100%, 520px)',
+  boxSizing: 'border-box',
+  padding: '14px 16px',
+  backdropFilter: 'blur(4px)',
+  WebkitBackdropFilter: 'blur(4px)',
+  pointerEvents: 'auto',
+  userSelect: 'none',
+  WebkitUserSelect: 'none',
+};
+
+const homeGuestBookTitleStyle: CSSProperties = {
+  margin: '0 0 0.55rem',
+  fontWeight: 700,
+};
+
+const homeGuestBookTitleSuffixStyle: CSSProperties = {
+  fontWeight: 400,
+};
+
+const homeGuestBookCloseButtonStyle: CSSProperties = {
+  position: 'absolute',
+  top: '0.24rem',
+  right: '0.3rem',
+  width: '1.18rem',
+  height: '1.18rem',
+  border: 0,
+  borderRadius: 0,
+  background: 'transparent',
+  color: '#000',
+  padding: 0,
+  font: 'inherit',
+  fontSize: '1rem',
+  lineHeight: 1,
+  cursor: 'pointer',
+  userSelect: 'none',
+  WebkitUserSelect: 'none',
+};
+
+const homeGuestBookFormStyle: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'minmax(0, 1fr) auto',
+  gap: '0.5rem',
+  alignItems: 'center',
+};
+
+const homeGuestBookInputStyle: CSSProperties = {
+  minWidth: 0,
+  border: '1px solid #000',
+  borderRadius: 0,
+  backgroundColor: '#fff',
+  color: '#000',
+  padding: '0.42rem 0.5rem',
+  font: 'inherit',
+  lineHeight: 1.2,
+  userSelect: 'none',
+  WebkitUserSelect: 'none',
+};
+
+const homeGuestBookSignedMessageStyle: CSSProperties = {
+  ...homeGuestBookInputStyle,
+  boxSizing: 'border-box',
+  textAlign: 'left',
+};
+
+const homeGuestBookButtonStyle: CSSProperties = {
+  border: '1px solid #000',
+  borderRadius: 0,
+  backgroundColor: '#fff',
+  color: '#000',
+  padding: '0.42rem 0.65rem',
+  font: 'inherit',
+  lineHeight: 1.2,
+  cursor: 'pointer',
+  whiteSpace: 'nowrap',
+  userSelect: 'none',
+  WebkitUserSelect: 'none',
+};
+
+const homeGuestBookButtonContentStyle: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: '0.32rem',
+};
+
+const homeGuestBookButtonIconStyle: CSSProperties = {
+  width: '0.92rem',
+  height: '0.92rem',
+  display: 'block',
+};
+
+const homeGuestBookErrorStyle: CSSProperties = {
+  display: 'block',
+  marginTop: '0.45rem',
+  color: '#8a0000',
+  fontSize: '0.78rem',
+  lineHeight: 1.2,
+};
+
+const homeGuestBookOverlayStyle: CSSProperties = {
+  position: 'fixed',
+  inset: 0,
+  zIndex: 12080,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: '1.2rem',
+  backgroundColor: 'rgba(255, 255, 255, 0.12)',
+  pointerEvents: 'auto',
+};
+
+const homeGuestBookPopupStyle: CSSProperties = {
+  width: 'min(92vw, 560px)',
+  maxHeight: 'min(72vh, 560px)',
+  overflowY: 'auto',
+  border: '1px solid #000',
+  borderRadius: 0,
+  backgroundColor: '#fff',
+  color: '#000',
+  padding: '1rem',
+  boxShadow: '0 10px 28px rgba(0, 0, 0, 0.22)',
+};
+
+const homeGuestBookPopupTitleStyle: CSSProperties = {
+  margin: '0 0 0.75rem',
+  fontSize: '1rem',
+  lineHeight: 1.2,
+};
+
+const homeGuestBookEntryListStyle: CSSProperties = {
+  margin: 0,
+  padding: 0,
+  listStyle: 'none',
+  display: 'grid',
+  gap: '0.78rem',
+};
+
+const homeGuestBookEntryMessageStyle: CSSProperties = {
+  margin: 0,
+  whiteSpace: 'pre-wrap',
+  overflowWrap: 'anywhere',
+};
+
+const homeGuestBookEntryTimeStyle: CSSProperties = {
+  display: 'block',
+  marginTop: '0.18rem',
+  fontSize: '0.75rem',
+  opacity: 0.62,
+};
+
+const homeGuestBookRestoreButtonStyle: CSSProperties = {
+  position: 'fixed',
+  left: 'calc(0.9rem + 1px)',
+  bottom: 'calc(2.58rem + 5px)',
+  zIndex: 120,
+  width: '1.1rem',
+  height: '1.1rem',
+  border: 0,
+  backgroundColor: 'transparent',
+  color: '#000',
+  padding: 0,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  fontSize: '1.1rem',
+  lineHeight: 1,
+  cursor: 'pointer',
+  userSelect: 'none',
+  WebkitUserSelect: 'none',
 };
 
 const homeSpriteLayerStyle: CSSProperties = {
@@ -114,7 +312,7 @@ const BOSCH_STACK_WIDTH = 105;
 const OMOM_STACK_WIDTH = 68;
 const HOME_MANA_STACK_WIDTH = 70;
 const SPRITE_GAP_PX = 20;
-const SPRITE_ROW_VERTICAL_SHIFT_PX = -10;
+const SPRITE_ROW_VERTICAL_SHIFT_PX = 45;
 const OMOM_VERTICAL_OFFSET_PX = 20;
 const SPRITE_TARGET_PADDING_X = 90;
 const SPRITE_TARGET_PADDING_Y = 90;
@@ -273,6 +471,12 @@ type HomeCollectedManaSprite = Point & {
   floatDelayMs: number;
 };
 
+type GuestBookEntry = {
+  id: number;
+  message: string;
+  created_at: string;
+};
+
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
@@ -312,6 +516,56 @@ function getCurrentHeaderHeight(): number {
     return 0;
   }
   return Math.round(headerNode.getBoundingClientRect().height);
+}
+
+function getGuestBookEndpoint(query = ''): string {
+  return `${GUESTBOOK_SUPABASE_URL}/rest/v1/guestbook_entries${query}`;
+}
+
+function getGuestBookHeaders(extraHeaders: Record<string, string> = {}): HeadersInit {
+  return {
+    apikey: GUESTBOOK_SUPABASE_ANON_KEY,
+    Authorization: `Bearer ${GUESTBOOK_SUPABASE_ANON_KEY}`,
+    ...extraHeaders,
+  };
+}
+
+function formatGuestBookTimestamp(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date);
+}
+
+async function fetchGuestBookEntries(): Promise<GuestBookEntry[]> {
+  const response = await fetch(
+    getGuestBookEndpoint('?select=id,message,created_at&order=created_at.desc'),
+    {
+      headers: getGuestBookHeaders(),
+    },
+  );
+  if (!response.ok) {
+    throw new Error('Could not load guest book.');
+  }
+  return (await response.json()) as GuestBookEntry[];
+}
+
+async function createGuestBookEntry(message: string): Promise<void> {
+  const response = await fetch(getGuestBookEndpoint(), {
+    method: 'POST',
+    headers: getGuestBookHeaders({
+      'Content-Type': 'application/json',
+      Prefer: 'return=minimal',
+    }),
+    body: JSON.stringify({message}),
+  });
+  if (!response.ok) {
+    throw new Error('Could not sign guest book.');
+  }
 }
 
 function createInitialPositions(viewportWidth: number, viewportHeight: number): {
@@ -637,7 +891,7 @@ type HomeExperienceProps = {
 
 const defaultHomeWelcomeContent = (
   <>
-    Welcome to <strong>Mons Academy</strong>, this realm's #1 learning hub for
+    Welcome to <strong>❀ Mons Academy</strong>, this realm's #1 learning hub for
     all things <strong>Super Metal Mons</strong>!
   </>
 );
@@ -660,6 +914,14 @@ export function HomeExperience({
     HomeCollectedManaSprite[]
   >([]);
   const [homeManaBursts, setHomeManaBursts] = useState<HomeManaBurst[]>([]);
+  const [guestBookMessage, setGuestBookMessage] = useState('');
+  const [hasSignedGuestBook, setHasSignedGuestBook] = useState(false);
+  const [isGuestBookSubmitting, setIsGuestBookSubmitting] = useState(false);
+  const [isGuestBookOpen, setIsGuestBookOpen] = useState(false);
+  const [isGuestBookLoading, setIsGuestBookLoading] = useState(false);
+  const [isGuestBookMinimized, setIsGuestBookMinimized] = useState(false);
+  const [guestBookEntries, setGuestBookEntries] = useState<GuestBookEntry[]>([]);
+  const [guestBookError, setGuestBookError] = useState<string | null>(null);
   const [homeWelcomeBoxHeight, setHomeWelcomeBoxHeight] = useState<number>(
     DEFAULT_WELCOME_BOX_HEIGHT_PX,
   );
@@ -730,6 +992,67 @@ export function HomeExperience({
   ): void => {
     collectedHomeManaSpritesRef.current = sprites;
     setCollectedHomeManaSprites(sprites);
+  };
+
+  useEffect(() => {
+    if (readGuestBookSignedFromStorage()) {
+      setGuestBookMessage(GUESTBOOK_SIGNED_MESSAGE);
+      setHasSignedGuestBook(true);
+    }
+    setIsGuestBookMinimized(readGuestBookMinimizedFromStorage());
+  }, []);
+
+  const loadGuestBookEntries = async (): Promise<void> => {
+    setIsGuestBookLoading(true);
+    setGuestBookError(null);
+    try {
+      setGuestBookEntries(await fetchGuestBookEntries());
+    } catch (error) {
+      setGuestBookError(error instanceof Error ? error.message : 'Could not load guest book.');
+    } finally {
+      setIsGuestBookLoading(false);
+    }
+  };
+
+  const openGuestBook = (): void => {
+    setIsGuestBookOpen(true);
+    void loadGuestBookEntries();
+  };
+
+  const minimizeGuestBook = (): void => {
+    writeGuestBookMinimizedToStorage(true);
+    setIsGuestBookMinimized(true);
+  };
+
+  const restoreGuestBook = (): void => {
+    writeGuestBookMinimizedToStorage(false);
+    setIsGuestBookMinimized(false);
+  };
+
+  const handleGuestBookSubmit = (event: FormEvent<HTMLFormElement>): void => {
+    event.preventDefault();
+    if (hasSignedGuestBook) {
+      openGuestBook();
+      return;
+    }
+    const trimmedMessage = guestBookMessage.trim();
+    if (trimmedMessage.length === 0 || isGuestBookSubmitting) {
+      return;
+    }
+    setIsGuestBookSubmitting(true);
+    setGuestBookError(null);
+    void createGuestBookEntry(trimmedMessage)
+      .then(() => {
+        writeGuestBookSignedToStorage(true);
+        setGuestBookMessage(GUESTBOOK_SIGNED_MESSAGE);
+        setHasSignedGuestBook(true);
+      })
+      .catch((error) => {
+        setGuestBookError(error instanceof Error ? error.message : 'Could not sign guest book.');
+      })
+      .finally(() => {
+        setIsGuestBookSubmitting(false);
+      });
   };
 
   const getHomeTrailRetentionDistance = (): number =>
@@ -984,6 +1307,7 @@ export function HomeExperience({
     );
     collectedManaSprites.forEach((sprite) => {
       clearHomeManaFadeTimerForId(sprite.id);
+      playBoardSoundEffect(Math.random() < 0.5 ? 'scoreMana' : 'manaPickUp');
       triggerHomeManaPickupBurst(sprite);
       homeManaFadeTimeoutByIdRef.current[sprite.id] = window.setTimeout(() => {
         setHomeManaSpritesSynced(
@@ -1000,6 +1324,14 @@ export function HomeExperience({
       current[key] ? current : {...current, [key]: true},
     );
   };
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    preloadBoardSoundEffects(['scoreMana', 'manaPickUp']);
+    preloadSiteSoundEffects(['guideClick']);
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -1484,11 +1816,13 @@ export function HomeExperience({
           targetElement.closest('aside[aria-label="Site menu"]') ||
           targetElement.closest('button[aria-label="Close site menu"]') ||
           targetElement.closest('a[aria-label="Go to settings"]') ||
-          targetElement.closest('a[aria-label="Return to previous page"]')
+          targetElement.closest('a[aria-label="Return to previous page"]') ||
+          targetElement.closest('.home-guest-book')
         )
       ) {
         return;
       }
+      playSiteSoundEffect('guideClick');
       activeGuidePointerIdRef.current = event.pointerId;
       guideBoschToPoint(
         {x: event.clientX, y: event.clientY},
@@ -1706,7 +2040,124 @@ export function HomeExperience({
         <div ref={homeWelcomeBoxRef} className="home-welcome-box" style={homeWelcomeBoxStyle}>
           {welcomeContent}
         </div>
+        {!isGuestBookMinimized ? (
+          <div className="home-guest-book" style={homeGuestBookBoxStyle}>
+            <button
+              type="button"
+              aria-label="Minimize guest book"
+              style={homeGuestBookCloseButtonStyle}
+              onClick={minimizeGuestBook}>
+              ×
+            </button>
+            <p style={homeGuestBookTitleStyle}>
+              ✍️ Guest Book- <span style={homeGuestBookTitleSuffixStyle}>please sign!</span>
+            </p>
+            <form style={homeGuestBookFormStyle} onSubmit={handleGuestBookSubmit}>
+              {hasSignedGuestBook ? (
+                <div aria-label="Guest book signed" style={homeGuestBookSignedMessageStyle}>
+                  {guestBookMessage}
+                </div>
+              ) : (
+                <input
+                  type="text"
+                  aria-label="Guest book entry"
+                  maxLength={GUESTBOOK_ENTRY_MAX_LENGTH}
+                  value={guestBookMessage}
+                  placeholder="write here"
+                  style={homeGuestBookInputStyle}
+                  onChange={(event) => {
+                    setGuestBookMessage(event.currentTarget.value);
+                  }}
+                />
+              )}
+              <button
+                type="submit"
+                disabled={
+                  isGuestBookSubmitting ||
+                  (!hasSignedGuestBook && guestBookMessage.trim().length === 0)
+                }
+                style={{
+                  ...homeGuestBookButtonStyle,
+                  opacity:
+                    isGuestBookSubmitting ||
+                    (!hasSignedGuestBook && guestBookMessage.trim().length === 0)
+                      ? 0.54
+                      : 1,
+                }}>
+                {hasSignedGuestBook ? (
+                  <span style={homeGuestBookButtonContentStyle}>
+                    <svg
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      style={homeGuestBookButtonIconStyle}
+                      fill="none">
+                      <path
+                        d="M9 6H20M9 12H20M9 18H20M4 6H4.01M4 12H4.01M4 18H4.01"
+                        stroke="currentColor"
+                        strokeWidth="2.2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    <span>read book</span>
+                  </span>
+                ) : isGuestBookSubmitting ? (
+                  'signing...'
+                ) : (
+                  'submit'
+                )}
+              </button>
+            </form>
+            {guestBookError ? <span style={homeGuestBookErrorStyle}>{guestBookError}</span> : null}
+          </div>
+        ) : null}
       </div>
+      {isGuestBookMinimized ? (
+        <button
+          type="button"
+          className="home-guest-book"
+          aria-label="Show guest book"
+          style={homeGuestBookRestoreButtonStyle}
+          onClick={restoreGuestBook}>
+          📜
+        </button>
+      ) : null}
+      {isGuestBookOpen ? (
+        <div
+          className="home-guest-book"
+          style={homeGuestBookOverlayStyle}
+          onClick={() => {
+            setIsGuestBookOpen(false);
+          }}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Guest book entries"
+            style={homeGuestBookPopupStyle}
+            onClick={(event) => {
+              event.stopPropagation();
+            }}>
+            <h2 style={homeGuestBookPopupTitleStyle}>Guest Book</h2>
+            {isGuestBookLoading ? (
+              <p style={homeGuestBookEntryMessageStyle}>loading...</p>
+            ) : guestBookEntries.length === 0 ? (
+              <p style={homeGuestBookEntryMessageStyle}>No entries yet.</p>
+            ) : (
+              <ol style={homeGuestBookEntryListStyle}>
+                {guestBookEntries.map((entry) => (
+                  <li key={entry.id}>
+                    <p style={homeGuestBookEntryMessageStyle}>{entry.message}</p>
+                    <time dateTime={entry.created_at} style={homeGuestBookEntryTimeStyle}>
+                      {formatGuestBookTimestamp(entry.created_at)}
+                    </time>
+                  </li>
+                ))}
+              </ol>
+            )}
+            {guestBookError ? <span style={homeGuestBookErrorStyle}>{guestBookError}</span> : null}
+          </div>
+        </div>
+      ) : null}
     </NewTopLayout>
   );
 }

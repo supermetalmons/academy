@@ -803,6 +803,10 @@ export default function ThreeDBoardSurface(props: ThreeDBoardSurfaceProps) {
       if (!isRunning) {
         return;
       }
+      if (isItemPickupChoiceOpen) {
+        rafId = window.requestAnimationFrame(tick);
+        return;
+      }
       if (lastMeasureMs !== 0 && nowMs - lastMeasureMs < 16) {
         rafId = window.requestAnimationFrame(tick);
         return;
@@ -832,7 +836,7 @@ export default function ThreeDBoardSurface(props: ThreeDBoardSurfaceProps) {
       isRunning = false;
       window.cancelAnimationFrame(rafId);
     };
-  }, [enabled]);
+  }, [enabled, isItemPickupChoiceOpen]);
 
   useEffect(() => {
     if (!enabled || typeof window === 'undefined') {
@@ -1246,8 +1250,6 @@ export default function ThreeDBoardSurface(props: ThreeDBoardSurfaceProps) {
     transformStyle: 'preserve-3d',
     willChange: 'transform',
     transform: `rotateX(${rotation.x}deg) rotateY(${rotation.y}deg)`,
-    filter: isItemPickupChoiceOpen ? 'blur(1.8px)' : undefined,
-    transition: 'filter 150ms ease',
   };
 
   const faceBaseStyle: CSSProperties = {
@@ -1389,8 +1391,20 @@ export default function ThreeDBoardSurface(props: ThreeDBoardSurfaceProps) {
     overflow: 'visible',
     pointerEvents: 'none',
     zIndex: 14,
-    filter: isItemPickupChoiceOpen ? 'blur(1.8px)' : undefined,
-    transition: 'filter 150ms ease',
+  };
+
+  const itemChoiceVeilStyle: CSSProperties = {
+    position: 'absolute',
+    inset: 0,
+    zIndex: 24,
+    pointerEvents: 'none',
+    background: isDark
+      ? 'rgba(0, 0, 0, 0.12)'
+      : 'rgba(255, 255, 255, 0.12)',
+    backdropFilter: isItemPickupChoiceOpen ? 'blur(2.3px)' : 'none',
+    WebkitBackdropFilter: isItemPickupChoiceOpen ? 'blur(2.3px)' : 'none',
+    opacity: isItemPickupChoiceOpen ? 1 : 0,
+    transition: 'opacity 150ms ease',
   };
 
   const reflectionLayerStyle: CSSProperties = {
@@ -1749,6 +1763,7 @@ export default function ThreeDBoardSurface(props: ThreeDBoardSurfaceProps) {
           );
         })}
       </div>
+      <div aria-hidden="true" style={itemChoiceVeilStyle} />
       </div>
     </div>
   );

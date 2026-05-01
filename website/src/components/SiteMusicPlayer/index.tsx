@@ -71,6 +71,8 @@ type PersistedMusicPlayerState = {
   isMiniControlsVisible?: boolean;
   currentTrackIndex?: number;
   isShuffleEnabled?: boolean;
+  isFavoritesOnlyEnabled?: boolean;
+  favoriteTrackFileNames?: string[];
   loopMode?: MusicLoopMode;
   isLoopEnabled?: boolean;
 };
@@ -81,6 +83,8 @@ type SiteMusicPlayerValue = {
   currentTrackIndex: number;
   isPlaying: boolean;
   isShuffleEnabled: boolean;
+  isFavoritesOnlyEnabled: boolean;
+  favoriteTrackFileNames: string[];
   loopMode: MusicLoopMode;
   currentTime: number;
   duration: number;
@@ -94,6 +98,8 @@ type SiteMusicPlayerValue = {
   skipTrack: (direction: 1 | -1) => void;
   selectTrack: (nextIndex: number, shouldPlay?: boolean) => void;
   setShuffleEnabled: (enabled: boolean) => void;
+  setFavoritesOnlyEnabled: (enabled: boolean) => void;
+  toggleFavoriteTrack: (fileName: string) => void;
   setLoopMode: (mode: MusicLoopMode) => void;
   setMusicVolume: (volume: number) => void;
   seek: (nextTime: number) => void;
@@ -101,6 +107,7 @@ type SiteMusicPlayerValue = {
 
 const SiteMusicPlayerContext = createContext<SiteMusicPlayerValue | null>(null);
 const MUSIC_PLAYER_STORAGE_KEY = 'mons-academy-music-player-v1';
+const allTrackIndexes = supermonsTracks.map((_, index) => index);
 
 const hiddenAudioStyle: CSSProperties = {
   display: 'none',
@@ -152,6 +159,15 @@ function readPersistedMusicPlayerState(): PersistedMusicPlayerState | null {
       return null;
     }
     const parsedValue = JSON.parse(rawValue) as PersistedMusicPlayerState;
+    const validTrackFileNames = new Set(supermonsTracks.map((track) => track.fileName));
+    const favoriteTrackFileNames = Array.isArray(parsedValue.favoriteTrackFileNames)
+      ? parsedValue.favoriteTrackFileNames.filter(
+          (fileName, index, allFileNames): fileName is string =>
+            typeof fileName === 'string' &&
+            validTrackFileNames.has(fileName) &&
+            allFileNames.indexOf(fileName) === index,
+        )
+      : [];
     const currentTrackIndex =
       typeof parsedValue.currentTrackIndex === 'number' &&
       parsedValue.currentTrackIndex >= 0 &&
@@ -165,6 +181,8 @@ function readPersistedMusicPlayerState(): PersistedMusicPlayerState | null {
         (parsedValue.isMiniControlsVisible === undefined && parsedValue.hasActivated === true),
       currentTrackIndex,
       isShuffleEnabled: parsedValue.isShuffleEnabled === true,
+      isFavoritesOnlyEnabled: parsedValue.isFavoritesOnlyEnabled === true,
+      favoriteTrackFileNames,
       loopMode:
         parsedValue.loopMode === 'off' ||
         parsedValue.loopMode === 'all' ||
@@ -218,6 +236,12 @@ export function SiteMusicPlayerProvider({children}: {children: ReactNode}): Reac
   const [isShuffleEnabled, setIsShuffleEnabled] = useState(
     initialMusicState?.isShuffleEnabled ?? false,
   );
+  const [isFavoritesOnlyEnabled, setIsFavoritesOnlyEnabledState] = useState(
+    initialMusicState?.isFavoritesOnlyEnabled ?? false,
+  );
+  const [favoriteTrackFileNames, setFavoriteTrackFileNames] = useState<string[]>(
+    initialMusicState?.favoriteTrackFileNames ?? [],
+  );
   const [loopMode, setLoopMode] = useState<MusicLoopMode>(initialMusicState?.loopMode ?? 'off');
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -229,6 +253,19 @@ export function SiteMusicPlayerProvider({children}: {children: ReactNode}): Reac
 
   const currentTrack = supermonsTracks[currentTrackIndex];
   const currentTrackSrc = useMemo(() => getTrackSrc(currentTrack.fileName), [currentTrack.fileName]);
+  const favoriteTrackFileNameSet = useMemo(
+    () => new Set(favoriteTrackFileNames),
+    [favoriteTrackFileNames],
+  );
+  const favoriteTrackIndexes = useMemo(
+    () =>
+      supermonsTracks.flatMap((track, index) =>
+        favoriteTrackFileNameSet.has(track.fileName) ? [index] : [],
+      ),
+    [favoriteTrackFileNameSet],
+  );
+  const playbackTrackIndexes =
+    isFavoritesOnlyEnabled ? favoriteTrackIndexes : allTrackIndexes;
 
   const play = useCallback(() => {
     const audio = audioRef.current;
@@ -256,16 +293,26 @@ export function SiteMusicPlayerProvider({children}: {children: ReactNode}): Reac
 
   const getNextTrackIndex = useCallback(
     (direction: 1 | -1) => {
-      if (isShuffleEnabled && supermonsTracks.length > 1) {
+      const trackIndexes = isFavoritesOnlyEnabled ? favoriteTrackIndexes : allTrackIndexes;
+      if (trackIndexes.length === 0) {
+        return currentTrackIndex;
+      }
+      if (isShuffleEnabled && trackIndexes.length > 1) {
         let nextIndex = currentTrackIndex;
         while (nextIndex === currentTrackIndex) {
-          nextIndex = Math.floor(Math.random() * supermonsTracks.length);
+          nextIndex = trackIndexes[Math.floor(Math.random() * trackIndexes.length)];
         }
         return nextIndex;
       }
-      return (currentTrackIndex + direction + supermonsTracks.length) % supermonsTracks.length;
+      const currentPlaybackIndex = trackIndexes.indexOf(currentTrackIndex);
+      if (currentPlaybackIndex === -1) {
+        return direction === 1 ? trackIndexes[0] : trackIndexes[trackIndexes.length - 1];
+      }
+      return trackIndexes[
+        (currentPlaybackIndex + direction + trackIndexes.length) % trackIndexes.length
+      ];
     },
-    [currentTrackIndex, isShuffleEnabled],
+    [currentTrackIndex, favoriteTrackIndexes, isFavoritesOnlyEnabled, isShuffleEnabled],
   );
 
   const selectTrack = useCallback(
@@ -300,6 +347,36 @@ export function SiteMusicPlayerProvider({children}: {children: ReactNode}): Reac
     play();
   }, [isPlaying, pause, play]);
 
+  const setFavoritesOnlyEnabled = useCallback(
+    (enabled: boolean) => {
+      setIsFavoritesOnlyEnabledState(enabled);
+      if (
+        enabled &&
+        !favoriteTrackIndexes.includes(currentTrackIndex) &&
+        favoriteTrackIndexes[0] !== undefined
+      ) {
+        selectTrack(favoriteTrackIndexes[0], isPlaying);
+      }
+    },
+    [currentTrackIndex, favoriteTrackIndexes, isPlaying, selectTrack],
+  );
+
+  const toggleFavoriteTrack = useCallback(
+    (fileName: string) => {
+      setFavoriteTrackFileNames((current) => {
+        const isAlreadyFavorite = current.includes(fileName);
+        if (isAlreadyFavorite) {
+          return current.filter((favoriteFileName) => favoriteFileName !== fileName);
+        }
+        if (!supermonsTracks.some((track) => track.fileName === fileName)) {
+          return current;
+        }
+        return [...current, fileName];
+      });
+    },
+    [],
+  );
+
   const seek = useCallback((nextTime: number) => {
     const audio = audioRef.current;
     if (audio) {
@@ -318,6 +395,24 @@ export function SiteMusicPlayerProvider({children}: {children: ReactNode}): Reac
       play();
     }
   }, [currentTrackSrc, isPlaying, play]);
+
+  useEffect(() => {
+    if (!isFavoritesOnlyEnabled) {
+      return;
+    }
+    if (favoriteTrackIndexes[0] === undefined) {
+      return;
+    }
+    if (!favoriteTrackIndexes.includes(currentTrackIndex)) {
+      selectTrack(favoriteTrackIndexes[0], isPlaying);
+    }
+  }, [
+    currentTrackIndex,
+    favoriteTrackIndexes,
+    isFavoritesOnlyEnabled,
+    isPlaying,
+    selectTrack,
+  ]);
 
   useEffect(() => {
     const updateMusicVolume = () => {
@@ -362,13 +457,23 @@ export function SiteMusicPlayerProvider({children}: {children: ReactNode}): Reac
           isMiniControlsVisible,
           currentTrackIndex,
           isShuffleEnabled,
+          isFavoritesOnlyEnabled,
+          favoriteTrackFileNames,
           loopMode,
         }),
       );
     } catch {
       // Ignore storage failures.
     }
-  }, [currentTrackIndex, hasActivated, isMiniControlsVisible, isShuffleEnabled, loopMode]);
+  }, [
+    currentTrackIndex,
+    favoriteTrackFileNames,
+    hasActivated,
+    isFavoritesOnlyEnabled,
+    isMiniControlsVisible,
+    isShuffleEnabled,
+    loopMode,
+  ]);
 
   const value = useMemo(
     () => ({
@@ -377,6 +482,8 @@ export function SiteMusicPlayerProvider({children}: {children: ReactNode}): Reac
       currentTrackIndex,
       isPlaying,
       isShuffleEnabled,
+      isFavoritesOnlyEnabled,
+      favoriteTrackFileNames,
       loopMode,
       currentTime,
       duration,
@@ -390,6 +497,8 @@ export function SiteMusicPlayerProvider({children}: {children: ReactNode}): Reac
       skipTrack,
       selectTrack,
       setShuffleEnabled: setIsShuffleEnabled,
+      setFavoritesOnlyEnabled,
+      toggleFavoriteTrack,
       setLoopMode,
       setMusicVolume: updateMusicVolume,
       seek,
@@ -399,7 +508,9 @@ export function SiteMusicPlayerProvider({children}: {children: ReactNode}): Reac
       currentTrackIndex,
       currentTime,
       duration,
+      favoriteTrackFileNames,
       hasActivated,
+      isFavoritesOnlyEnabled,
       hideMiniControls,
       isMiniControlsVisible,
       isPlaying,
@@ -409,9 +520,11 @@ export function SiteMusicPlayerProvider({children}: {children: ReactNode}): Reac
       pause,
       play,
       seek,
+      setFavoritesOnlyEnabled,
       selectTrack,
       skipTrack,
       togglePlay,
+      toggleFavoriteTrack,
       updateMusicVolume,
     ],
   );
@@ -434,7 +547,11 @@ export function SiteMusicPlayerProvider({children}: {children: ReactNode}): Reac
             }
             return;
           }
-          const isLastTrack = !isShuffleEnabled && currentTrackIndex >= supermonsTracks.length - 1;
+          const currentPlaybackIndex = playbackTrackIndexes.indexOf(currentTrackIndex);
+          const isLastTrack =
+            !isShuffleEnabled &&
+            playbackTrackIndexes.length > 0 &&
+            currentPlaybackIndex >= playbackTrackIndexes.length - 1;
           if (loopMode === 'off' && isLastTrack) {
             const audio = audioRef.current;
             if (audio) {

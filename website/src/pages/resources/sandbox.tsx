@@ -27,7 +27,6 @@ export default function ResourcesSandboxPage(): ReactNode {
           showSpawnGhosts
           enableFreeTileMove
           enableHoverClickScaling={false}
-          threeDBoardViewportBottomExtensionPx={4}
         />
       </section>
     </BlankSectionPage>

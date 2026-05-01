@@ -7,6 +7,7 @@ const DOWNLOAD_ALL_LOADING_MS = 8500;
 const DOWNLOAD_ALL_FILE_NAME = 'supermons-tracks.zip';
 const DOWNLOAD_ALL_FOLDER_NAME = 'supermons-tracks';
 const ZIP_UTF8_FLAG = 0x0800;
+const FAVORITE_PULSE_DURATION_MS = 620;
 
 const playerWrapStyle: CSSProperties = {
   width: '100%',
@@ -45,8 +46,43 @@ const titleStyle: CSSProperties = {
   fontSize: 'clamp(1.25rem, 3vw, 2rem)',
   lineHeight: 1.05,
   fontWeight: 800,
+  minWidth: 0,
+  display: 'inline',
+  overflowWrap: 'anywhere',
+};
+
+const titleTextWrapStyle: CSSProperties = {
   flex: '1 1 auto',
   minWidth: 0,
+  display: 'block',
+};
+
+const currentTrackFavoriteButtonStyle: CSSProperties = {
+  position: 'relative',
+  flex: '0 0 auto',
+  width: '31px',
+  height: '31px',
+  border: 'none',
+  background: 'transparent',
+  color: '#8f8f8f',
+  display: 'inline-flex',
+  verticalAlign: 'text-bottom',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: 0,
+  marginLeft: '0.35rem',
+  cursor: 'pointer',
+  opacity: 0.82,
+  transform: 'translateY(1px)',
+  transition: 'transform 170ms cubic-bezier(0.22, 1, 0.36, 1), color 160ms ease, filter 160ms ease, opacity 140ms ease',
+  overflow: 'visible',
+};
+
+const currentTrackFavoriteButtonActiveStyle: CSSProperties = {
+  ...currentTrackFavoriteButtonStyle,
+  color: '#f2ca3f',
+  filter: 'drop-shadow(0 0 3px rgba(242, 202, 63, 0.62))',
+  opacity: 1,
 };
 
 const titleRowStyle: CSSProperties = {
@@ -101,11 +137,26 @@ const controlsStyle: CSSProperties = {
 };
 
 const controlRowStyle: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: '38px minmax(0, 1fr) 38px',
+  alignItems: 'center',
+  gap: '0.55rem',
+};
+
+const controlClusterStyle: CSSProperties = {
+  gridColumn: '2',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
   flexWrap: 'wrap',
   gap: '0.55rem',
+};
+
+const controlFilterButtonWrapStyle: CSSProperties = {
+  gridColumn: '3',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'flex-end',
 };
 
 const iconButtonBaseStyle: CSSProperties = {
@@ -204,10 +255,77 @@ const trackButtonBaseStyle: CSSProperties = {
   cursor: 'pointer',
 };
 
-const trackButtonActiveStyle: CSSProperties = {
+const trackRowBaseStyle: CSSProperties = {
   ...trackButtonBaseStyle,
+  gridTemplateColumns: 'minmax(0, 1fr) 2rem',
+  cursor: 'default',
+};
+
+const trackRowActiveStyle: CSSProperties = {
+  ...trackRowBaseStyle,
   backgroundColor: '#000',
   color: '#fff',
+};
+
+const trackSelectButtonStyle: CSSProperties = {
+  minWidth: 0,
+  border: 'none',
+  background: 'transparent',
+  color: 'inherit',
+  display: 'grid',
+  gridTemplateColumns: '3.2rem minmax(0, 1fr)',
+  alignItems: 'center',
+  gap: '0.7rem',
+  padding: 0,
+  fontFamily: 'inherit',
+  fontSize: 'inherit',
+  lineHeight: 'inherit',
+  textAlign: 'left',
+  cursor: 'pointer',
+};
+
+const trackFavoriteButtonStyle: CSSProperties = {
+  position: 'relative',
+  width: '28px',
+  height: '28px',
+  border: 'none',
+  background: 'transparent',
+  color: '#8f8f8f',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: 0,
+  cursor: 'pointer',
+  opacity: 0.82,
+  justifySelf: 'end',
+  transition: 'transform 170ms cubic-bezier(0.22, 1, 0.36, 1), color 160ms ease, filter 160ms ease, opacity 140ms ease',
+  overflow: 'visible',
+};
+
+const trackFavoriteButtonActiveStyle: CSSProperties = {
+  ...trackFavoriteButtonStyle,
+  color: '#f2ca3f',
+  filter: 'drop-shadow(0 0 3px rgba(242, 202, 63, 0.62))',
+  opacity: 1,
+};
+
+const trackFavoritePulseWrapStyle: CSSProperties = {
+  position: 'absolute',
+  inset: 0,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  pointerEvents: 'none',
+};
+
+const trackFavoritePulseIconStyle: CSSProperties = {
+  width: '190%',
+  height: '190%',
+  display: 'block',
+  opacity: 0,
+  transform: 'scale(0.6)',
+  transformOrigin: 'center center',
+  overflow: 'visible',
 };
 
 const trackNumberStyle: CSSProperties = {
@@ -245,6 +363,12 @@ const volumeIconStyle: CSSProperties = {
   ...controlIconStyle,
   width: '16px',
   height: '16px',
+};
+
+const starIconStyle: CSSProperties = {
+  ...controlIconStyle,
+  width: '17px',
+  height: '17px',
 };
 
 function getTrackDownloadHref(fileName: string): string {
@@ -486,6 +610,26 @@ function renderVolumeIcon(): ReactNode {
   );
 }
 
+function renderStarIcon(
+  isFilled: boolean,
+  ref?: (node: SVGSVGElement | null) => void,
+): ReactNode {
+  return (
+    <svg
+      ref={ref}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      style={starIconStyle}
+      fill={isFilled ? 'currentColor' : 'none'}
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round">
+      <path d="M12 2.6L14.9 8.4L21.2 9.3L16.6 13.7L17.7 20L12 17L6.3 20L7.4 13.7L2.8 9.3L9.1 8.4L12 2.6Z" />
+    </svg>
+  );
+}
+
 function renderIcon(kind: 'previous' | 'play' | 'pause' | 'next' | 'shuffle' | 'loop'): ReactNode {
   if (kind === 'play') {
     return (
@@ -555,6 +699,10 @@ function renderIcon(kind: 'previous' | 'play' | 'pause' | 'next' | 'shuffle' | '
 export default function ResourcesMusicPage(): ReactNode {
   const trackListRef = useRef<HTMLOListElement | null>(null);
   const trackItemRefs = useRef<Array<HTMLLIElement | null>>([]);
+  const trackFavoriteIconRefs = useRef<Record<string, SVGSVGElement | null>>({});
+  const trackFavoritePulseRefs = useRef<Record<string, SVGSVGElement | null>>({});
+  const currentTrackFavoriteIconRef = useRef<SVGSVGElement | null>(null);
+  const currentTrackFavoritePulseRef = useRef<SVGSVGElement | null>(null);
   const [isDownloadAllLoading, setIsDownloadAllLoading] = useState(false);
   const {
     tracks,
@@ -562,6 +710,8 @@ export default function ResourcesMusicPage(): ReactNode {
     currentTrackIndex,
     isPlaying,
     isShuffleEnabled,
+    isFavoritesOnlyEnabled,
+    favoriteTrackFileNames,
     loopMode,
     currentTime,
     duration,
@@ -571,6 +721,8 @@ export default function ResourcesMusicPage(): ReactNode {
     skipTrack,
     selectTrack,
     setShuffleEnabled,
+    setFavoritesOnlyEnabled,
+    toggleFavoriteTrack,
     setLoopMode,
     setMusicVolume,
     seek,
@@ -582,6 +734,13 @@ export default function ResourcesMusicPage(): ReactNode {
         ? 'Loop playlist'
         : 'Loop current track';
   const currentTrackDownloadHref = getTrackDownloadHref(currentTrack.fileName);
+  const favoriteTrackFileNameSet = new Set(favoriteTrackFileNames);
+  const isCurrentTrackFavorite = favoriteTrackFileNameSet.has(currentTrack.fileName);
+  const visibleTrackIndexes = isFavoritesOnlyEnabled
+    ? tracks.flatMap((track, index) =>
+        favoriteTrackFileNameSet.has(track.fileName) ? [index] : [],
+      )
+    : tracks.map((_, index) => index);
 
   useEffect(() => {
     const trackList = trackListRef.current;
@@ -615,6 +774,126 @@ export default function ResourcesMusicPage(): ReactNode {
     }
   }
 
+  function runTrackFavoritePulseAnimation(fileName: string): void {
+    const favoriteIcon = trackFavoriteIconRefs.current[fileName];
+    if (favoriteIcon !== undefined && favoriteIcon !== null) {
+      favoriteIcon.getAnimations().forEach((animation) => {
+        animation.cancel();
+      });
+      favoriteIcon.animate(
+        [
+          {
+            transform: 'scale(1)',
+            filter: 'drop-shadow(0 0 0 rgba(242, 202, 63, 0))',
+          },
+          {
+            transform: 'scale(1.25)',
+            filter: 'drop-shadow(0 0 7px rgba(242, 202, 63, 0.85))',
+          },
+          {
+            transform: 'scale(1)',
+            filter: 'drop-shadow(0 0 0 rgba(242, 202, 63, 0))',
+          },
+        ],
+        {
+          duration: 420,
+          easing: 'cubic-bezier(0.2, 0.9, 0.25, 1)',
+          fill: 'none',
+        },
+      );
+    }
+    const favoritePulse = trackFavoritePulseRefs.current[fileName];
+    if (favoritePulse !== undefined && favoritePulse !== null) {
+      favoritePulse.getAnimations().forEach((animation) => {
+        animation.cancel();
+      });
+      favoritePulse.animate(
+        [
+          {
+            opacity: 0,
+            transform: 'scale(0.58)',
+            filter: 'drop-shadow(0 0 0 rgba(255, 226, 106, 0))',
+          },
+          {
+            opacity: 0.92,
+            transform: 'scale(0.95)',
+            filter: 'drop-shadow(0 0 8px rgba(255, 226, 106, 0.78))',
+          },
+          {
+            opacity: 0,
+            transform: 'scale(1.86)',
+            filter: 'drop-shadow(0 0 16px rgba(255, 226, 106, 0))',
+          },
+        ],
+        {
+          duration: FAVORITE_PULSE_DURATION_MS,
+          easing: 'cubic-bezier(0.2, 0.9, 0.25, 1)',
+          fill: 'none',
+        },
+      );
+    }
+  }
+
+  function runCurrentTrackFavoritePulseAnimation(): void {
+    const favoriteIcon = currentTrackFavoriteIconRef.current;
+    if (favoriteIcon !== null) {
+      favoriteIcon.getAnimations().forEach((animation) => {
+        animation.cancel();
+      });
+      favoriteIcon.animate(
+        [
+          {
+            transform: 'scale(1)',
+            filter: 'drop-shadow(0 0 0 rgba(242, 202, 63, 0))',
+          },
+          {
+            transform: 'scale(1.25)',
+            filter: 'drop-shadow(0 0 7px rgba(242, 202, 63, 0.85))',
+          },
+          {
+            transform: 'scale(1)',
+            filter: 'drop-shadow(0 0 0 rgba(242, 202, 63, 0))',
+          },
+        ],
+        {
+          duration: 420,
+          easing: 'cubic-bezier(0.2, 0.9, 0.25, 1)',
+          fill: 'none',
+        },
+      );
+    }
+    const favoritePulse = currentTrackFavoritePulseRef.current;
+    if (favoritePulse !== null) {
+      favoritePulse.getAnimations().forEach((animation) => {
+        animation.cancel();
+      });
+      favoritePulse.animate(
+        [
+          {
+            opacity: 0,
+            transform: 'scale(0.58)',
+            filter: 'drop-shadow(0 0 0 rgba(255, 226, 106, 0))',
+          },
+          {
+            opacity: 0.92,
+            transform: 'scale(0.95)',
+            filter: 'drop-shadow(0 0 8px rgba(255, 226, 106, 0.78))',
+          },
+          {
+            opacity: 0,
+            transform: 'scale(1.86)',
+            filter: 'drop-shadow(0 0 16px rgba(255, 226, 106, 0))',
+          },
+        ],
+        {
+          duration: FAVORITE_PULSE_DURATION_MS,
+          easing: 'cubic-bezier(0.2, 0.9, 0.25, 1)',
+          fill: 'none',
+        },
+      );
+    }
+  }
+
   return (
     <BlankSectionPage title="Resources">
       <ResourcesSubnav active="music" />
@@ -623,7 +902,46 @@ export default function ResourcesMusicPage(): ReactNode {
           <div style={nowPlayingStyle}>
             <p style={eyebrowStyle}>Now Playing</p>
             <div style={titleRowStyle}>
-              <h2 style={titleStyle}>{currentTrack.title}</h2>
+              <div style={titleTextWrapStyle}>
+                <h2 style={titleStyle}>{currentTrack.title}</h2>
+                <button
+                  type="button"
+                  aria-label={
+                    isCurrentTrackFavorite
+                      ? `Remove ${currentTrack.title} from favorites`
+                      : `Add ${currentTrack.title} to favorites`
+                  }
+                  title={isCurrentTrackFavorite ? 'Remove favorite' : 'Add favorite'}
+                  style={
+                    isCurrentTrackFavorite
+                      ? currentTrackFavoriteButtonActiveStyle
+                      : currentTrackFavoriteButtonStyle
+                  }
+                  onClick={() => {
+                    if (!isCurrentTrackFavorite) {
+                      runCurrentTrackFavoritePulseAnimation();
+                    }
+                    toggleFavoriteTrack(currentTrack.fileName);
+                  }}>
+                  {renderStarIcon(isCurrentTrackFavorite, (node) => {
+                    currentTrackFavoriteIconRef.current = node;
+                  })}
+                  <span style={trackFavoritePulseWrapStyle} aria-hidden="true">
+                    <svg
+                      ref={currentTrackFavoritePulseRef}
+                      viewBox="0 0 24 24"
+                      style={trackFavoritePulseIconStyle}>
+                      <path
+                        d="M12 2.6L14.9 8.4L21.2 9.3L16.6 13.7L17.7 20L12 17L6.3 20L7.4 13.7L2.8 9.3L9.1 8.4L12 2.6Z"
+                        fill="none"
+                        stroke="#ffe26a"
+                        strokeWidth="2.1"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </span>
+                </button>
+              </div>
               <div style={titleVolumeControlStyle}>
                 <span style={volumeIconSlotStyle}>{renderVolumeIcon()}</span>
                 <input
@@ -652,62 +970,76 @@ export default function ResourcesMusicPage(): ReactNode {
           </div>
           <div style={controlsStyle}>
             <div style={controlRowStyle}>
-              <button
-                type="button"
-                aria-label="Shuffle"
-                title="Shuffle"
-                style={isShuffleEnabled ? iconButtonActiveStyle : iconButtonBaseStyle}
-                onClick={() => setShuffleEnabled(!isShuffleEnabled)}>
-                {renderIcon('shuffle')}
-              </button>
-              <button
-                type="button"
-                aria-label="Previous track"
-                title="Previous"
-                style={iconButtonBaseStyle}
-                onClick={() => skipTrack(-1)}>
-                {renderIcon('previous')}
-              </button>
-              <button
-                type="button"
-                aria-label={isPlaying ? 'Pause track' : 'Play track'}
-                title={isPlaying ? 'Pause' : 'Play'}
-                style={playButtonStyle}
-                onClick={() => {
-                  if (isPlaying) {
-                    pause();
-                    return;
+              <div style={controlClusterStyle}>
+                <button
+                  type="button"
+                  aria-label="Shuffle"
+                  title="Shuffle"
+                  style={isShuffleEnabled ? iconButtonActiveStyle : iconButtonBaseStyle}
+                  onClick={() => setShuffleEnabled(!isShuffleEnabled)}>
+                  {renderIcon('shuffle')}
+                </button>
+                <button
+                  type="button"
+                  aria-label="Previous track"
+                  title="Previous"
+                  style={iconButtonBaseStyle}
+                  onClick={() => skipTrack(-1)}>
+                  {renderIcon('previous')}
+                </button>
+                <button
+                  type="button"
+                  aria-label={isPlaying ? 'Pause track' : 'Play track'}
+                  title={isPlaying ? 'Pause' : 'Play'}
+                  style={playButtonStyle}
+                  onClick={() => {
+                    if (isPlaying) {
+                      pause();
+                      return;
+                    }
+                    play();
+                  }}>
+                  {renderIcon(isPlaying ? 'pause' : 'play')}
+                </button>
+                <button
+                  type="button"
+                  aria-label="Next track"
+                  title="Next"
+                  style={iconButtonBaseStyle}
+                  onClick={() => skipTrack(1)}>
+                  {renderIcon('next')}
+                </button>
+                <button
+                  type="button"
+                  aria-label={loopButtonLabel}
+                  title={loopButtonLabel}
+                  style={{
+                    ...(loopMode !== 'off' ? iconButtonActiveStyle : iconButtonBaseStyle),
+                    position: 'relative',
+                  }}
+                  onClick={() =>
+                    setLoopMode(loopMode === 'off' ? 'all' : loopMode === 'all' ? 'one' : 'off')
+                  }>
+                  {renderIcon('loop')}
+                  {loopMode === 'one' ? (
+                    <span aria-hidden="true" style={loopOneBadgeStyle}>
+                      1
+                    </span>
+                  ) : null}
+                </button>
+              </div>
+              <div style={controlFilterButtonWrapStyle}>
+                <button
+                  type="button"
+                  aria-label={
+                    isFavoritesOnlyEnabled ? 'Show all tracks' : 'Show favorite tracks'
                   }
-                  play();
-                }}>
-                {renderIcon(isPlaying ? 'pause' : 'play')}
-              </button>
-              <button
-                type="button"
-                aria-label="Next track"
-                title="Next"
-                style={iconButtonBaseStyle}
-                onClick={() => skipTrack(1)}>
-                {renderIcon('next')}
-              </button>
-              <button
-                type="button"
-                aria-label={loopButtonLabel}
-                title={loopButtonLabel}
-                style={{
-                  ...(loopMode !== 'off' ? iconButtonActiveStyle : iconButtonBaseStyle),
-                  position: 'relative',
-                }}
-                onClick={() =>
-                  setLoopMode(loopMode === 'off' ? 'all' : loopMode === 'all' ? 'one' : 'off')
-                }>
-                {renderIcon('loop')}
-                {loopMode === 'one' ? (
-                  <span aria-hidden="true" style={loopOneBadgeStyle}>
-                    1
-                  </span>
-                ) : null}
-              </button>
+                  title={isFavoritesOnlyEnabled ? 'Show all tracks' : 'Show favorite tracks'}
+                  style={isFavoritesOnlyEnabled ? iconButtonActiveStyle : iconButtonBaseStyle}
+                  onClick={() => setFavoritesOnlyEnabled(!isFavoritesOnlyEnabled)}>
+                  {renderStarIcon(isFavoritesOnlyEnabled)}
+                </button>
+              </div>
             </div>
             <div style={timeRowStyle}>
               <span style={timeTextStyle}>{formatTime(currentTime)}</span>
@@ -725,21 +1057,65 @@ export default function ResourcesMusicPage(): ReactNode {
             </div>
           </div>
           <ol ref={trackListRef} className="music-track-list-scrollbar" style={trackListStyle}>
-            {tracks.map((track, index) => {
+            {visibleTrackIndexes.map((index) => {
+              const track = tracks[index];
               const isActive = index === currentTrackIndex;
+              const isFavorite = favoriteTrackFileNameSet.has(track.fileName);
               return (
                 <li
                   key={track.fileName}
                   ref={(node) => {
                     trackItemRefs.current[index] = node;
                   }}>
-                  <button
-                    type="button"
-                    style={isActive ? trackButtonActiveStyle : trackButtonBaseStyle}
-                    onClick={() => selectTrack(index)}>
-                    <span style={trackNumberStyle}>{String(index + 1).padStart(2, '0')}</span>
-                    <span style={trackTitleStyle}>{track.title}</span>
-                  </button>
+                  <div
+                    style={isActive ? trackRowActiveStyle : trackRowBaseStyle}>
+                    <button
+                      type="button"
+                      style={trackSelectButtonStyle}
+                      onClick={() => selectTrack(index)}>
+                      <span style={trackNumberStyle}>{String(index + 1).padStart(2, '0')}</span>
+                      <span style={trackTitleStyle}>{track.title}</span>
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={
+                        isFavorite
+                          ? `Remove ${track.title} from favorites`
+                          : `Add ${track.title} to favorites`
+                      }
+                      title={isFavorite ? 'Remove favorite' : 'Add favorite'}
+                      style={
+                        isFavorite
+                          ? trackFavoriteButtonActiveStyle
+                          : trackFavoriteButtonStyle
+                      }
+                      onClick={() => {
+                        if (!isFavorite) {
+                          runTrackFavoritePulseAnimation(track.fileName);
+                        }
+                        toggleFavoriteTrack(track.fileName);
+                      }}>
+                      {renderStarIcon(isFavorite, (node) => {
+                        trackFavoriteIconRefs.current[track.fileName] = node;
+                      })}
+                      <span style={trackFavoritePulseWrapStyle} aria-hidden="true">
+                        <svg
+                          ref={(node) => {
+                            trackFavoritePulseRefs.current[track.fileName] = node;
+                          }}
+                          viewBox="0 0 24 24"
+                          style={trackFavoritePulseIconStyle}>
+                          <path
+                            d="M12 2.6L14.9 8.4L21.2 9.3L16.6 13.7L17.7 20L12 17L6.3 20L7.4 13.7L2.8 9.3L9.1 8.4L12 2.6Z"
+                            fill="none"
+                            stroke="#ffe26a"
+                            strokeWidth="2.1"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </span>
+                    </button>
+                  </div>
                 </li>
               );
             })}

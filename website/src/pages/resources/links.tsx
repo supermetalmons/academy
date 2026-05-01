@@ -15,10 +15,16 @@ const emojipackFontDownloadItem = {
   href: 'https://drive.google.com/drive/folders/12z0-LVx_ItZDojkrO6IkDCo40kjx7B2A?usp=sharing',
 } as const;
 
-const alternatePlayItems: Array<{label: string; href: string; iconKind?: AlternatePlayIconKind}> = [
+const alternatePlayItems: Array<{
+  label: string;
+  href: string;
+  iconKind?: AlternatePlayIconKind;
+  note?: string;
+}> = [
   {
-    label: "Meinong's Tabletop Edition",
+    label: "Meinong's Tabletop Edition*",
     href: 'https://coldnightwarmth.github.io/meinongs-tabletop/',
+    note: '(*you can also play Mana Garden, a Mons version of Snake here!)',
   },
   {
     label: 'Tabletop Simulator Edition',
@@ -247,6 +253,12 @@ const collectionLinkWithTrailingIconStyle: CSSProperties = {
   gap: '0.35rem',
 };
 
+const alternatePlayNoteStyle: CSSProperties = {
+  ...collectionTextStyle,
+  opacity: 0.78,
+  marginLeft: '1.15rem',
+};
+
 const chainIconStyle: CSSProperties = {
   width: '0.86rem',
   height: '0.86rem',
@@ -358,14 +370,28 @@ export default function ResourcesLinksPage(): ReactNode {
         <h3 style={collectionsTitleStyle}>Alternate ways to play Mons</h3>
         <ul style={collectionsListStyle}>
           {alternatePlayItems.map((item) => (
-            <li key={item.label} style={collectionItemStyle}>
-              <span style={collectionChevronStyle} aria-hidden="true">
-                ›
+            <li
+              key={item.label}
+              style={
+                item.note
+                  ? {
+                      ...collectionItemStyle,
+                      flexDirection: 'column',
+                      alignItems: 'flex-start',
+                      gap: '0.1rem',
+                    }
+                  : collectionItemStyle
+              }>
+              <span style={{...collectionItemStyle, margin: 0}}>
+                <span style={collectionChevronStyle} aria-hidden="true">
+                  ›
+                </span>
+                <a href={item.href} {...externalLinkProps} style={collectionLinkWithTrailingIconStyle}>
+                  <span>{item.label}</span>
+                  {item.iconKind ? renderAlternatePlayIcon(item.iconKind) : null}
+                </a>
               </span>
-              <a href={item.href} {...externalLinkProps} style={collectionLinkWithTrailingIconStyle}>
-                <span>{item.label}</span>
-                {item.iconKind ? renderAlternatePlayIcon(item.iconKind) : null}
-              </a>
+              {item.note ? <span style={alternatePlayNoteStyle}>{item.note}</span> : null}
             </li>
           ))}
         </ul>

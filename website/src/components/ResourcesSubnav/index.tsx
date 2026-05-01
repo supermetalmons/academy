@@ -1,6 +1,10 @@
 import type {CSSProperties, ReactNode} from 'react';
-import {useState} from 'react';
+import {useEffect, useState} from 'react';
 import Link from '@docusaurus/Link';
+import {
+  playSiteSoundEffect,
+  preloadSiteSoundEffects,
+} from '@site/src/utils/siteSoundEffects';
 
 type ResourcesSection = 'super-metal-mons' | 'sandbox' | 'gallery' | 'music' | 'other';
 
@@ -163,6 +167,10 @@ const items: Array<{key: ResourcesSection; label: ReactNode; to: string}> = [
 export default function ResourcesSubnav({active}: ResourcesSubnavProps): ReactNode {
   const [pressedItem, setPressedItem] = useState<ResourcesSection | null>(null);
 
+  useEffect(() => {
+    preloadSiteSoundEffects(['pageButton']);
+  }, []);
+
   return (
     <nav aria-label="Resources sections" style={wrapStyle} className="section-subnav">
       {items.map((item) => {
@@ -178,6 +186,9 @@ export default function ResourcesSubnav({active}: ResourcesSubnavProps): ReactNo
             onMouseLeave={() => setPressedItem(null)}
             onTouchStart={() => setPressedItem(item.key)}
             onTouchEnd={() => setPressedItem(null)}
+            onClick={() => {
+              playSiteSoundEffect('pageButton');
+            }}
             style={{
               ...(isActive ? activeButtonStyle : inactiveButtonStyle),
               ...(isPressed ? pressedButtonStyle : undefined),

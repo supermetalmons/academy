@@ -94,12 +94,23 @@ const faqWindowImageStyle: CSSProperties = {
 const faqGalleryImageStyle: CSSProperties = {
   display: 'block',
   width: 'auto',
-  maxWidth: 'min(50%, 310px)',
-  height: 'auto',
-  margin: '0 auto',
+  maxWidth: '100%',
+  height: 'clamp(46px, 12.9vw, 165px)',
+  minWidth: 0,
   imageRendering: 'auto',
   objectFit: 'contain',
   cursor: 'zoom-in',
+};
+
+const faqGalleryImageRowStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 'clamp(0.3rem, 1.2vw, 0.8rem)',
+  flexWrap: 'nowrap',
+  margin: '0 auto',
+  maxWidth: '100%',
+  overflow: 'hidden',
 };
 
 const faqPreviewOverlayStyle: CSSProperties = {
@@ -469,7 +480,7 @@ const faqEntries: FaqEntry[] = [
     question: 'What is Super Metal Mons?',
     answer: (
       <>
-        Super Metal Mons (SMM) is an abstract strategy game of perfect information (a bit like chess)
+        Super Metal Mons (SMM) is a 2-player abstract strategy game of perfect information
         featuring an assortment of collectable monsters, originally launched via two generations of NFT collections on
         Ethereum created by
         <span style={leadingPersonInsetStyle}>
@@ -521,13 +532,13 @@ const faqEntries: FaqEntry[] = [
     question: 'Do I need a crypto wallet to play?',
     answer: (
       <>
-        No! The game is fully playable without signing in at all. You can play local or anon, and when
-        you do want to sign in you can do so with Ethereum, Solana, or your Apple or Twitter (X)
-        profile. An account allows you to build your profile to start climbing the elo leaderboard and
-        mining daily rewards. If you do connect a wallet that holds certain nfts (
+        {' '}<b>No!</b><br /> The game is fully playable without signing in at all. You can play local or anon as much as you want. Then when
+        you do want to sign in you can do so with your Apple or Twitter (X) login in addition to Ethereum
+        and Solana methods. Any account allows you to build your profile to start climbing the elo leaderboard and
+        mining daily in-game rewards. If you do connect a wallet holding certain nfts (
         <a href="https://www.tensor.trade/trade/swag_pack" {...externalLinkProps}>Swag Pack</a>,{' '}
         <a href="https://www.tensor.trade/trade/smm_4_year_anniversary_set" {...externalLinkProps}>SMM 4yr Anniversary Set!</a>) you can
-        use it on the site to access some exclusive cosmetic content.
+        use them on-site to access exclusive cosmetic content.
       </>
     ),
   },
@@ -965,11 +976,23 @@ export default function FaqPage(): ReactNode {
             return (
               <Fragment key={`${entry.question}-with-gallery`}>
                 {defaultEntryNode}
-                <img
-                  src="/assets/gallery/other-pics/001.jpg"
-                  alt="Super Metal Mons gallery"
-                  style={faqGalleryImageStyle}
-                />
+                <div style={faqGalleryImageRowStyle}>
+                  <img
+                    src="/assets/gallery/other-pics/001.jpg"
+                    alt="Super Metal Mons gallery"
+                    style={faqGalleryImageStyle}
+                  />
+                  <img
+                    src="/assets/cloth.png"
+                    alt="Super Metal Mons cloth prototype"
+                    style={faqGalleryImageStyle}
+                  />
+                  <img
+                    src="/assets/prototype.png"
+                    alt="Super Metal Mons physical prototype"
+                    style={faqGalleryImageStyle}
+                  />
+                </div>
               </Fragment>
             );
           }

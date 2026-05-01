@@ -1,6 +1,10 @@
 import type {CSSProperties, ReactNode} from 'react';
-import {useState} from 'react';
+import {useEffect, useState} from 'react';
 import Link from '@docusaurus/Link';
+import {
+  playSiteSoundEffect,
+  preloadSiteSoundEffects,
+} from '@site/src/utils/siteSoundEffects';
 
 type InstructionSection = 'basic-rules' | 'video-tutorial' | 'lessons' | 'manual';
 
@@ -175,6 +179,10 @@ const items: Array<{key: InstructionSection; label: (isActive: boolean) => React
 export default function InstructionSubnav({active}: InstructionSubnavProps): ReactNode {
   const [pressedItem, setPressedItem] = useState<InstructionSection | null>(null);
 
+  useEffect(() => {
+    preloadSiteSoundEffects(['pageButton']);
+  }, []);
+
   return (
     <nav aria-label="Instruction sections" style={wrapStyle} className="section-subnav">
       {items.map((item) => {
@@ -190,6 +198,9 @@ export default function InstructionSubnav({active}: InstructionSubnavProps): Rea
             onMouseLeave={() => setPressedItem(null)}
             onTouchStart={() => setPressedItem(item.key)}
             onTouchEnd={() => setPressedItem(null)}
+            onClick={() => {
+              playSiteSoundEffect('pageButton');
+            }}
             style={{
               ...(isActive ? activeButtonStyle : inactiveButtonStyle),
               ...(isPressed ? pressedButtonStyle : undefined),

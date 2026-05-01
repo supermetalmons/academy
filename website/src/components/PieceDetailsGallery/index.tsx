@@ -5,6 +5,7 @@ import {pieceDetailItems} from '@site/src/data/pieceDetails';
 const gridStyle: CSSProperties = {
   display: 'grid',
   gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+  alignItems: 'start',
   gap: '0.9rem',
 };
 
@@ -18,6 +19,7 @@ const boxStyle: CSSProperties = {
   alignItems: 'center',
   textAlign: 'center',
   gap: '0.45rem',
+  boxSizing: 'border-box',
 };
 
 const cardLinkStyle: CSSProperties = {
@@ -52,6 +54,28 @@ const textStyle: CSSProperties = {
   margin: 0,
   fontSize: '0.9rem',
   lineHeight: 1.25,
+};
+
+const diagramFrameStyle: CSSProperties = {
+  width: '100%',
+  maxWidth: '210px',
+  aspectRatio: '1 / 1',
+  marginTop: '0.2rem',
+  border: '1px solid #000',
+  borderRadius: '6px',
+  backgroundColor: '#d6d6d6',
+  overflow: 'hidden',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+};
+
+const diagramStyle: CSSProperties = {
+  width: '100%',
+  height: '100%',
+  objectFit: 'contain',
+  display: 'block',
+  imageRendering: 'auto',
 };
 
 const manaPoolPreviewStyle: CSSProperties = {
@@ -95,6 +119,17 @@ export default function PieceDetailsGallery(): ReactNode {
             </div>
             <h3 style={titleStyle}>{item.title}</h3>
             <p style={textStyle}>{item.text}</p>
+            {item.diagramImage ? (
+              <div style={diagramFrameStyle}>
+                <img
+                  src={item.diagramImage}
+                  alt={`${item.title} diagram`}
+                  loading="lazy"
+                  decoding="async"
+                  style={diagramStyle}
+                />
+              </div>
+            ) : null}
           </article>
         </Link>
       ))}

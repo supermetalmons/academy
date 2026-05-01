@@ -16,6 +16,10 @@ import {
   writeLessonFavoritesToStorage,
 } from '@site/src/constants/lessonFavorites';
 import {
+  GUESTBOOK_MINIMIZED_STORAGE_KEY,
+  GUESTBOOK_SIGNED_STORAGE_KEY,
+} from '@site/src/constants/guestBook';
+import {
   writePuzzleCompletionsToStorage,
   writePuzzleFavoritesToStorage,
 } from '@site/src/constants/puzzleFavorites';
@@ -34,6 +38,11 @@ import {
   useSiteBoardTheme,
   writeSiteBoardThemeToStorage,
 } from '@site/src/utils/siteBoardTheme';
+import {
+  GRASS_BACKGROUND_DEFAULT,
+  useSiteGrassBackground,
+  writeSiteGrassBackgroundToStorage,
+} from '@site/src/utils/siteGrassBackground';
 
 const MONS_VIEWER_FAVORITES_STORAGE_KEY = 'mons-academy-favorites-folder';
 const MONS_VIEWER_STATE_STORAGE_KEY = 'mons-academy-viewer-state';
@@ -44,6 +53,7 @@ const LAST_RESOURCES_ROUTE_STORAGE_KEY = 'mons_last_resources_route_v1';
 const LAST_SETTINGS_RETURN_ROUTE_STORAGE_KEY = 'mons_last_settings_return_route_v1';
 const CLOUD_INTRO_SESSION_KEY = 'mons_cloud_intro_seen_v1';
 const SANDBOX_BOARD_STATE_STORAGE_KEY = 'mons-academy-sandbox-board-state-v1';
+const MUSIC_PLAYER_STORAGE_KEY = 'mons-academy-music-player-v1';
 
 const SITE_PROGRESS_STORAGE_KEYS_TO_REMOVE = [
   MONS_VIEWER_FAVORITES_STORAGE_KEY,
@@ -54,6 +64,9 @@ const SITE_PROGRESS_STORAGE_KEYS_TO_REMOVE = [
   LAST_PUZZLES_ROUTE_STORAGE_KEY,
   LAST_RESOURCES_ROUTE_STORAGE_KEY,
   LAST_SETTINGS_RETURN_ROUTE_STORAGE_KEY,
+  GUESTBOOK_SIGNED_STORAGE_KEY,
+  GUESTBOOK_MINIMIZED_STORAGE_KEY,
+  MUSIC_PLAYER_STORAGE_KEY,
 ];
 
 const contentWrapStyle: CSSProperties = {
@@ -122,6 +135,11 @@ const boardStyleRowStyle: CSSProperties = {
   marginBottom: '0.34rem',
 };
 
+const grassBackgroundRowStyle: CSSProperties = {
+  ...boardStyleRowStyle,
+  marginBottom: '0.64rem',
+};
+
 const boardStyleToggleWrapStyle: CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
@@ -130,12 +148,18 @@ const boardStyleToggleWrapStyle: CSSProperties = {
 
 const boardStyleToggleLabelStyle: CSSProperties = {
   minWidth: '2.55rem',
+  textAlign: 'right',
   margin: 0,
   color: settingsTextColor,
   fontSize: '0.95rem',
   lineHeight: 1,
   fontWeight: 700,
   textShadow: settingsTextShadow,
+};
+
+const grassBackgroundToggleLabelStyle: CSSProperties = {
+  ...boardStyleToggleLabelStyle,
+  minWidth: '4.8rem',
 };
 
 const boardStyleToggleStyle: CSSProperties = {
@@ -159,6 +183,12 @@ const boardStyleToggleDarkStyle: CSSProperties = {
   backgroundColor: 'rgba(18, 19, 22, 0.82)',
 };
 
+const grassBackgroundToggleWatercolorStyle: CSSProperties = {
+  ...boardStyleToggleStyle,
+  border: '1.5px solid rgba(0, 0, 0, 0.72)',
+  backgroundColor: 'rgba(136, 179, 95, 0.7)',
+};
+
 const boardStyleToggleThumbStyle: CSSProperties = {
   width: '1.34rem',
   height: '1.34rem',
@@ -170,6 +200,12 @@ const boardStyleToggleThumbStyle: CSSProperties = {
 };
 
 const boardStyleToggleThumbDarkStyle: CSSProperties = {
+  ...boardStyleToggleThumbStyle,
+  backgroundColor: '#ffffff',
+  transform: 'translateX(1.43rem)',
+};
+
+const grassBackgroundToggleThumbWatercolorStyle: CSSProperties = {
   ...boardStyleToggleThumbStyle,
   backgroundColor: '#ffffff',
   transform: 'translateX(1.43rem)',
@@ -324,6 +360,7 @@ function clearSiteProgressStorage(): void {
   writeMusicVolumeToStorage(MUSIC_VOLUME_DEFAULT);
   writeSoundEffectVolumeToStorage(SOUND_EFFECT_VOLUME_DEFAULT);
   writeSiteBoardThemeToStorage(BOARD_STYLE_DEFAULT);
+  writeSiteGrassBackgroundToStorage(GRASS_BACKGROUND_DEFAULT);
   writeCloudSpeedToStorage(CLOUD_SPEED_DEFAULT);
   writeCloudEnabledToStorage(CLOUD_ENABLED_DEFAULT);
 
@@ -351,6 +388,7 @@ function formatVolumeLabel(value: number): string {
 
 export default function SettingsPage(): ReactNode {
   const boardTheme = useSiteBoardTheme();
+  const grassBackground = useSiteGrassBackground();
   const [musicVolume, setMusicVolume] = useState<number>(MUSIC_VOLUME_DEFAULT);
   const [soundEffectVolume, setSoundEffectVolume] = useState<number>(
     SOUND_EFFECT_VOLUME_DEFAULT,
@@ -429,6 +467,38 @@ export default function SettingsPage(): ReactNode {
                     style={
                       boardTheme === 'dark'
                         ? boardStyleToggleThumbDarkStyle
+                        : boardStyleToggleThumbStyle
+                    }
+                  />
+                </button>
+              </div>
+            </div>
+            <div style={grassBackgroundRowStyle}>
+              <p style={controlLabelStyle}>Grass Background</p>
+              <div style={boardStyleToggleWrapStyle}>
+                <p style={grassBackgroundToggleLabelStyle}>
+                  {grassBackground === 'watercolor' ? 'Watercolor' : 'Pixel'}
+                </p>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={grassBackground === 'watercolor'}
+                  aria-label="Grass background"
+                  onClick={() => {
+                    writeSiteGrassBackgroundToStorage(
+                      grassBackground === 'watercolor' ? 'pixel' : 'watercolor',
+                    );
+                  }}
+                  style={
+                    grassBackground === 'watercolor'
+                      ? grassBackgroundToggleWatercolorStyle
+                      : boardStyleToggleStyle
+                  }>
+                  <span
+                    aria-hidden="true"
+                    style={
+                      grassBackground === 'watercolor'
+                        ? grassBackgroundToggleThumbWatercolorStyle
                         : boardStyleToggleThumbStyle
                     }
                   />

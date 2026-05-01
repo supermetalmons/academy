@@ -108,6 +108,27 @@ const textStyle: CSSProperties = {
   maxWidth: '700px',
 };
 
+const diagramFrameStyle: CSSProperties = {
+  width: 'min(100%, 430px)',
+  aspectRatio: '1 / 1',
+  marginTop: '0.4rem',
+  border: '1px solid #000',
+  borderRadius: '8px',
+  backgroundColor: '#d6d6d6',
+  overflow: 'hidden',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+};
+
+const diagramStyle: CSSProperties = {
+  width: '100%',
+  height: '100%',
+  objectFit: 'contain',
+  display: 'block',
+  imageRendering: 'auto',
+};
+
 const missingStyle: CSSProperties = {
   margin: 0,
   fontSize: '1rem',
@@ -274,6 +295,16 @@ export default function PieceDetailEntryPage({
             </div>
             <h2 style={titleStyle}>{detail.title}</h2>
             <p style={textStyle}>{detail.text}</p>
+            {detail.diagramImage ? (
+              <div style={diagramFrameStyle}>
+                <img
+                  src={detail.diagramImage}
+                  alt={`${detail.title} diagram`}
+                  decoding="async"
+                  style={diagramStyle}
+                />
+              </div>
+            ) : null}
             {detail.monEntries && detail.monEntries.length > 0 ? (
               <>
                 <div aria-hidden="true" style={monDividerStyle} />

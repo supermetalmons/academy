@@ -18,6 +18,11 @@ import {
   readCloudEnabledFromStorage,
   readCloudSpeedFromStorage,
 } from '@site/src/constants/cloudSpeed';
+import {
+  playSiteSoundEffect,
+  preloadSiteSoundEffects,
+} from '@site/src/utils/siteSoundEffects';
+import {useSiteGrassBackground} from '@site/src/utils/siteGrassBackground';
 
 type NewTopLayoutProps = {
   underCloudChildren?: ReactNode;
@@ -56,6 +61,25 @@ const pageStyle: CSSProperties = {
   backgroundSize: '620px',
   backgroundAttachment: 'fixed',
   imageRendering: 'pixelated',
+};
+
+const watercolorPageStyle: CSSProperties = {
+  ...pageStyle,
+  backgroundImage: 'url("/assets/grass-watercolor.webp")',
+  backgroundRepeat: 'no-repeat',
+  backgroundPosition: 'center center',
+  backgroundSize: 'cover',
+  imageRendering: 'auto',
+};
+
+const instructionLessonsPageStyle: CSSProperties = {
+  ...pageStyle,
+  backgroundColor: '#080808',
+  backgroundImage: 'url("/img/legacy/images/library.jpg")',
+  backgroundRepeat: 'no-repeat',
+  backgroundPosition: 'center center',
+  backgroundSize: 'cover',
+  imageRendering: 'auto',
 };
 
 const headerBarStyle: CSSProperties = {
@@ -468,10 +492,10 @@ const BASE_MENU_ITEMS: MenuItem[] = [
   {label: 'FAQ', to: '/faq'},
 ];
 const LOGO_SOURCES = [
-  '/assets/logoimage.jpg',
-  '/assets/kingmon72.jpg',
-  '/assets/puzzleimage.jpg',
-  '/assets/faq.jpg',
+  '/assets/logoimage-topbar.webp',
+  '/assets/kingmon72-topbar.webp',
+  '/assets/puzzleimage-topbar.webp',
+  '/assets/faq-topbar.webp',
 ];
 const LOGO_RESTORE_HYSTERESIS_PX = 72;
 const NAV_BELOW_RESTORE_HYSTERESIS_PX = 72;
@@ -644,6 +668,10 @@ function isInstructionRoute(pathname: string): boolean {
   return pathname === '/instruction' || pathname.startsWith('/instruction/');
 }
 
+function isInstructionLessonsRoute(pathname: string): boolean {
+  return pathname === '/instruction/lessons' || pathname.startsWith('/instruction/lessons/');
+}
+
 function isResourcesRoute(pathname: string): boolean {
   return pathname === '/resources' || pathname.startsWith('/resources/');
 }
@@ -675,15 +703,15 @@ function isFaqContext(pathname: string): boolean {
 
 function getLogoSrc(pathname: string): string {
   if (isPuzzlesContext(pathname)) {
-    return '/assets/puzzleimage.jpg';
+    return '/assets/puzzleimage-topbar.webp';
   }
   if (isFaqContext(pathname)) {
-    return '/assets/faq.jpg';
+    return '/assets/faq-topbar.webp';
   }
   if (isInstructionContext(pathname)) {
-    return '/assets/kingmon72.jpg';
+    return '/assets/kingmon72-topbar.webp';
   }
-  return '/assets/logoimage.jpg';
+  return '/assets/logoimage-topbar.webp';
 }
 
 const loadedLogoSources = new Set<string>();
@@ -833,6 +861,9 @@ export default function NewTopLayout({
       ),
     [],
   );
+  useEffect(() => {
+    preloadSiteSoundEffects(['pageButton']);
+  }, []);
   const [showCloudIntro] = useState<boolean>(() => {
     if (typeof window === 'undefined') {
       return true;
@@ -861,6 +892,14 @@ export default function NewTopLayout({
   const [hoveredTitleIcon, setHoveredTitleIcon] = useState<TitleIconKey | null>(null);
   const [cloudEnabled, setCloudEnabled] = useState<boolean>(CLOUD_ENABLED_DEFAULT);
   const [cloudSpeedMultiplier, setCloudSpeedMultiplier] = useState<number>(CLOUD_SPEED_DEFAULT);
+  const grassBackground = useSiteGrassBackground();
+  const useInstructionLessonsBackground = isInstructionLessonsRoute(pathname);
+  const dynamicPageStyle = useInstructionLessonsBackground
+    ? instructionLessonsPageStyle
+    : grassBackground === 'watercolor'
+      ? watercolorPageStyle
+      : pageStyle;
+  const shouldRenderClouds = cloudEnabled && !useInstructionLessonsBackground;
   const safeCloudSpeedMultiplier = clampCloudSpeed(cloudSpeedMultiplier);
   const cloudLayerStyle = useMemo<CSSProperties>(
     () => ({
@@ -1582,6 +1621,9 @@ export default function NewTopLayout({
             onMouseLeave={() => setPressedItem(null)}
             onTouchStart={() => setPressedItem(item.to)}
             onTouchEnd={() => setPressedItem(null)}
+            onClick={() => {
+              playSiteSoundEffect('pageButton');
+            }}
             style={{
               ...(isActive ? activeButtonStyle : buttonStyle),
               ...compactButtonStyleOverrides,
@@ -1596,9 +1638,9 @@ export default function NewTopLayout({
 
   return (
     <main
-      style={pageStyle}
+      style={dynamicPageStyle}
       className={`mons-shell${showNavBelowRow ? ' mons-shell--nav-below' : ''}${isMobileSidebarMode ? ' mons-shell--mobile-sidebar' : ''}${isMobileSidebarMode && isMobileGalleryThinMode ? ' mons-shell--mobile-gallery-thin' : ''}`}>
-      {cloudEnabled ? (
+      {shouldRenderClouds ? (
         <div
           className={`cloud-shadows${showCloudIntro ? ' cloud-shadows--intro' : ''}`}
           style={cloudLayerStyle}
@@ -1824,7 +1866,10 @@ export default function NewTopLayout({
                       onMouseLeave={() => setPressedItem(null)}
                       onTouchStart={() => setPressedItem(item.to)}
                       onTouchEnd={() => setPressedItem(null)}
-                      onClick={() => setIsMobileSidebarOpen(false)}
+                      onClick={() => {
+                        playSiteSoundEffect('pageButton');
+                        setIsMobileSidebarOpen(false);
+                      }}
                       style={{
                         ...(isActive
                           ? {...mobileSidebarButtonStyle, ...activeButtonStyle}
