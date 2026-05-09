@@ -25,10 +25,17 @@ type ShopDropCase = {
   tracks: [ShopDropTrack, ShopDropTrack];
 };
 
+type ShopTrackPlaybackMode = 'sample' | 'single' | 'loop-all' | 'loop-one' | 'shuffle';
+type ShopTrackCarouselDirection = 'next' | 'previous';
+
+const SHOP_DROP_COVER_VERSION = '2026-05-09-cover-refresh-2';
+const getShopDropCoverSrc = (filename: string): string =>
+  `/assets/supermons-tracks/shop-drop/${filename}?v=${SHOP_DROP_COVER_VERSION}`;
+
 const SHOP_DROP_CASES: ShopDropCase[] = [
   {
     id: 1,
-    coverSrc: '/assets/supermons-tracks/shop-drop/cover1.png',
+    coverSrc: getShopDropCoverSrc('cover1.png'),
     tracks: [
       {
         id: 1,
@@ -44,7 +51,7 @@ const SHOP_DROP_CASES: ShopDropCase[] = [
   },
   {
     id: 3,
-    coverSrc: '/assets/supermons-tracks/shop-drop/cover2.png',
+    coverSrc: getShopDropCoverSrc('cover2.png'),
     tracks: [
       {
         id: 4,
@@ -60,7 +67,7 @@ const SHOP_DROP_CASES: ShopDropCase[] = [
   },
   {
     id: 5,
-    coverSrc: '/assets/supermons-tracks/shop-drop/cover3.png',
+    coverSrc: getShopDropCoverSrc('cover3.png'),
     tracks: [
       {
         id: 5,
@@ -76,7 +83,7 @@ const SHOP_DROP_CASES: ShopDropCase[] = [
   },
   {
     id: 7,
-    coverSrc: '/assets/supermons-tracks/shop-drop/cover4.png',
+    coverSrc: getShopDropCoverSrc('cover4.png'),
     tracks: [
       {
         id: 7,
@@ -92,7 +99,7 @@ const SHOP_DROP_CASES: ShopDropCase[] = [
   },
   {
     id: 9,
-    coverSrc: '/assets/supermons-tracks/shop-drop/cover5.png',
+    coverSrc: getShopDropCoverSrc('cover5.png'),
     tracks: [
       {
         id: 9,
@@ -111,12 +118,88 @@ const SHOP_DROP_CASES: ShopDropCase[] = [
 const NATURAL_VISUALIZER_TRACK_IDS = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
 const LOW_END_VISUALIZER_BOOST_TRACK_IDS = new Set([2, 3, 4, 5, 7, 8, 9, 10]);
 const SHOP_DROP_DOWNLOAD_SRC = '/assets/supermons-tracks/shop-drop/mons-shop-drop-tracks.zip';
+const SHOP_TRACK_SAMPLE_SECONDS = 30;
+const SHOP_TRACK_PLAYBACK_MODES: ShopTrackPlaybackMode[] = [
+  'sample',
+  'single',
+  'loop-all',
+  'loop-one',
+  'shuffle',
+];
+const SHOP_DROP_TRACK_ORDER = SHOP_DROP_CASES.flatMap((item) => item.tracks.map((track) => track.id));
+const SHOP_TRACKS_THIN_VIEW_QUERY = '(max-width: 860px)';
+const SHOP_TRACKS_WIDE_GALLERY_MAX_WIDTH_PX = 1400;
+
+const SHOP_TRACK_PLAYBACK_MODE_LABELS: Record<ShopTrackPlaybackMode, string> = {
+  sample: 'Play 30 second samples',
+  single: 'Play one track',
+  'loop-all': 'Loop all tracks',
+  'loop-one': 'Loop current track',
+  shuffle: 'Shuffle remaining tracks',
+};
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function interpolateNumber(from: number, to: number, amount: number): number {
+  return from + (to - from) * amount;
+}
 
 function getShopDropCoverForTrack(trackId: number | null): string | null {
   if (trackId === null) {
     return null;
   }
   return SHOP_DROP_CASES.find((item) => item.tracks.some((track) => track.id === trackId))?.coverSrc ?? null;
+}
+
+function getShopDropSampleNextTrackId(trackId: number): number | null {
+  return SHOP_DROP_CASES.find((item) => item.tracks[0].id === trackId)?.tracks[1].id ?? null;
+}
+
+function useShopTracksViewportHeight(): number | null {
+  const [viewportHeight, setViewportHeight] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined;
+    }
+
+    const updateViewportHeight = (): void => {
+      setViewportHeight(window.innerHeight);
+    };
+
+    updateViewportHeight();
+    window.addEventListener('resize', updateViewportHeight);
+    return () => {
+      window.removeEventListener('resize', updateViewportHeight);
+    };
+  }, []);
+
+  return viewportHeight;
+}
+
+function useShopTracksThinView(): boolean | null {
+  const [isThinView, setIsThinView] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined;
+    }
+
+    const mediaQuery = window.matchMedia(SHOP_TRACKS_THIN_VIEW_QUERY);
+    const updateThinView = (): void => {
+      setIsThinView(mediaQuery.matches);
+    };
+
+    updateThinView();
+    mediaQuery.addEventListener('change', updateThinView);
+    return () => {
+      mediaQuery.removeEventListener('change', updateThinView);
+    };
+  }, []);
+
+  return isThinView;
 }
 
 const pageStyle: CSSProperties = {
@@ -130,32 +213,50 @@ const pageStyle: CSSProperties = {
   color: '#111',
 };
 
+const settledContentLayerStyle: CSSProperties = {
+  position: 'absolute',
+  inset: 0,
+  transition: 'opacity 220ms ease',
+};
+
 const topBarStyle: CSSProperties = {
   position: 'absolute',
   top: 0,
   left: 0,
   right: 0,
-  height: TOP_BAR_HEIGHT_PX,
-  padding: '0 10px',
+  minHeight: TOP_BAR_HEIGHT_PX,
+  padding: '4px 10px',
+  boxSizing: 'border-box',
   display: 'flex',
+  flexWrap: 'wrap',
   alignItems: 'center',
-  justifyContent: 'space-between',
+  alignContent: 'center',
+  gap: 8,
   backgroundColor: '#fff',
   borderBottom: '1px solid #e5e5e5',
   zIndex: 20,
 };
 
 const topBarTitleStyle: CSSProperties = {
+  flex: '1 1 140px',
+  minWidth: 0,
   fontSize: 12,
   lineHeight: 1,
   color: '#111',
   letterSpacing: 0.1,
   whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  textOverflow: 'clip',
 };
 
 const topBarButtonsStyle: CSSProperties = {
   display: 'flex',
+  flex: '0 1 auto',
+  minWidth: 0,
+  maxWidth: '100%',
+  flexWrap: 'wrap',
   alignItems: 'center',
+  justifyContent: 'flex-end',
   gap: 6,
 };
 
@@ -180,9 +281,10 @@ const topBarButtonActiveStyle: CSSProperties = {
 const galleryStyle: CSSProperties = {
   position: 'absolute',
   top: TOP_BAR_HEIGHT_PX,
-  left: 0,
-  right: 0,
+  left: '50%',
+  right: 'auto',
   bottom: 76,
+  width: `min(100%, ${SHOP_TRACKS_WIDE_GALLERY_MAX_WIDTH_PX}px)`,
   display: 'grid',
   gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
   gridTemplateRows: 'minmax(0, 1fr)',
@@ -190,6 +292,18 @@ const galleryStyle: CSSProperties = {
   padding: '10px 20px 0',
   boxSizing: 'border-box',
   alignItems: 'center',
+  transform: 'translateX(-50%)',
+};
+
+const thinGalleryStyle: CSSProperties = {
+  ...galleryStyle,
+  left: 0,
+  right: 0,
+  width: 'auto',
+  display: 'block',
+  padding: '0 44px 0',
+  overflow: 'hidden',
+  transform: 'none',
 };
 
 const caseCardStyle: CSSProperties = {
@@ -205,7 +319,18 @@ const caseCardStyle: CSSProperties = {
   transform: 'translateY(90px)',
 };
 
+const thinCaseCardStyle: CSSProperties = {
+  ...caseCardStyle,
+  position: 'absolute',
+  top: '50%',
+  left: '50%',
+  width: 'min(350px, calc(100vw - 92px))',
+  transform: 'translate(-50%, calc(-50% + 92px))',
+};
+
 const canvasShellStyle: CSSProperties = {
+  position: 'relative',
+  zIndex: 1,
   width: '100%',
   height: 'clamp(210px, 38vh, 270px)',
   minHeight: 210,
@@ -216,6 +341,16 @@ const canvasShellStyle: CSSProperties = {
   backgroundColor: '#fff',
   boxShadow: 'none',
   overflow: 'hidden',
+};
+
+const thinCanvasShellStyle: CSSProperties = {
+  ...canvasShellStyle,
+  height: 'clamp(190px, 32vh, 285px)',
+  minHeight: 190,
+};
+
+const caseCanvasAnimationWrapStyle: CSSProperties = {
+  width: '100%',
 };
 
 const canvasShellScaleStyle: CSSProperties = {
@@ -236,6 +371,38 @@ const canvasStyle: CSSProperties = {
   touchAction: 'none',
 };
 
+const expandedCaseOverlayStyle: CSSProperties = {
+  position: 'fixed',
+  inset: 0,
+  zIndex: 40,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  backgroundColor: 'rgba(255, 255, 255, 0.18)',
+  backdropFilter: 'blur(4px)',
+  WebkitBackdropFilter: 'blur(4px)',
+  transition: 'opacity 230ms ease',
+};
+
+const expandedCaseStageStyle: CSSProperties = {
+  position: 'absolute',
+  inset: 0,
+  width: '100vw',
+  height: '100vh',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  transition: 'transform 260ms cubic-bezier(0.2, 0.95, 0.25, 1), opacity 220ms ease',
+  transformOrigin: '50% 58%',
+};
+
+const expandedCanvasStyle: CSSProperties = {
+  ...canvasStyle,
+  maxWidth: 'none',
+  maxHeight: 'none',
+  minHeight: 0,
+};
+
 const controlsStyle: CSSProperties = {
   width: 'min(100%, 230px)',
   display: 'grid',
@@ -248,6 +415,8 @@ const controlsStyle: CSSProperties = {
 };
 
 const caseControlsStackStyle: CSSProperties = {
+  position: 'relative',
+  zIndex: 2,
   width: 'min(100%, 230px)',
   display: 'grid',
   gap: 6,
@@ -277,15 +446,25 @@ const trackStackStyle: CSSProperties = {
 const playButtonStyle: CSSProperties = {
   width: 30,
   height: 30,
+  minWidth: 30,
+  minHeight: 30,
+  maxWidth: 30,
+  maxHeight: 30,
+  aspectRatio: '1 / 1',
+  boxSizing: 'border-box',
   border: '1px solid #111',
-  borderRadius: '9999px',
+  borderRadius: '50%',
   backgroundColor: '#fff',
   color: '#111',
   padding: 0,
   display: 'inline-flex',
+  flex: '0 0 30px',
   alignItems: 'center',
   justifyContent: 'center',
+  alignSelf: 'center',
+  justifySelf: 'center',
   cursor: 'pointer',
+  lineHeight: 0,
 };
 
 const sliderWrapStyle: CSSProperties = {
@@ -295,9 +474,28 @@ const sliderWrapStyle: CSSProperties = {
   alignItems: 'center',
 };
 
+const trackSliderInputWrapStyle: CSSProperties = {
+  position: 'relative',
+  minWidth: 0,
+  display: 'flex',
+  alignItems: 'center',
+};
+
 const trackSliderStyle: CSSProperties = {
   width: '100%',
   cursor: 'pointer',
+};
+
+const sampleMarkerStyle: CSSProperties = {
+  position: 'absolute',
+  top: '50%',
+  width: 2,
+  height: 12,
+  borderRadius: 1,
+  backgroundColor: '#111',
+  opacity: 0.45,
+  transform: 'translate(-1px, -50%)',
+  pointerEvents: 'none',
 };
 
 const timeLabelStyle: CSSProperties = {
@@ -316,6 +514,7 @@ const visualizerLayerStyle: CSSProperties = {
   height: 360,
   transform: 'translateX(-50%)',
   pointerEvents: 'none',
+  transition: 'opacity 1s ease',
   zIndex: 4,
 };
 
@@ -325,6 +524,27 @@ const visualizerCanvasStyle: CSSProperties = {
   height: '100%',
 };
 
+const visualizerContentLayerStyle: CSSProperties = {
+  position: 'absolute',
+  inset: 0,
+  transition: 'opacity 1s ease',
+};
+
+const visualizerPlaceholderTextStyle: CSSProperties = {
+  position: 'absolute',
+  top: '50%',
+  left: '50%',
+  margin: 0,
+  transform: 'translate(-50%, -50%)',
+  color: '#9a9a9a',
+  fontSize: 11,
+  fontStyle: 'italic',
+  lineHeight: 1,
+  letterSpacing: 0,
+  whiteSpace: 'nowrap',
+  transition: 'opacity 1.8s ease',
+};
+
 const visualizerCoverStyle: CSSProperties = {
   position: 'absolute',
   top: '50%',
@@ -332,16 +552,35 @@ const visualizerCoverStyle: CSSProperties = {
   width: 58,
   height: 58,
   borderRadius: '9999px',
-  objectFit: 'cover',
-  pointerEvents: 'none',
+  border: 0,
+  padding: 0,
+  backgroundPosition: 'center',
+  backgroundSize: 'cover',
+  pointerEvents: 'auto',
+  cursor: 'pointer',
   boxShadow: '0 0 0 1px rgba(0, 0, 0, 0.18)',
+};
+
+const visualizerProgressHitAreaStyle: CSSProperties = {
+  position: 'absolute',
+  top: '50%',
+  left: '50%',
+  width: 132,
+  height: 132,
+  padding: 0,
+  border: 0,
+  borderRadius: '9999px',
+  backgroundColor: 'transparent',
+  transform: 'translate(-50%, -50%)',
+  pointerEvents: 'auto',
+  cursor: 'pointer',
 };
 
 const bottomControlsStyle: CSSProperties = {
   position: 'absolute',
   left: '50%',
   bottom: 14,
-  width: 'min(320px, calc(100vw - 48px))',
+  width: 'min(360px, calc(100vw - 48px))',
   transform: 'translateX(-50%)',
   display: 'grid',
   justifyItems: 'center',
@@ -369,7 +608,7 @@ const downloadButtonStyle: CSSProperties = {
 const volumeControlStyle: CSSProperties = {
   width: '100%',
   display: 'grid',
-  gridTemplateColumns: '32px minmax(0, 1fr)',
+  gridTemplateColumns: '32px minmax(0, 1fr) 28px',
   alignItems: 'center',
   gap: 8,
 };
@@ -380,6 +619,124 @@ const volumeLabelStyle: CSSProperties = {
   justifyContent: 'flex-end',
   alignItems: 'center',
   height: 20,
+};
+
+const playbackModeButtonStyle: CSSProperties = {
+  width: 30,
+  height: 24,
+  border: 0,
+  borderRadius: 0,
+  backgroundColor: 'transparent',
+  color: '#111',
+  padding: 0,
+  marginLeft: 6,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  cursor: 'pointer',
+  lineHeight: 0,
+};
+
+const playbackModeButtonIconWrapStyle: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  transformOrigin: '50% 50%',
+};
+
+const playbackModeButtonWrapStyle: CSSProperties = {
+  position: 'relative',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  transform: 'translateX(3px)',
+};
+
+const playbackModeCalloutStyle: CSSProperties = {
+  position: 'absolute',
+  left: '50%',
+  bottom: 'calc(100% + 14px)',
+  width: 178,
+  minHeight: 40,
+  boxSizing: 'border-box',
+  border: '1px solid #111',
+  borderRadius: 0,
+  backgroundColor: '#fff',
+  color: '#111',
+  padding: '8px 20px 8px 14px',
+  fontSize: 12,
+  lineHeight: 1.15,
+  textAlign: 'center',
+  transform: 'translateX(calc(-50% + 4px))',
+  pointerEvents: 'auto',
+  zIndex: 16,
+};
+
+const playbackModeCalloutCloseButtonStyle: CSSProperties = {
+  position: 'absolute',
+  top: 1,
+  right: 2,
+  width: 15,
+  height: 15,
+  border: 0,
+  backgroundColor: 'transparent',
+  color: '#111',
+  padding: 0,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  fontSize: 12,
+  lineHeight: 1,
+  cursor: 'pointer',
+};
+
+const playbackModeCalloutBreakStyle: CSSProperties = {
+  position: 'absolute',
+  left: '50%',
+  bottom: -1,
+  width: 17,
+  height: 2,
+  backgroundColor: '#fff',
+  transform: 'translateX(-50%)',
+};
+
+const playbackModeCalloutPointerStyle: CSSProperties = {
+  position: 'absolute',
+  left: '50%',
+  bottom: -8,
+  width: 12,
+  height: 12,
+  borderRight: '1px solid #111',
+  borderBottom: '1px solid #111',
+  backgroundColor: '#fff',
+  transform: 'translateX(-50%) rotate(45deg)',
+};
+
+const carouselArrowButtonBaseStyle: CSSProperties = {
+  position: 'absolute',
+  top: 'calc(50% + 58px)',
+  width: 42,
+  height: 64,
+  border: 0,
+  backgroundColor: 'transparent',
+  color: '#111',
+  padding: 0,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  cursor: 'pointer',
+  transform: 'translateY(-50%)',
+  zIndex: 10,
+};
+
+const carouselArrowLeftStyle: CSSProperties = {
+  ...carouselArrowButtonBaseStyle,
+  left: 10,
+};
+
+const carouselArrowRightStyle: CSSProperties = {
+  ...carouselArrowButtonBaseStyle,
+  right: 10,
 };
 
 const newMusicSliderStyles = `
@@ -425,6 +782,80 @@ const newMusicSliderStyles = `
 }
 .new-music-visualizer-cover {
   animation: new-music-cover-spin 5.5s linear infinite;
+}
+@keyframes shop-tracks-case-enter-next {
+  from {
+    opacity: 0;
+    transform: translateX(42px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes shop-tracks-case-exit-next {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-42px);
+  }
+}
+@keyframes shop-tracks-case-enter-previous {
+  from {
+    opacity: 0;
+    transform: translateX(-42px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes shop-tracks-case-exit-previous {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(42px);
+  }
+}
+@keyframes shop-tracks-mode-hint-bob {
+  0% {
+    transform: translateX(var(--shop-tracks-mode-hint-x, calc(-50% + 4px))) translateY(0);
+  }
+  23% {
+    transform: translateX(var(--shop-tracks-mode-hint-x, calc(-50% + 4px))) translateY(-5px);
+  }
+  50% {
+    transform: translateX(var(--shop-tracks-mode-hint-x, calc(-50% + 4px))) translateY(0);
+  }
+  73% {
+    transform: translateX(var(--shop-tracks-mode-hint-x, calc(-50% + 4px))) translateY(-4px);
+  }
+  100% {
+    transform: translateX(var(--shop-tracks-mode-hint-x, calc(-50% + 4px))) translateY(0);
+  }
+}
+@keyframes shop-tracks-mode-hint-bob-thin {
+  0% {
+    transform: translateX(var(--shop-tracks-mode-hint-x, calc(-50% - 21px))) translateY(0);
+  }
+  23% {
+    transform: translateX(var(--shop-tracks-mode-hint-x, calc(-50% - 21px))) translateY(-5px);
+  }
+  50% {
+    transform: translateX(var(--shop-tracks-mode-hint-x, calc(-50% - 21px))) translateY(0);
+  }
+  73% {
+    transform: translateX(var(--shop-tracks-mode-hint-x, calc(-50% - 21px))) translateY(-4px);
+  }
+  100% {
+    transform: translateX(var(--shop-tracks-mode-hint-x, calc(-50% - 21px))) translateY(0);
+  }
 }
 `;
 
@@ -473,6 +904,87 @@ function VolumeWaveIcon({volume}: {volume: number}): ReactNode {
         strokeWidth="1.7"
         style={waveStyle(volume >= 0.67)}
       />
+    </svg>
+  );
+}
+
+function PlaybackModeIcon({mode}: {mode: ShopTrackPlaybackMode}): ReactNode {
+  if (mode === 'sample') {
+    return (
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+        <text
+          x="13"
+          y="19.5"
+          fill="currentColor"
+          fontFamily="Arial, Helvetica, sans-serif"
+          fontSize="20.5"
+          fontWeight="900"
+          textAnchor="middle">
+          $
+        </text>
+      </svg>
+    );
+  }
+
+  if (mode === 'loop-all' || mode === 'loop-one') {
+    return (
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+        <path
+          d="M7 7H16.5L14.5 5M16.5 7L14.5 9M17 17H7.5L9.5 15M7.5 17L9.5 19"
+          fill="none"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="1.8"
+        />
+        <path
+          d="M17 7C19 8.2 20 9.9 20 12C20 14.1 19 15.8 17 17M7 17C5 15.8 4 14.1 4 12C4 9.9 5 8.2 7 7"
+          fill="none"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeWidth="1.8"
+        />
+        {mode === 'loop-one' ? (
+          <>
+            <circle cx="17.2" cy="17.2" r="4.5" fill="currentColor" />
+            <text x="17.2" y="19.35" textAnchor="middle" fontSize="6.8" fontWeight="900" fill="#fff">
+              1
+            </text>
+          </>
+        ) : null}
+      </svg>
+    );
+  }
+
+  if (mode === 'shuffle') {
+    return (
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+        <g transform="translate(1.5 0)">
+          <path
+            d="M4 7H6.5C9.5 7 10.9 17 14 17H17M15 15L18 17L15 19M4 17H6.5C8 17 9 14.6 10 12M14 7H17M15 5L18 7L15 9"
+            fill="none"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="1.8"
+          />
+        </g>
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+      <g transform="translate(-2 0)">
+        <path d="M7.5 5V19L17.5 12L7.5 5Z" fill="currentColor" />
+        <path
+          d="M19.5 5V19"
+          fill="none"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeWidth="2"
+        />
+      </g>
     </svg>
   );
 }
@@ -615,25 +1127,101 @@ void main() {
 `;
 
 function CdCaseCanvas({
+  canvasStyleOverride,
   coverSrc,
+  initialRotationX,
   initialRotationY,
+  initialRotationZ,
+  isAutoRotating,
+  maxPixelRatio = 2,
+  modelScale = 0.92,
+  onCaseClick,
+  onCaseDoubleClick,
   onDragEnd,
+  onSceneMissClick,
   onDragStart,
+  preferSharpCover = false,
+  resetToken,
 }: {
+  canvasStyleOverride?: CSSProperties;
   coverSrc: string;
+  initialRotationX: number;
   initialRotationY: number;
+  initialRotationZ: number;
+  isAutoRotating: boolean;
+  maxPixelRatio?: number;
+  modelScale?: number;
+  onCaseClick?: () => void;
+  onCaseDoubleClick?: () => void;
   onDragEnd: () => void;
+  onSceneMissClick?: () => void;
   onDragStart: () => void;
+  preferSharpCover?: boolean;
+  resetToken: string;
 }): ReactNode {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const groupRef = useRef<THREE.Group | null>(null);
+  const isDraggingRef = useRef(false);
+  const onCaseClickRef = useRef(onCaseClick);
+  const onCaseDoubleClickRef = useRef(onCaseDoubleClick);
   const onDragEndRef = useRef(onDragEnd);
+  const onSceneMissClickRef = useRef(onSceneMissClick);
   const onDragStartRef = useRef(onDragStart);
-  const rotationRef = useRef({x: -0.2, y: initialRotationY});
+  const renderRef = useRef<(() => void) | null>(null);
+  const rotationRef = useRef({x: initialRotationX, y: initialRotationY, z: initialRotationZ});
 
   useEffect(() => {
+    onCaseClickRef.current = onCaseClick;
+    onCaseDoubleClickRef.current = onCaseDoubleClick;
     onDragEndRef.current = onDragEnd;
+    onSceneMissClickRef.current = onSceneMissClick;
     onDragStartRef.current = onDragStart;
-  }, [onDragEnd, onDragStart]);
+  }, [onCaseClick, onCaseDoubleClick, onDragEnd, onSceneMissClick, onDragStart]);
+
+  useEffect(() => {
+    rotationRef.current = {x: initialRotationX, y: initialRotationY, z: initialRotationZ};
+    const group = groupRef.current;
+    if (group !== null) {
+      group.rotation.x = initialRotationX;
+      group.rotation.y = initialRotationY;
+      group.rotation.z = initialRotationZ;
+      renderRef.current?.();
+    }
+  }, [initialRotationX, initialRotationY, initialRotationZ, resetToken]);
+
+  useEffect(() => {
+    if (!isAutoRotating) {
+      return undefined;
+    }
+
+    let frameId: number | null = null;
+    let lastFrameTime = performance.now();
+
+    const tick = (frameTime: number): void => {
+      const group = groupRef.current;
+      const render = renderRef.current;
+      const deltaSeconds = Math.min(0.05, Math.max(0, (frameTime - lastFrameTime) / 1000));
+      lastFrameTime = frameTime;
+
+      if (group !== null && render !== null && !isDraggingRef.current) {
+        rotationRef.current = {
+          ...rotationRef.current,
+          y: rotationRef.current.y + deltaSeconds * 0.14,
+        };
+        group.rotation.y = rotationRef.current.y;
+        render();
+      }
+
+      frameId = window.requestAnimationFrame(tick);
+    };
+
+    frameId = window.requestAnimationFrame(tick);
+    return () => {
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
+    };
+  }, [isAutoRotating]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -648,7 +1236,7 @@ function CdCaseCanvas({
       powerPreference: 'high-performance',
     });
     renderer.setClearColor(0x000000, 0);
-    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    renderer.setPixelRatio(Math.min(maxPixelRatio, window.devicePixelRatio || 1));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.18;
@@ -662,10 +1250,11 @@ function CdCaseCanvas({
     camera.position.set(0, 0, 8.75);
 
     const group = new THREE.Group();
+    groupRef.current = group;
     group.rotation.x = rotationRef.current.x;
     group.rotation.y = rotationRef.current.y;
-    group.rotation.z = -0.045;
-    group.scale.setScalar(0.92);
+    group.rotation.z = rotationRef.current.z;
+    group.scale.setScalar(modelScale);
     scene.add(group);
 
     const lidMaterial = new THREE.MeshPhysicalMaterial({
@@ -920,12 +1509,12 @@ function CdCaseCanvas({
     coverBacker.position.set(0.16, 0, 0.198);
     group.add(coverBacker);
 
-    const coverGeometry = new THREE.PlaneGeometry(2.82, 2.86);
+    const coverGeometry = new THREE.PlaneGeometry(2.8, 2.86);
     const coverMesh = new THREE.Mesh(coverGeometry, paperMaterial);
-    coverMesh.position.set(0.16, 0, 0.221);
+    coverMesh.position.set(0.11, 0, 0.221);
     group.add(coverMesh);
-    addRoundedBox(group, moldedMaterial, 2.92, 0.018, 0.035, [0.16, 1.425, 0.218], 0.006);
-    addRoundedBox(group, moldedMaterial, 2.92, 0.018, 0.035, [0.16, -1.425, 0.218], 0.006);
+    addRoundedBox(group, moldedMaterial, 2.84, 0.018, 0.035, [0.12, 1.425, 0.218], 0.006);
+    addRoundedBox(group, moldedMaterial, 2.84, 0.018, 0.035, [0.12, -1.425, 0.218], 0.006);
     addRoundedBox(group, moldedMaterial, 0.018, 2.72, 0.035, [1.47, 0, 0.218], 0.006);
 
     const frontPlate = new THREE.Mesh(
@@ -987,7 +1576,15 @@ function CdCaseCanvas({
     textureLoader.load(coverSrc, (texture) => {
       coverTexture = texture;
       texture.colorSpace = THREE.SRGBColorSpace;
-      texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+      texture.anisotropy = preferSharpCover
+        ? renderer.capabilities.getMaxAnisotropy()
+        : Math.min(8, renderer.capabilities.getMaxAnisotropy());
+      if (preferSharpCover) {
+        texture.generateMipmaps = false;
+        texture.minFilter = THREE.LinearFilter;
+        texture.magFilter = THREE.LinearFilter;
+      }
+      texture.needsUpdate = true;
       paperMaterial.map = texture;
       paperMaterial.needsUpdate = true;
       render();
@@ -1019,6 +1616,7 @@ function CdCaseCanvas({
       updateDynamicHighlights();
       renderer.render(scene, camera);
     };
+    renderRef.current = render;
 
     const resizeRenderer = (): void => {
       const rect = canvas.getBoundingClientRect();
@@ -1033,14 +1631,55 @@ function CdCaseCanvas({
     let isDragging = false;
     let lastPointerX = 0;
     let lastPointerY = 0;
+    let pointerDownX = 0;
+    let pointerDownY = 0;
+    let didPointerMoveBeyondClick = false;
+    let pendingCaseClickTimeout: number | null = null;
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    const caseHitObjects = group.children.filter((child): child is THREE.Mesh => child instanceof THREE.Mesh);
+
+    const clearPendingCaseClick = (): void => {
+      if (pendingCaseClickTimeout !== null) {
+        window.clearTimeout(pendingCaseClickTimeout);
+        pendingCaseClickTimeout = null;
+      }
+    };
+
+    const doesPointerHitCase = (event: PointerEvent | MouseEvent): boolean => {
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) {
+        return false;
+      }
+      pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -(((event.clientY - rect.top) / rect.height) * 2 - 1);
+      raycaster.setFromCamera(pointer, camera);
+      return raycaster.intersectObjects(caseHitObjects, true).length > 0;
+    };
 
     const handlePointerDown = (event: PointerEvent): void => {
       if (event.button !== 0) {
         return;
       }
+      const isCaseHit = doesPointerHitCase(event);
+      if (onSceneMissClickRef.current !== undefined && !isCaseHit) {
+        onSceneMissClickRef.current();
+        return;
+      }
+      if (
+        (onCaseClickRef.current !== undefined || onCaseDoubleClickRef.current !== undefined) &&
+        !isCaseHit
+      ) {
+        return;
+      }
+      clearPendingCaseClick();
       isDragging = true;
+      isDraggingRef.current = true;
       lastPointerX = event.clientX;
       lastPointerY = event.clientY;
+      pointerDownX = event.clientX;
+      pointerDownY = event.clientY;
+      didPointerMoveBeyondClick = false;
       canvas.setPointerCapture(event.pointerId);
       canvas.style.cursor = 'grabbing';
       onDragStartRef.current();
@@ -1054,9 +1693,16 @@ function CdCaseCanvas({
       const deltaY = event.clientY - lastPointerY;
       lastPointerX = event.clientX;
       lastPointerY = event.clientY;
+      if (
+        !didPointerMoveBeyondClick &&
+        Math.hypot(event.clientX - pointerDownX, event.clientY - pointerDownY) > 5
+      ) {
+        didPointerMoveBeyondClick = true;
+      }
       rotationRef.current = {
         x: Math.max(-0.72, Math.min(0.42, rotationRef.current.x + deltaY * 0.008)),
         y: rotationRef.current.y + deltaX * 0.011,
+        z: rotationRef.current.z,
       };
       group.rotation.x = rotationRef.current.x;
       group.rotation.y = rotationRef.current.y;
@@ -1068,15 +1714,43 @@ function CdCaseCanvas({
         return;
       }
       isDragging = false;
+      isDraggingRef.current = false;
+      canvas.releasePointerCapture(event.pointerId);
+      canvas.style.cursor = 'grab';
+      onDragEndRef.current();
+      if (!didPointerMoveBeyondClick && onCaseClickRef.current !== undefined) {
+        pendingCaseClickTimeout = window.setTimeout(() => {
+          pendingCaseClickTimeout = null;
+          onCaseClickRef.current?.();
+        }, 240);
+      }
+    };
+
+    const handlePointerCancel = (event: PointerEvent): void => {
+      if (!isDragging) {
+        return;
+      }
+      isDragging = false;
+      isDraggingRef.current = false;
       canvas.releasePointerCapture(event.pointerId);
       canvas.style.cursor = 'grab';
       onDragEndRef.current();
     };
 
+    const handleDoubleClick = (event: MouseEvent): void => {
+      if (onCaseDoubleClickRef.current === undefined || !doesPointerHitCase(event)) {
+        return;
+      }
+      clearPendingCaseClick();
+      event.preventDefault();
+      onCaseDoubleClickRef.current();
+    };
+
     canvas.addEventListener('pointerdown', handlePointerDown);
     canvas.addEventListener('pointermove', handlePointerMove);
     canvas.addEventListener('pointerup', handlePointerUp);
-    canvas.addEventListener('pointercancel', handlePointerUp);
+    canvas.addEventListener('pointercancel', handlePointerCancel);
+    canvas.addEventListener('dblclick', handleDoubleClick);
 
     const resizeObserver = new ResizeObserver(resizeRenderer);
     resizeObserver.observe(canvas);
@@ -1087,7 +1761,9 @@ function CdCaseCanvas({
       canvas.removeEventListener('pointerdown', handlePointerDown);
       canvas.removeEventListener('pointermove', handlePointerMove);
       canvas.removeEventListener('pointerup', handlePointerUp);
-      canvas.removeEventListener('pointercancel', handlePointerUp);
+      canvas.removeEventListener('pointercancel', handlePointerCancel);
+      canvas.removeEventListener('dblclick', handleDoubleClick);
+      clearPendingCaseClick();
       coverTexture?.dispose();
       scene.traverse((object) => {
         if (object instanceof THREE.Mesh || object instanceof THREE.LineSegments) {
@@ -1096,25 +1772,80 @@ function CdCaseCanvas({
         }
       });
       renderer.dispose();
+      if (groupRef.current === group) {
+        groupRef.current = null;
+      }
+      if (renderRef.current === render) {
+        renderRef.current = null;
+      }
       if (isDragging) {
+        isDraggingRef.current = false;
         onDragEndRef.current();
       }
     };
-  }, [coverSrc, initialRotationY]);
+  }, [coverSrc, maxPixelRatio, modelScale, preferSharpCover]);
 
-  return <canvas ref={canvasRef} style={canvasStyle} aria-label="Rotatable jewel case" />;
+  return (
+    <canvas
+      ref={canvasRef}
+      style={{...canvasStyle, ...canvasStyleOverride}}
+      aria-label="Rotatable jewel case"
+    />
+  );
 }
 
 function AudioRadialVisualizer({
   activeCoverSrc,
   activeTrackId,
   audioElement,
+  isPlaybackPaused,
+  isVisualizerHidden,
+  layerStyle,
+  playbackMode,
+  setIsPlaybackPaused,
+  setIsVisualizerHidden,
 }: {
   activeCoverSrc: string | null;
   activeTrackId: number | null;
   audioElement: HTMLAudioElement | null;
+  isPlaybackPaused: boolean;
+  isVisualizerHidden: boolean;
+  layerStyle?: CSSProperties;
+  playbackMode: ShopTrackPlaybackMode;
+  setIsPlaybackPaused: Dispatch<SetStateAction<boolean>>;
+  setIsVisualizerHidden: Dispatch<SetStateAction<boolean>>;
 }): ReactNode {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const isPlaybackPausedRef = useRef(isPlaybackPaused);
+  const isVisualizerVisible = audioElement !== null && !isVisualizerHidden;
+
+  useEffect(() => {
+    isPlaybackPausedRef.current = isPlaybackPaused;
+  }, [isPlaybackPaused]);
+
+  const seekAudioFromProgressPointer = (event: {
+    clientX: number;
+    clientY: number;
+    currentTarget: HTMLElement;
+  }): void => {
+    if (audioElement === null) {
+      return;
+    }
+    const trackDuration = audioElement.duration || 0;
+    const seekDuration =
+      playbackMode === 'sample'
+        ? Math.min(trackDuration || SHOP_TRACK_SAMPLE_SECONDS, SHOP_TRACK_SAMPLE_SECONDS)
+        : trackDuration;
+    if (!Number.isFinite(seekDuration) || seekDuration <= 0) {
+      return;
+    }
+    const rect = event.currentTarget.getBoundingClientRect();
+    const offsetX = event.clientX - rect.left - rect.width / 2;
+    const offsetY = event.clientY - rect.top - rect.height / 2;
+    const angle = Math.atan2(offsetY, offsetX);
+    const progress = ((angle + Math.PI / 2 + Math.PI * 2) % (Math.PI * 2)) / (Math.PI * 2);
+    audioElement.currentTime = progress * seekDuration;
+  };
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -1149,7 +1880,22 @@ function AudioRadialVisualizer({
     }
 
     const frequencyData = new Uint8Array(analyser.frequencyBinCount);
+    const visualFrequencyData = new Float32Array(analyser.frequencyBinCount);
+    const particleCanvas = document.createElement('canvas');
+    const particleContext = particleCanvas.getContext('2d');
     let frameId: number | null = null;
+    let lastFrameTime = performance.now();
+    let nextParticleSpawnTime = lastFrameTime + 120;
+    const particles: Array<{
+      age: number;
+      life: number;
+      renderAlpha: number;
+      size: number;
+      vx: number;
+      vy: number;
+      x: number;
+      y: number;
+    }> = [];
 
     const resizeCanvas = (): void => {
       const pixelRatio = Math.min(2, window.devicePixelRatio || 1);
@@ -1159,7 +1905,16 @@ function AudioRadialVisualizer({
     };
 
     const draw = (): void => {
+      const frameTime = performance.now();
+      const deltaSeconds = Math.min(0.05, Math.max(0.001, (frameTime - lastFrameTime) / 1000));
+      lastFrameTime = frameTime;
       analyser.getByteFrequencyData(frequencyData);
+      const isPausedFrame = isPlaybackPausedRef.current;
+      const frequencyEase = Math.min(1, deltaSeconds * (isPausedFrame ? 2.1 : 12));
+      for (let index = 0; index < frequencyData.length; index += 1) {
+        const target = isPausedFrame ? 0 : (frequencyData[index] ?? 0);
+        visualFrequencyData[index] += (target - visualFrequencyData[index]) * frequencyEase;
+      }
       const context = canvas.getContext('2d');
       if (context === null) {
         return;
@@ -1170,6 +1925,8 @@ function AudioRadialVisualizer({
       const centerX = width * 0.5;
       const centerY = height * 0.5;
       const size = Math.min(width, height);
+      const particlePixelSize = Math.max(5, Math.round(size * 0.017));
+      const particleScale = 1 / particlePixelSize;
       const baseRadius = size * 0.19;
       const barCount = 152;
       const shouldEvenlyDistribute =
@@ -1177,6 +1934,15 @@ function AudioRadialVisualizer({
       const shouldLiftLowEnd =
         activeTrackId !== null && LOW_END_VISUALIZER_BOOST_TRACK_IDS.has(activeTrackId);
       const currentTime = audioElement.currentTime || 0;
+      const duration = audioElement.duration || 0;
+      const progressDuration =
+        playbackMode === 'sample'
+          ? Math.min(duration || SHOP_TRACK_SAMPLE_SECONDS, SHOP_TRACK_SAMPLE_SECONDS)
+          : duration;
+      const trackProgress =
+        Number.isFinite(progressDuration) && progressDuration > 0
+          ? Math.min(1, Math.max(0, currentTime / progressDuration))
+          : 0;
       const quietArcCenter = -Math.PI * 0.38 + Math.sin(currentTime * 0.18) * 0.13;
       const quietArcWidth = 0.52;
 
@@ -1186,17 +1952,96 @@ function AudioRadialVisualizer({
       let mid = 0;
       let treble = 0;
       for (let index = 1; index < 22; index += 1) {
-        bass += frequencyData[index] ?? 0;
+        bass += visualFrequencyData[index] ?? 0;
       }
       for (let index = 22; index < 138; index += 1) {
-        mid += frequencyData[index] ?? 0;
+        mid += visualFrequencyData[index] ?? 0;
       }
       for (let index = 138; index < 420; index += 1) {
-        treble += frequencyData[index] ?? 0;
+        treble += visualFrequencyData[index] ?? 0;
       }
       bass /= 21 * 255;
       mid /= 116 * 255;
       treble /= 282 * 255;
+
+      if (!isPausedFrame && frameTime >= nextParticleSpawnTime) {
+        const spawnCount = Math.random() > 0.78 ? 2 : 1;
+        for (let index = 0; index < spawnCount; index += 1) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = size * (0.065 + Math.random() * 0.075);
+          const startDistance = size * (0.085 + Math.random() * 0.08);
+          particles.push({
+            age: 0,
+            life: 4.7 + Math.random() * 3.4,
+            renderAlpha: 0,
+            size: size * (0.016 + Math.random() * 0.036),
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed - size * (0.006 + Math.random() * 0.011),
+            x: centerX + Math.cos(angle) * startDistance,
+            y: centerY + Math.sin(angle) * startDistance,
+          });
+        }
+        nextParticleSpawnTime = frameTime + 95 + Math.random() * 230;
+      }
+
+      if (particleContext !== null) {
+        const particleWidth = Math.max(1, Math.ceil(width * particleScale));
+        const particleHeight = Math.max(1, Math.ceil(height * particleScale));
+        if (particleCanvas.width !== particleWidth || particleCanvas.height !== particleHeight) {
+          particleCanvas.width = particleWidth;
+          particleCanvas.height = particleHeight;
+        }
+        particleContext.clearRect(0, 0, particleWidth, particleHeight);
+      }
+
+      for (let index = particles.length - 1; index >= 0; index -= 1) {
+        const particle = particles[index];
+        particle.age += deltaSeconds * (isPausedFrame ? 2.4 : 1);
+        if (particle.age >= particle.life) {
+          particles.splice(index, 1);
+          continue;
+        }
+
+        particle.x += particle.vx * deltaSeconds;
+        particle.y += particle.vy * deltaSeconds;
+        particle.vx *= 0.998;
+        particle.vy *= 0.998;
+
+        const lifeProgress = particle.age / particle.life;
+        const fade = Math.sin(lifeProgress * Math.PI);
+        const edgeFadeX = Math.min(1, particle.x / (width * 0.2), (width - particle.x) / (width * 0.2));
+        const edgeFadeY = Math.min(1, particle.y / (height * 0.22), (height - particle.y) / (height * 0.2));
+        const alpha = Math.max(0, fade * edgeFadeX * edgeFadeY) * (0.82 + mid * 0.08 + treble * 0.08);
+        particle.renderAlpha = alpha;
+        if (alpha <= 0.001) {
+          continue;
+        }
+
+        if (particleContext !== null) {
+          const mosaicX = particle.x * particleScale;
+          const mosaicY = particle.y * particleScale;
+          const mosaicSize = Math.max(1.4, particle.size * particleScale);
+          particleContext.save();
+          particleContext.globalAlpha = Math.min(1, alpha);
+          particleContext.fillStyle = '#79bdff';
+          particleContext.beginPath();
+          particleContext.arc(mosaicX, mosaicY, mosaicSize * 0.62, 0, Math.PI * 2);
+          particleContext.fill();
+          particleContext.restore();
+        }
+      }
+
+      if (particleContext !== null) {
+        context.save();
+        context.imageSmoothingEnabled = false;
+        context.drawImage(particleCanvas, 0, 0, width, height);
+        context.restore();
+      }
+
+      context.beginPath();
+      context.arc(centerX, centerY, baseRadius * 1.02, 0, Math.PI * 2);
+      context.fillStyle = '#fff';
+      context.fill();
 
       const pulseRadius = baseRadius + bass * size * 0.065;
       context.beginPath();
@@ -1206,7 +2051,7 @@ function AudioRadialVisualizer({
       context.stroke();
 
       const readBin = (binIndex: number): number =>
-        (frequencyData[Math.min(frequencyData.length - 1, Math.max(1, binIndex))] ?? 0) / 255;
+        (visualFrequencyData[Math.min(visualFrequencyData.length - 1, Math.max(1, binIndex))] ?? 0) / 255;
       const getAngularDistance = (angleA: number, angleB: number): number =>
         Math.abs(Math.atan2(Math.sin(angleA - angleB), Math.cos(angleA - angleB)));
 
@@ -1244,10 +2089,10 @@ function AudioRadialVisualizer({
           lineEnergy = Math.max(midSample, highSample, treble * 0.9);
         } else {
           const binIndex = Math.min(
-            frequencyData.length - 1,
+            visualFrequencyData.length - 1,
             Math.max(1, Math.round(Math.pow(normalizedIndex, 1.55) * 520)),
           );
-          const magnitude = (frequencyData[binIndex] ?? 0) / 255;
+          const magnitude = (visualFrequencyData[binIndex] ?? 0) / 255;
           harmonic =
             magnitude * 0.72 +
             bass * (1 - normalizedIndex) * 0.18 +
@@ -1282,12 +2127,66 @@ function AudioRadialVisualizer({
         context.lineWidth = Math.max(1, size * (0.004 + lineEnergy * 0.004));
         context.lineCap = 'round';
         context.stroke();
+
+        const segmentDeltaX = x2 - x1;
+        const segmentDeltaY = y2 - y1;
+        const segmentLengthSquared = segmentDeltaX * segmentDeltaX + segmentDeltaY * segmentDeltaY;
+        const segmentLength = Math.sqrt(segmentLengthSquared);
+        if (segmentLength > 0) {
+          for (const particle of particles) {
+            if (particle.renderAlpha <= 0.03) {
+              continue;
+            }
+
+            const projection = clampNumber(
+              ((particle.x - x1) * segmentDeltaX + (particle.y - y1) * segmentDeltaY) /
+                segmentLengthSquared,
+              0,
+              1,
+            );
+            const closestX = x1 + segmentDeltaX * projection;
+            const closestY = y1 + segmentDeltaY * projection;
+            const distanceX = particle.x - closestX;
+            const distanceY = particle.y - closestY;
+            const invertRadius = particle.size * 0.78 + particlePixelSize * 1.15;
+            const distanceSquared = distanceX * distanceX + distanceY * distanceY;
+            if (distanceSquared > invertRadius * invertRadius) {
+              continue;
+            }
+
+            const halfSegmentT = Math.sqrt(invertRadius * invertRadius - distanceSquared) / segmentLength;
+            const startT = clampNumber(projection - halfSegmentT, 0, 1);
+            const endT = clampNumber(projection + halfSegmentT, 0, 1);
+            context.beginPath();
+            context.moveTo(x1 + segmentDeltaX * startT, y1 + segmentDeltaY * startT);
+            context.lineTo(x1 + segmentDeltaX * endT, y1 + segmentDeltaY * endT);
+            context.strokeStyle = `rgba(255, 255, 255, ${Math.min(1, particle.renderAlpha * 1.1)})`;
+            context.lineWidth = Math.max(1.2, size * (0.004 + lineEnergy * 0.004));
+            context.lineCap = 'round';
+            context.stroke();
+          }
+        }
       }
 
       context.beginPath();
       context.arc(centerX, centerY, baseRadius * 0.45 + mid * size * 0.035, 0, Math.PI * 2);
       context.fillStyle = `rgba(0, 0, 0, ${0.04 + mid * 0.1})`;
       context.fill();
+
+      if (trackProgress > 0) {
+        const progressRingRadius = baseRadius * 0.72;
+        const progressRingStart = -Math.PI / 2;
+        const progressRingEnd =
+          trackProgress >= 0.999
+            ? progressRingStart + Math.PI * 2
+            : progressRingStart + Math.PI * 2 * trackProgress;
+        context.beginPath();
+        context.arc(centerX, centerY, progressRingRadius, progressRingStart, progressRingEnd);
+        context.strokeStyle = 'rgba(0, 0, 0, 0.62)';
+        context.lineWidth = Math.max(2, size * 0.011);
+        context.lineCap = trackProgress >= 0.999 ? 'butt' : 'round';
+        context.stroke();
+      }
 
       frameId = window.requestAnimationFrame(draw);
     };
@@ -1308,52 +2207,214 @@ function AudioRadialVisualizer({
       }
       analyser.disconnect();
     };
-  }, [activeTrackId, audioElement]);
+  }, [activeTrackId, audioElement, playbackMode]);
 
   return (
     <div
       aria-hidden="true"
       style={{
         ...visualizerLayerStyle,
-        opacity: audioElement === null ? 0 : 1,
+        ...layerStyle,
       }}>
-      <canvas ref={canvasRef} style={visualizerCanvasStyle} />
-      {activeCoverSrc !== null ? (
-        <img
-          src={activeCoverSrc}
-          alt=""
-          className="new-music-visualizer-cover"
-          style={{
-            ...visualizerCoverStyle,
-            animationPlayState: audioElement === null ? 'paused' : 'running',
-          }}
-        />
-      ) : null}
+      <div
+        style={{
+          ...visualizerContentLayerStyle,
+          opacity: isVisualizerVisible ? 1 : 0,
+        }}>
+        <canvas ref={canvasRef} style={visualizerCanvasStyle} />
+        {isVisualizerVisible ? (
+          <button
+            type="button"
+            aria-label="Seek current shop track"
+            style={visualizerProgressHitAreaStyle}
+            onPointerDown={(event) => {
+              event.currentTarget.setPointerCapture(event.pointerId);
+              seekAudioFromProgressPointer(event);
+            }}
+            onPointerMove={(event) => {
+              if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                seekAudioFromProgressPointer(event);
+              }
+            }}
+            onPointerUp={(event) => {
+              if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                event.currentTarget.releasePointerCapture(event.pointerId);
+              }
+            }}
+            onPointerCancel={(event) => {
+              if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                event.currentTarget.releasePointerCapture(event.pointerId);
+              }
+            }}
+          />
+        ) : null}
+        {activeCoverSrc !== null && audioElement !== null && isVisualizerVisible ? (
+          <button
+            type="button"
+            aria-label={isPlaybackPaused ? 'Play current shop track' : 'Pause current shop track'}
+            className="new-music-visualizer-cover"
+            style={{
+              ...visualizerCoverStyle,
+              animationPlayState: isPlaybackPaused ? 'paused' : 'running',
+              backgroundImage: `url("${activeCoverSrc}")`,
+            }}
+            onClick={() => {
+              if (isPlaybackPaused || audioElement.paused) {
+                setIsVisualizerHidden(false);
+                setIsPlaybackPaused(false);
+                void audioElement.play().catch(() => {
+                  setIsPlaybackPaused(true);
+                });
+                return;
+              }
+              audioElement.pause();
+              setIsVisualizerHidden(false);
+              setIsPlaybackPaused(true);
+            }}
+          />
+        ) : null}
+      </div>
+      <p
+        style={{
+          ...visualizerPlaceholderTextStyle,
+          opacity: isVisualizerVisible ? 0 : 1,
+          transition: isVisualizerVisible ? 'opacity 140ms ease' : 'opacity 2.4s ease 520ms',
+        }}>
+        ( ambient battle + meditation music )
+      </p>
     </div>
   );
 }
 
 type TrackControlProps = {
   activeTrackId: number | null;
+  activeTrackRestartToken: number;
+  isPlaybackPaused: boolean;
   label: 'A' | 'B';
+  onDemoSeekBlocked: () => void;
+  onSampleLimitReached: () => void;
+  playbackMode: ShopTrackPlaybackMode;
   setActiveAudioElement: Dispatch<SetStateAction<HTMLAudioElement | null>>;
   setActiveTrackId: Dispatch<SetStateAction<number | null>>;
+  setIsPlaybackPaused: Dispatch<SetStateAction<boolean>>;
+  setIsVisualizerHidden: Dispatch<SetStateAction<boolean>>;
+  setShufflePlayedTrackIds: Dispatch<SetStateAction<number[]>>;
+  shufflePlayedTrackIds: number[];
   track: ShopDropTrack;
   volume: number;
 };
 
 function ShopDropTrackControl({
   activeTrackId,
+  activeTrackRestartToken,
+  isPlaybackPaused,
   label,
+  onDemoSeekBlocked,
+  onSampleLimitReached,
+  playbackMode,
   setActiveAudioElement,
   setActiveTrackId,
+  setIsPlaybackPaused,
+  setIsVisualizerHidden,
+  setShufflePlayedTrackIds,
+  shufflePlayedTrackIds,
   track,
   volume,
 }: TrackControlProps): ReactNode {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const lastRestartTokenRef = useRef(activeTrackRestartToken);
+  const wasActiveTrackRef = useRef(false);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
-  const isPlaying = activeTrackId === track.id;
+  const isActiveTrack = activeTrackId === track.id;
+  const isPlaying = isActiveTrack && !isPlaybackPaused;
+  const isSampleMode = playbackMode === 'sample';
+  const sampleMarkerLeft =
+    duration > SHOP_TRACK_SAMPLE_SECONDS
+      ? `${(SHOP_TRACK_SAMPLE_SECONDS / duration) * 100}%`
+      : '100%';
+
+  const stopCurrentTrack = (trackId: number): void => {
+    setIsVisualizerHidden(true);
+    setIsPlaybackPaused(true);
+    window.setTimeout(() => {
+      setActiveTrackId((current) => {
+        if (current !== trackId) {
+          return current;
+        }
+        setIsPlaybackPaused(false);
+        setIsVisualizerHidden(false);
+        return null;
+      });
+    }, 1000);
+  };
+
+  const finishCurrentTrack = (audio: HTMLAudioElement, didReachSampleLimit = false): void => {
+    audio.pause();
+    audio.currentTime = 0;
+    setCurrentTime(0);
+
+    if (isSampleMode) {
+      if (didReachSampleLimit) {
+        onSampleLimitReached();
+      }
+      const nextSampleTrackId = getShopDropSampleNextTrackId(track.id);
+      if (nextSampleTrackId !== null) {
+        setIsVisualizerHidden(false);
+        setIsPlaybackPaused(false);
+        setShufflePlayedTrackIds([]);
+        setActiveTrackId(nextSampleTrackId);
+        return;
+      }
+      stopCurrentTrack(track.id);
+      return;
+    }
+
+    if (playbackMode === 'loop-one') {
+      audio.currentTime = 0;
+      setIsVisualizerHidden(false);
+      setIsPlaybackPaused(false);
+      void audio.play().catch(() => {
+        setIsPlaybackPaused(true);
+      });
+      return;
+    }
+
+    if (playbackMode === 'loop-all') {
+      const currentIndex = SHOP_DROP_TRACK_ORDER.indexOf(track.id);
+      const nextTrackId =
+        SHOP_DROP_TRACK_ORDER[(currentIndex + 1) % SHOP_DROP_TRACK_ORDER.length] ?? SHOP_DROP_TRACK_ORDER[0];
+      if (nextTrackId === undefined) {
+        return;
+      }
+      setIsVisualizerHidden(false);
+      setIsPlaybackPaused(false);
+      setShufflePlayedTrackIds([]);
+      setActiveTrackId(nextTrackId);
+      return;
+    }
+
+    if (playbackMode === 'shuffle') {
+      const playedTrackIds = new Set(shufflePlayedTrackIds.length > 0 ? shufflePlayedTrackIds : [track.id]);
+      playedTrackIds.add(track.id);
+      if (playedTrackIds.size < SHOP_DROP_TRACK_ORDER.length) {
+        const unplayedTrackIds = SHOP_DROP_TRACK_ORDER.filter((trackId) => !playedTrackIds.has(trackId));
+        const nextTrackId =
+          unplayedTrackIds[Math.floor(Math.random() * unplayedTrackIds.length)] ?? unplayedTrackIds[0];
+        if (nextTrackId === undefined) {
+          return;
+        }
+        setIsVisualizerHidden(false);
+        setIsPlaybackPaused(false);
+        setShufflePlayedTrackIds([...playedTrackIds, nextTrackId]);
+        setActiveTrackId(nextTrackId);
+        return;
+      }
+      setShufflePlayedTrackIds([]);
+    }
+
+    stopCurrentTrack(track.id);
+  };
 
   useEffect(() => {
     if (audioRef.current !== null) {
@@ -1366,20 +2427,44 @@ function ShopDropTrackControl({
     if (audio === null) {
       return;
     }
+    const shouldRestartActiveTrack = isActiveTrack && activeTrackRestartToken !== lastRestartTokenRef.current;
+    lastRestartTokenRef.current = activeTrackRestartToken;
+    const becameActiveTrack = isActiveTrack && !wasActiveTrackRef.current;
+    wasActiveTrackRef.current = isActiveTrack;
     audio.volume = volume;
-    if (!isPlaying) {
+    if (!isActiveTrack) {
       audio.pause();
       setActiveAudioElement((current) => (current === audio ? null : current));
       return;
     }
     setActiveAudioElement(audio);
+    if (isPlaybackPaused) {
+      audio.pause();
+      return;
+    }
+    if (
+      shouldRestartActiveTrack ||
+      (isSampleMode && (becameActiveTrack || audio.currentTime >= SHOP_TRACK_SAMPLE_SECONDS))
+    ) {
+      audio.currentTime = 0;
+      setCurrentTime(0);
+    }
     void audio.play().catch(() => {
       setActiveTrackId(null);
+      setIsPlaybackPaused(false);
+      setIsVisualizerHidden(false);
     });
-    return () => {
-      setActiveAudioElement((current) => (current === audio ? null : current));
-    };
-  }, [isPlaying, setActiveAudioElement, setActiveTrackId]);
+  }, [
+    isActiveTrack,
+    activeTrackRestartToken,
+    isPlaybackPaused,
+    setActiveAudioElement,
+    setActiveTrackId,
+    setIsPlaybackPaused,
+    setIsVisualizerHidden,
+    isSampleMode,
+    volume,
+  ]);
 
   return (
     <div style={controlsStyle}>
@@ -1389,7 +2474,20 @@ function ShopDropTrackControl({
         className="new-music-play-button"
         style={playButtonStyle}
         onClick={() => {
-          setActiveTrackId((current) => (current === track.id ? null : track.id));
+          setActiveTrackId((current) => {
+            if (current !== track.id) {
+              setIsVisualizerHidden(false);
+              setIsPlaybackPaused(false);
+              setShufflePlayedTrackIds([track.id]);
+              return track.id;
+            }
+            setIsPlaybackPaused((currentPaused) => {
+              const nextPaused = !currentPaused;
+              setIsVisualizerHidden(nextPaused);
+              return nextPaused;
+            });
+            return current;
+          });
         }}>
         {isPlaying ? (
           <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" fill="currentColor">
@@ -1403,30 +2501,63 @@ function ShopDropTrackControl({
       </button>
       <span style={trackStackStyle}>
         <span style={sliderWrapStyle}>
-          <input
-            type="range"
-            min={0}
-            max={duration || 0}
-            step={0.01}
-            value={Math.min(currentTime, duration || currentTime)}
-            aria-label={`Seek ${track.title}`}
-            style={trackSliderStyle}
-            className="new-music-track-slider"
-            onChange={(event) => {
-              const nextTime = Number(event.currentTarget.value);
-              setCurrentTime(nextTime);
-              if (audioRef.current !== null) {
-                audioRef.current.currentTime = nextTime;
-              }
-            }}
-          />
+          <span style={trackSliderInputWrapStyle}>
+            <input
+              type="range"
+              min={0}
+              max={duration || 0}
+              step={0.01}
+              value={Math.min(currentTime, duration || currentTime)}
+              aria-label={`Seek ${track.title}`}
+              style={trackSliderStyle}
+              className="new-music-track-slider"
+              onChange={(event) => {
+                const requestedTime = Number(event.currentTarget.value);
+                const isBlockedDemoSeek = isSampleMode && requestedTime > SHOP_TRACK_SAMPLE_SECONDS;
+                if (isBlockedDemoSeek) {
+                  onDemoSeekBlocked();
+                  if (!isPlaying) {
+                    setCurrentTime(0);
+                    if (audioRef.current !== null) {
+                      audioRef.current.currentTime = 0;
+                    }
+                    setIsVisualizerHidden(false);
+                    setIsPlaybackPaused(false);
+                    setShufflePlayedTrackIds([track.id]);
+                    setActiveTrackId(track.id);
+                  }
+                  return;
+                }
+                const nextTime = isSampleMode
+                  ? Math.min(requestedTime, SHOP_TRACK_SAMPLE_SECONDS)
+                  : requestedTime;
+                setCurrentTime(nextTime);
+                if (audioRef.current !== null) {
+                  audioRef.current.currentTime = nextTime;
+                  if (isSampleMode && nextTime >= SHOP_TRACK_SAMPLE_SECONDS && isPlaying) {
+                    finishCurrentTrack(audioRef.current, true);
+                  }
+                }
+              }}
+            />
+            {isSampleMode ? (
+              <span
+                style={{
+                  ...sampleMarkerStyle,
+                  left: sampleMarkerLeft,
+                }}
+              />
+            ) : null}
+          </span>
           <span style={timeLabelStyle}>
-            {formatTrackTime(isPlaying ? currentTime : duration)}
+            {formatTrackTime(isActiveTrack ? currentTime : duration)}
           </span>
         </span>
         <p style={trackTitleStyle}>
           <span style={trackTitlePrefixStyle}>{label} - </span>
-          {track.title}
+          <span style={{fontWeight: isPlaying ? 900 : 400, letterSpacing: isPlaying ? 0.45 : 0}}>
+            {track.title}
+          </span>
         </p>
       </span>
       <audio
@@ -1437,11 +2568,15 @@ function ShopDropTrackControl({
           setDuration(event.currentTarget.duration || 0);
         }}
         onTimeUpdate={(event) => {
-          setCurrentTime(event.currentTarget.currentTime);
+          const audio = event.currentTarget;
+          if (isSampleMode && audio.currentTime >= SHOP_TRACK_SAMPLE_SECONDS) {
+            finishCurrentTrack(audio, true);
+            return;
+          }
+          setCurrentTime(audio.currentTime);
         }}
-        onEnded={() => {
-          setActiveTrackId(null);
-          setCurrentTime(0);
+        onEnded={(event) => {
+          finishCurrentTrack(event.currentTarget);
         }}
       />
     </div>
@@ -1450,79 +2585,176 @@ function ShopDropTrackControl({
 
 type CaseCardProps = {
   activeTrackId: number | null;
+  activeTrackRestartToken: number;
+  carouselAnimation?: string;
   caseIndex: number;
   draggingCaseId: number | null;
   hoveredCaseId: number | null;
+  isCarouselVisible?: boolean;
+  isPlaybackPaused: boolean;
+  isThinView?: boolean;
   item: ShopDropCase;
+  onExpandCase: (item: ShopDropCase) => void;
+  onDemoSeekBlocked: () => void;
+  onSampleLimitReached: () => void;
+  playbackMode: ShopTrackPlaybackMode;
+  resetToken: string;
+  shortLayoutAmount: number;
+  showTrackControls?: boolean;
   setDraggingCaseId: Dispatch<SetStateAction<number | null>>;
   setActiveAudioElement: Dispatch<SetStateAction<HTMLAudioElement | null>>;
   setActiveTrackId: Dispatch<SetStateAction<number | null>>;
+  setActiveTrackRestartToken: Dispatch<SetStateAction<number>>;
   setHoveredCaseId: Dispatch<SetStateAction<number | null>>;
+  setIsPlaybackPaused: Dispatch<SetStateAction<boolean>>;
+  setIsVisualizerHidden: Dispatch<SetStateAction<boolean>>;
+  setShufflePlayedTrackIds: Dispatch<SetStateAction<number[]>>;
+  shufflePlayedTrackIds: number[];
   volume: number;
 };
 
 function ShopDropCaseCard({
   activeTrackId,
+  activeTrackRestartToken,
+  carouselAnimation,
   caseIndex,
   draggingCaseId,
   hoveredCaseId,
+  isCarouselVisible = true,
+  isPlaybackPaused,
+  isThinView = false,
   item,
+  onExpandCase,
+  onDemoSeekBlocked,
+  onSampleLimitReached,
+  playbackMode,
+  resetToken,
+  shortLayoutAmount,
+  showTrackControls = true,
   setDraggingCaseId,
   setActiveAudioElement,
   setActiveTrackId,
+  setActiveTrackRestartToken,
   setHoveredCaseId,
+  setIsPlaybackPaused,
+  setIsVisualizerHidden,
+  setShufflePlayedTrackIds,
+  shufflePlayedTrackIds,
   volume,
 }: CaseCardProps): ReactNode {
   const initialRotationYByIndex = [0.48, 0.24, 0, -0.24, -0.39];
-  const initialRotationY = initialRotationYByIndex[caseIndex] ?? 0;
+  const initialRotationX = isThinView ? 0 : -0.2;
+  const initialRotationY = isThinView ? 0 : (initialRotationYByIndex[caseIndex] ?? 0);
+  const initialRotationZ = isThinView ? 0 : -0.045;
   const isPointerOverCaseRef = useRef(false);
-  const isCaseScaled = draggingCaseId === item.id || (draggingCaseId === null && hoveredCaseId === item.id);
+  const isPlayingCase = !isPlaybackPaused && item.tracks.some((track) => track.id === activeTrackId);
+  const isCaseScaled =
+    isPlayingCase || draggingCaseId === item.id || (draggingCaseId === null && hoveredCaseId === item.id);
+  const wideArcOffsetYByIndex = [0, 12, 22, 12, 0];
+  const wideArcOffsetY = wideArcOffsetYByIndex[caseIndex] ?? 0;
+  const wideCaseShiftY = Math.round(interpolateNumber(90, 24, shortLayoutAmount));
+  const thinCaseShiftY = Math.round(interpolateNumber(92, 34, shortLayoutAmount));
+  const articleStyle = isThinView
+    ? {
+        ...thinCaseCardStyle,
+        transform: `translate(-50%, calc(-50% + ${thinCaseShiftY}px))`,
+      }
+    : {
+        ...caseCardStyle,
+        transform: `translateY(${wideCaseShiftY + wideArcOffsetY}px)`,
+      };
+  const canvasMinHeight = Math.round(interpolateNumber(isThinView ? 190 : 210, isThinView ? 140 : 155, shortLayoutAmount));
+  const canvasMaxHeight = Math.round(interpolateNumber(isThinView ? 285 : 270, isThinView ? 205 : 205, shortLayoutAmount));
+  const canvasViewportHeight = interpolateNumber(isThinView ? 32 : 38, isThinView ? 25 : 28, shortLayoutAmount).toFixed(2);
+  const canvasShellBaseStyle = {
+    ...(isThinView ? thinCanvasShellStyle : canvasShellStyle),
+    height: `clamp(${canvasMinHeight}px, ${canvasViewportHeight}vh, ${canvasMaxHeight}px)`,
+    minHeight: canvasMinHeight,
+  };
+  const playASideFromBeginning = (): void => {
+    const aSideTrackId = item.tracks[0].id;
+    setIsVisualizerHidden(false);
+    setIsPlaybackPaused(false);
+    setShufflePlayedTrackIds([aSideTrackId]);
+    setActiveTrackRestartToken((current) => current + 1);
+    setActiveTrackId(aSideTrackId);
+  };
 
   return (
     <article
       style={{
-        ...caseCardStyle,
-        zIndex: isCaseScaled ? 3 : 1,
+        ...articleStyle,
+        opacity: isCarouselVisible ? 1 : 0,
+        pointerEvents: isCarouselVisible ? 'auto' : 'none',
+        zIndex: isCarouselVisible ? (isCaseScaled ? 3 : 1) : 0,
       }}>
       <div
         style={{
-          ...canvasShellStyle,
-          transform: isCaseScaled ? canvasShellScaleStyle.transform : 'scale(1)',
-          transformOrigin: canvasShellScaleStyle.transformOrigin,
-          transition: canvasShellScaleStyle.transition,
-          willChange: canvasShellScaleStyle.willChange,
-        }}
-        onPointerEnter={() => {
-          isPointerOverCaseRef.current = true;
-          if (draggingCaseId === null) {
-            setHoveredCaseId(item.id);
-          }
-        }}
-        onPointerLeave={() => {
-          isPointerOverCaseRef.current = false;
-          setHoveredCaseId((current) => (current === item.id ? null : current));
+          ...caseCanvasAnimationWrapStyle,
+          animation: carouselAnimation,
         }}>
-        <CdCaseCanvas
-          coverSrc={item.coverSrc}
-          initialRotationY={initialRotationY}
-          onDragEnd={() => {
-            setDraggingCaseId(null);
-            setHoveredCaseId(isPointerOverCaseRef.current ? item.id : null);
+        <div
+          style={{
+            ...canvasShellBaseStyle,
+            transform: isCaseScaled ? canvasShellScaleStyle.transform : 'scale(1)',
+            transformOrigin: canvasShellScaleStyle.transformOrigin,
+            transition: canvasShellScaleStyle.transition,
+            willChange: canvasShellScaleStyle.willChange,
           }}
-          onDragStart={() => {
-            setDraggingCaseId(item.id);
-            setHoveredCaseId(item.id);
+          onPointerEnter={() => {
+            isPointerOverCaseRef.current = true;
+            if (draggingCaseId === null) {
+              setHoveredCaseId(item.id);
+            }
           }}
-        />
+          onPointerLeave={() => {
+            isPointerOverCaseRef.current = false;
+            setHoveredCaseId((current) => (current === item.id ? null : current));
+          }}>
+          <CdCaseCanvas
+            coverSrc={item.coverSrc}
+            initialRotationX={initialRotationX}
+            initialRotationY={initialRotationY}
+            initialRotationZ={initialRotationZ}
+            isAutoRotating={isPlayingCase}
+            onCaseClick={playASideFromBeginning}
+            onCaseDoubleClick={() => {
+              onExpandCase(item);
+            }}
+            onDragEnd={() => {
+              setDraggingCaseId(null);
+              setHoveredCaseId(isPointerOverCaseRef.current ? item.id : null);
+            }}
+            onDragStart={() => {
+              setDraggingCaseId(item.id);
+              setHoveredCaseId(item.id);
+            }}
+            resetToken={resetToken}
+          />
+        </div>
       </div>
-      <div style={caseControlsStackStyle}>
+      <div
+        style={{
+          ...caseControlsStackStyle,
+          opacity: showTrackControls ? 1 : 0,
+          pointerEvents: showTrackControls ? 'auto' : 'none',
+        }}>
         {item.tracks.map((track, index) => (
           <ShopDropTrackControl
             key={track.id}
             activeTrackId={activeTrackId}
+            activeTrackRestartToken={activeTrackRestartToken}
+            isPlaybackPaused={isPlaybackPaused}
             label={index === 0 ? 'A' : 'B'}
+            onDemoSeekBlocked={onDemoSeekBlocked}
+            onSampleLimitReached={onSampleLimitReached}
+            playbackMode={playbackMode}
             setActiveAudioElement={setActiveAudioElement}
             setActiveTrackId={setActiveTrackId}
+            setIsPlaybackPaused={setIsPlaybackPaused}
+            setIsVisualizerHidden={setIsVisualizerHidden}
+            setShufflePlayedTrackIds={setShufflePlayedTrackIds}
+            shufflePlayedTrackIds={shufflePlayedTrackIds}
             track={track}
             volume={volume}
           />
@@ -1534,16 +2766,251 @@ function ShopDropCaseCard({
 
 export default function ShopTracksPage(): ReactNode {
   const [activeTrackId, setActiveTrackId] = useState<number | null>(null);
+  const [activeTrackRestartToken, setActiveTrackRestartToken] = useState(0);
   const [activeAudioElement, setActiveAudioElement] = useState<HTMLAudioElement | null>(null);
   const [draggingCaseId, setDraggingCaseId] = useState<number | null>(null);
   const [hoveredCaseId, setHoveredCaseId] = useState<number | null>(null);
+  const [isPlaybackPaused, setIsPlaybackPaused] = useState(false);
+  const [isVisualizerHidden, setIsVisualizerHidden] = useState(false);
+  const [hasUsedPlaybackModeSwitch, setHasUsedPlaybackModeSwitch] = useState(false);
+  const [hasClosedPlaybackModeHint, setHasClosedPlaybackModeHint] = useState(false);
+  const [expandedCase, setExpandedCase] = useState<ShopDropCase | null>(null);
+  const [isExpandedCaseVisible, setIsExpandedCaseVisible] = useState(false);
+  const [isPlaybackModeHintRendered, setIsPlaybackModeHintRendered] = useState(false);
+  const [playbackModeHintAnimationKey, setPlaybackModeHintAnimationKey] = useState(0);
+  const [isPlaybackModeHintVisible, setIsPlaybackModeHintVisible] = useState(false);
+  const [isPlaybackModeButtonAnimating, setIsPlaybackModeButtonAnimating] = useState(false);
+  const [isLayoutVisible, setIsLayoutVisible] = useState(false);
+  const [playbackMode, setPlaybackMode] = useState<ShopTrackPlaybackMode>('sample');
+  const [shufflePlayedTrackIds, setShufflePlayedTrackIds] = useState<number[]>([]);
+  const [visibleCaseIndex, setVisibleCaseIndex] = useState(0);
+  const [previousVisibleCaseIndex, setPreviousVisibleCaseIndex] = useState<number | null>(null);
+  const [carouselDirection, setCarouselDirection] = useState<ShopTrackCarouselDirection>('next');
+  const [topBarHeight, setTopBarHeight] = useState(TOP_BAR_HEIGHT_PX);
   const [volume, setVolume] = useState(1);
+  const carouselAnimationTimeoutRef = useRef<number | null>(null);
+  const expandedCaseAnimationTimeoutRef = useRef<number | null>(null);
+  const playbackModeAnimationTimeoutRef = useRef<number | null>(null);
+  const playbackModeHintTimeoutRef = useRef<number | null>(null);
+  const topBarRef = useRef<HTMLDivElement | null>(null);
+  const isThinView = useShopTracksThinView();
+  const viewportHeight = useShopTracksViewportHeight();
+  const isLayoutReady = isThinView !== null && viewportHeight !== null;
+  const resolvedIsThinView = isThinView ?? false;
+  const resolvedViewportHeight = viewportHeight ?? 780;
   const activeCoverSrc = getShopDropCoverForTrack(activeTrackId);
+  const cdTiltResetToken = `${resolvedIsThinView ? 'thin' : 'wide'}-${visibleCaseIndex}`;
+  const shortLayoutAmount =
+    clampNumber((780 - resolvedViewportHeight) / 220, 0, 1);
+  const visualizerCompactAmount = Math.pow(shortLayoutAmount, 0.72);
+  const topBarExtraHeight = Math.max(0, topBarHeight - TOP_BAR_HEIGHT_PX);
+  const shouldHideDownloadForHeight = resolvedViewportHeight < 610;
+  const shouldHideVisualizerForHeight = resolvedViewportHeight < 520;
+  const visualizerCompactScale = interpolateNumber(1, 0.32, visualizerCompactAmount);
+  const responsiveGalleryStyle = {
+    ...(resolvedIsThinView ? thinGalleryStyle : galleryStyle),
+    top: topBarHeight,
+    bottom: Math.round(interpolateNumber(76, 126, shortLayoutAmount)),
+  };
+  const responsiveVisualizerLayerStyle: CSSProperties = {
+    top: Math.round(interpolateNumber(66, 26, visualizerCompactAmount)) + topBarExtraHeight,
+    width: 'min(920px, calc(100vw - 24px))',
+    height: 360,
+    transform: `translateX(-50%) scale(${visualizerCompactScale.toFixed(3)})`,
+    transformOrigin: '50% 0',
+  };
+  const carouselArrowTop = `calc(50% + ${Math.round(interpolateNumber(58, 18, shortLayoutAmount))}px)`;
+  const responsiveBottomControlsStyle: CSSProperties = {
+    ...bottomControlsStyle,
+    gap: shouldHideDownloadForHeight ? 3 : bottomControlsStyle.gap,
+  };
+  const responsiveDownloadButtonStyle: CSSProperties = {
+    ...downloadButtonStyle,
+    backgroundColor: resolvedIsThinView ? 'transparent' : downloadButtonStyle.backgroundColor,
+    display: shouldHideDownloadForHeight ? 'none' : downloadButtonStyle.display,
+  };
+  const responsivePlaybackModeCalloutStyle = {
+    ...playbackModeCalloutStyle,
+    '--shop-tracks-mode-hint-x': resolvedIsThinView
+      ? 'calc(-50% - 21px)'
+      : 'calc(-50% + 4px)',
+    ...(resolvedIsThinView
+      ? {
+          width: 116,
+          padding: '8px 14px 8px 10px',
+          transform: 'translateX(calc(-50% - 21px))',
+        }
+      : {}),
+  } as CSSProperties;
+  const responsivePlaybackModeCalloutBreakStyle: CSSProperties = {
+    ...playbackModeCalloutBreakStyle,
+    ...(resolvedIsThinView ? {left: 'calc(50% + 24.5px)'} : {}),
+  };
+  const responsivePlaybackModeCalloutPointerStyle: CSSProperties = {
+    ...playbackModeCalloutPointerStyle,
+    ...(resolvedIsThinView ? {left: 'calc(50% + 24.5px)'} : {}),
+  };
+
+  useEffect(() => {
+    const topBar = topBarRef.current;
+    if (topBar === null) {
+      return undefined;
+    }
+
+    const updateTopBarHeight = (): void => {
+      setTopBarHeight(Math.ceil(topBar.getBoundingClientRect().height));
+    };
+
+    updateTopBarHeight();
+    const resizeObserver = new ResizeObserver(updateTopBarHeight);
+    resizeObserver.observe(topBar);
+    window.addEventListener('resize', updateTopBarHeight);
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', updateTopBarHeight);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isLayoutReady) {
+      setIsLayoutVisible(false);
+      return undefined;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      setIsLayoutVisible(true);
+    });
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [isLayoutReady]);
+
+  useEffect(() => {
+    return () => {
+      if (carouselAnimationTimeoutRef.current !== null) {
+        window.clearTimeout(carouselAnimationTimeoutRef.current);
+      }
+      if (playbackModeAnimationTimeoutRef.current !== null) {
+        window.clearTimeout(playbackModeAnimationTimeoutRef.current);
+      }
+      if (expandedCaseAnimationTimeoutRef.current !== null) {
+        window.clearTimeout(expandedCaseAnimationTimeoutRef.current);
+      }
+      if (playbackModeHintTimeoutRef.current !== null) {
+        window.clearTimeout(playbackModeHintTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const showCarouselCase = (direction: ShopTrackCarouselDirection): void => {
+    if (carouselAnimationTimeoutRef.current !== null) {
+      window.clearTimeout(carouselAnimationTimeoutRef.current);
+    }
+    setPreviousVisibleCaseIndex(visibleCaseIndex);
+    setCarouselDirection(direction);
+    setVisibleCaseIndex((currentIndex) => {
+      const offset = direction === 'next' ? 1 : -1;
+      return (currentIndex + offset + SHOP_DROP_CASES.length) % SHOP_DROP_CASES.length;
+    });
+    carouselAnimationTimeoutRef.current = window.setTimeout(() => {
+      setPreviousVisibleCaseIndex(null);
+      carouselAnimationTimeoutRef.current = null;
+    }, 280);
+  };
+
+  const showPlaybackModeHint = (): void => {
+    if (!hasUsedPlaybackModeSwitch && !hasClosedPlaybackModeHint) {
+      if (playbackModeHintTimeoutRef.current !== null) {
+        window.clearTimeout(playbackModeHintTimeoutRef.current);
+      }
+      setIsPlaybackModeHintRendered(true);
+      setPlaybackModeHintAnimationKey((current) => current + 1);
+      setIsPlaybackModeHintVisible(false);
+      playbackModeHintTimeoutRef.current = window.setTimeout(() => {
+        setIsPlaybackModeHintVisible(true);
+        playbackModeHintTimeoutRef.current = null;
+      }, 20);
+    }
+  };
+
+  const forceShowPlaybackModeHint = (): void => {
+    if (playbackModeHintTimeoutRef.current !== null) {
+      window.clearTimeout(playbackModeHintTimeoutRef.current);
+    }
+    setIsPlaybackModeHintRendered(true);
+    setPlaybackModeHintAnimationKey((current) => current + 1);
+    setIsPlaybackModeHintVisible(false);
+    playbackModeHintTimeoutRef.current = window.setTimeout(() => {
+      setIsPlaybackModeHintVisible(true);
+      playbackModeHintTimeoutRef.current = null;
+    }, 20);
+  };
+
+  const hidePlaybackModeHint = (): void => {
+    if (playbackModeHintTimeoutRef.current !== null) {
+      window.clearTimeout(playbackModeHintTimeoutRef.current);
+    }
+    setIsPlaybackModeHintVisible(false);
+    playbackModeHintTimeoutRef.current = window.setTimeout(() => {
+      setIsPlaybackModeHintRendered(false);
+      playbackModeHintTimeoutRef.current = null;
+    }, 220);
+  };
+
+  const closePlaybackModeHint = (): void => {
+    if (playbackModeHintTimeoutRef.current !== null) {
+      window.clearTimeout(playbackModeHintTimeoutRef.current);
+      playbackModeHintTimeoutRef.current = null;
+    }
+    setHasClosedPlaybackModeHint(true);
+    setIsPlaybackModeHintVisible(false);
+    setIsPlaybackModeHintRendered(false);
+  };
+
+  const markPlaybackModeSwitchUsed = (): void => {
+    setHasUsedPlaybackModeSwitch(true);
+    hidePlaybackModeHint();
+  };
+
+  const animatePlaybackModeButton = (): void => {
+    if (playbackModeAnimationTimeoutRef.current !== null) {
+      window.clearTimeout(playbackModeAnimationTimeoutRef.current);
+    }
+    setIsPlaybackModeButtonAnimating(true);
+    playbackModeAnimationTimeoutRef.current = window.setTimeout(() => {
+      setIsPlaybackModeButtonAnimating(false);
+      playbackModeAnimationTimeoutRef.current = null;
+    }, 180);
+  };
+
+  const openExpandedCase = (item: ShopDropCase): void => {
+    if (expandedCaseAnimationTimeoutRef.current !== null) {
+      window.clearTimeout(expandedCaseAnimationTimeoutRef.current);
+      expandedCaseAnimationTimeoutRef.current = null;
+    }
+    setExpandedCase(item);
+    setIsExpandedCaseVisible(false);
+    expandedCaseAnimationTimeoutRef.current = window.setTimeout(() => {
+      setIsExpandedCaseVisible(true);
+      expandedCaseAnimationTimeoutRef.current = null;
+    }, 20);
+  };
+
+  const closeExpandedCase = (): void => {
+    if (expandedCaseAnimationTimeoutRef.current !== null) {
+      window.clearTimeout(expandedCaseAnimationTimeoutRef.current);
+    }
+    setIsExpandedCaseVisible(false);
+    expandedCaseAnimationTimeoutRef.current = window.setTimeout(() => {
+      setExpandedCase(null);
+      expandedCaseAnimationTimeoutRef.current = null;
+    }, 260);
+  };
 
   return (
     <main aria-label="shop tracks research dept." style={pageStyle}>
       <style>{newMusicSliderStyles}</style>
-      <div aria-label="shop tracks top bar" style={topBarStyle}>
+      <div ref={topBarRef} aria-label="shop tracks top bar" style={topBarStyle}>
         <span style={topBarTitleStyle}>mons future aesthetical research dept.</span>
         <div style={topBarButtonsStyle}>
           <button
@@ -1573,33 +3040,153 @@ export default function ShopTracksPage(): ReactNode {
           </button>
         </div>
       </div>
+      {isLayoutReady ? (
+        <div
+          style={{
+            ...settledContentLayerStyle,
+            opacity: isLayoutVisible ? 1 : 0,
+          }}>
       <AudioRadialVisualizer
         activeCoverSrc={activeCoverSrc}
         activeTrackId={activeTrackId}
         audioElement={activeAudioElement}
+        isPlaybackPaused={isPlaybackPaused}
+        isVisualizerHidden={isVisualizerHidden || shouldHideVisualizerForHeight}
+        layerStyle={responsiveVisualizerLayerStyle}
+        playbackMode={playbackMode}
+        setIsPlaybackPaused={setIsPlaybackPaused}
+        setIsVisualizerHidden={setIsVisualizerHidden}
       />
-      <section aria-label="Shop drop tracks" style={galleryStyle}>
-        {SHOP_DROP_CASES.map((item, index) => (
+      <section aria-label="Shop drop tracks" style={responsiveGalleryStyle}>
+        {resolvedIsThinView ? (
+          <button
+            type="button"
+            aria-label="Previous album"
+            style={{...carouselArrowLeftStyle, top: carouselArrowTop}}
+            onClick={() => {
+              showCarouselCase('previous');
+            }}>
+            <svg viewBox="0 0 24 48" width="24" height="48" aria-hidden="true">
+              <path
+                d="M15 14L7 24L15 34"
+                fill="none"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2.4"
+              />
+            </svg>
+          </button>
+        ) : null}
+        {SHOP_DROP_CASES.map((item, index) => {
+          const isCurrentCarouselCase = !resolvedIsThinView || index === visibleCaseIndex;
+          const isLeavingCarouselCase = resolvedIsThinView && index === previousVisibleCaseIndex;
+          const isVisibleCarouselCase = isCurrentCarouselCase || isLeavingCarouselCase;
+          const carouselAnimation =
+            !resolvedIsThinView || previousVisibleCaseIndex === null
+              ? undefined
+              : isCurrentCarouselCase
+                ? `shop-tracks-case-enter-${carouselDirection} 260ms ease both`
+                : isLeavingCarouselCase
+                  ? `shop-tracks-case-exit-${carouselDirection} 260ms ease both`
+                  : undefined;
+
+          return (
           <ShopDropCaseCard
             key={item.id}
             activeTrackId={activeTrackId}
+            activeTrackRestartToken={activeTrackRestartToken}
+            carouselAnimation={carouselAnimation}
             caseIndex={index}
             draggingCaseId={draggingCaseId}
             hoveredCaseId={hoveredCaseId}
+            isCarouselVisible={isVisibleCarouselCase}
+            isPlaybackPaused={isPlaybackPaused}
+            isThinView={resolvedIsThinView}
             item={item}
+            onExpandCase={openExpandedCase}
+            onDemoSeekBlocked={forceShowPlaybackModeHint}
+            onSampleLimitReached={showPlaybackModeHint}
+            playbackMode={playbackMode}
+            resetToken={cdTiltResetToken}
+            shortLayoutAmount={shortLayoutAmount}
+            showTrackControls={isCurrentCarouselCase}
             setDraggingCaseId={setDraggingCaseId}
             setActiveAudioElement={setActiveAudioElement}
             setActiveTrackId={setActiveTrackId}
+            setActiveTrackRestartToken={setActiveTrackRestartToken}
             setHoveredCaseId={setHoveredCaseId}
+            setIsPlaybackPaused={setIsPlaybackPaused}
+            setIsVisualizerHidden={setIsVisualizerHidden}
+            setShufflePlayedTrackIds={setShufflePlayedTrackIds}
+            shufflePlayedTrackIds={shufflePlayedTrackIds}
             volume={volume}
           />
-        ))}
+          );
+        })}
+        {resolvedIsThinView ? (
+          <button
+            type="button"
+            aria-label="Next album"
+            style={{...carouselArrowRightStyle, top: carouselArrowTop}}
+            onClick={() => {
+              showCarouselCase('next');
+            }}>
+            <svg viewBox="0 0 24 48" width="24" height="48" aria-hidden="true">
+              <path
+                d="M9 14L17 24L9 34"
+                fill="none"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2.4"
+              />
+            </svg>
+          </button>
+        ) : null}
       </section>
-      <div style={bottomControlsStyle}>
+      {expandedCase !== null ? (
+        <div
+          role="presentation"
+          style={{
+            ...expandedCaseOverlayStyle,
+            opacity: isExpandedCaseVisible ? 1 : 0,
+          }}
+          onClick={closeExpandedCase}>
+          <div
+            style={{
+              ...expandedCaseStageStyle,
+              opacity: isExpandedCaseVisible ? 1 : 0,
+              transform: isExpandedCaseVisible
+                ? 'translateY(-14px) scale(1)'
+                : 'translateY(78px) scale(0.52)',
+            }}
+            onClick={(event) => {
+              event.stopPropagation();
+            }}>
+            <CdCaseCanvas
+              canvasStyleOverride={expandedCanvasStyle}
+              coverSrc={expandedCase.coverSrc}
+              initialRotationX={0}
+              initialRotationY={0}
+              initialRotationZ={0}
+              isAutoRotating={false}
+              maxPixelRatio={4}
+              modelScale={1.14}
+              onDragEnd={() => undefined}
+              onSceneMissClick={closeExpandedCase}
+              onDragStart={() => undefined}
+              preferSharpCover
+              resetToken={`expanded-${expandedCase.id}`}
+            />
+          </div>
+        </div>
+      ) : null}
+      <div style={responsiveBottomControlsStyle}>
         <a
           href={SHOP_DROP_DOWNLOAD_SRC}
           download="mons-shop-drop-tracks.zip"
-          style={downloadButtonStyle}>
+          style={responsiveDownloadButtonStyle}>
           <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true">
             <path
               d="M12 3V15M7.5 10.5L12 15L16.5 10.5M5 20H19"
@@ -1629,8 +3216,64 @@ export default function ShopTracksPage(): ReactNode {
               setVolume(Number(event.currentTarget.value));
             }}
           />
+          <span style={playbackModeButtonWrapStyle}>
+            {isPlaybackModeHintRendered ? (
+              <span
+                key={playbackModeHintAnimationKey}
+                style={{
+                  ...responsivePlaybackModeCalloutStyle,
+                  animation: isPlaybackModeHintVisible
+                    ? `${resolvedIsThinView ? 'shop-tracks-mode-hint-bob-thin' : 'shop-tracks-mode-hint-bob'} 760ms cubic-bezier(0.2, 1.05, 0.3, 1) 70ms both`
+                    : undefined,
+                  opacity: isPlaybackModeHintVisible ? 1 : 0,
+                  transition: 'opacity 180ms ease',
+                }}>
+                click here to switch out of preview/demo mode
+                <button
+                  type="button"
+                  aria-label="Close preview mode hint"
+                  style={playbackModeCalloutCloseButtonStyle}
+                  onClick={closePlaybackModeHint}>
+                  x
+                </button>
+                <span style={responsivePlaybackModeCalloutBreakStyle} />
+                <span style={responsivePlaybackModeCalloutPointerStyle} />
+              </span>
+            ) : null}
+            <button
+              type="button"
+              aria-label={`Playback mode: ${SHOP_TRACK_PLAYBACK_MODE_LABELS[playbackMode]}`}
+              title={SHOP_TRACK_PLAYBACK_MODE_LABELS[playbackMode]}
+              style={playbackModeButtonStyle}
+              onClick={() => {
+                animatePlaybackModeButton();
+                markPlaybackModeSwitchUsed();
+                setPlaybackMode((currentMode) => {
+                  const currentIndex = SHOP_TRACK_PLAYBACK_MODES.indexOf(currentMode);
+                  const nextMode =
+                    SHOP_TRACK_PLAYBACK_MODES[(currentIndex + 1) % SHOP_TRACK_PLAYBACK_MODES.length] ?? 'sample';
+                  setShufflePlayedTrackIds(nextMode === 'shuffle' && activeTrackId !== null ? [activeTrackId] : []);
+                  return nextMode;
+                });
+              }}>
+              <span
+                style={{
+                  ...playbackModeButtonIconWrapStyle,
+                  transform: isPlaybackModeButtonAnimating
+                    ? 'scale(1.32)'
+                    : 'scale(1)',
+                  transition: isPlaybackModeButtonAnimating
+                    ? 'transform 95ms cubic-bezier(0.2, 1.6, 0.35, 1)'
+                    : 'transform 150ms ease-out',
+                }}>
+                <PlaybackModeIcon mode={playbackMode} />
+              </span>
+            </button>
+          </span>
         </label>
       </div>
+        </div>
+      ) : null}
     </main>
   );
 }
