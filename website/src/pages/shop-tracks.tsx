@@ -437,6 +437,11 @@ const trackTitlePrefixStyle: CSSProperties = {
   color: '#9a9a9a',
 };
 
+const trackTitlePreviewStyle: CSSProperties = {
+  ...trackTitlePrefixStyle,
+  fontSize: 9,
+};
+
 const trackStackStyle: CSSProperties = {
   display: 'grid',
   gap: 1,
@@ -479,11 +484,34 @@ const trackSliderInputWrapStyle: CSSProperties = {
   minWidth: 0,
   display: 'flex',
   alignItems: 'center',
+  overflow: 'hidden',
 };
 
 const trackSliderStyle: CSSProperties = {
+  position: 'relative',
+  zIndex: 2,
   width: '100%',
   cursor: 'pointer',
+};
+
+const playbackHeadTrailStyle: CSSProperties = {
+  position: 'absolute',
+  top: '50%',
+  left: 0,
+  width: '100%',
+  height: 16,
+  transform: 'translateY(-50%)',
+  pointerEvents: 'none',
+  zIndex: 3,
+};
+
+const playbackHeadTrailSegmentBaseStyle: CSSProperties = {
+  position: 'absolute',
+  top: '50%',
+  height: 3,
+  borderRadius: 1,
+  backgroundColor: '#111',
+  transform: 'translateY(-50%)',
 };
 
 const sampleMarkerStyle: CSSProperties = {
@@ -496,6 +524,7 @@ const sampleMarkerStyle: CSSProperties = {
   opacity: 0.45,
   transform: 'translate(-1px, -50%)',
   pointerEvents: 'none',
+  zIndex: 4,
 };
 
 const timeLabelStyle: CSSProperties = {
@@ -855,6 +884,20 @@ const newMusicSliderStyles = `
   }
   100% {
     transform: translateX(var(--shop-tracks-mode-hint-x, calc(-50% - 21px))) translateY(0);
+  }
+}
+@keyframes shop-tracks-playhead-trail-pulse {
+  0% {
+    opacity: 0.16;
+    transform: translateY(-50%) scaleX(0.72);
+  }
+  45% {
+    opacity: 0.56;
+    transform: translateY(-50%) scaleX(1);
+  }
+  100% {
+    opacity: 0.18;
+    transform: translateY(-50%) scaleX(0.78);
   }
 }
 `;
@@ -2323,9 +2366,11 @@ function ShopDropTrackControl({
 }: TrackControlProps): ReactNode {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const lastRestartTokenRef = useRef(activeTrackRestartToken);
+  const playheadTrailHideTimeoutRef = useRef<number | null>(null);
   const wasActiveTrackRef = useRef(false);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
+  const [isPlayheadTrailRendered, setIsPlayheadTrailRendered] = useState(false);
   const isActiveTrack = activeTrackId === track.id;
   const isPlaying = isActiveTrack && !isPlaybackPaused;
   const isSampleMode = playbackMode === 'sample';
@@ -2333,6 +2378,13 @@ function ShopDropTrackControl({
     duration > SHOP_TRACK_SAMPLE_SECONDS
       ? `${(SHOP_TRACK_SAMPLE_SECONDS / duration) * 100}%`
       : '100%';
+  const sliderDuration = duration || 0;
+  const playheadProgress =
+    sliderDuration > 0 ? clampNumber(currentTime / sliderDuration, 0, 1) : 0;
+  const playheadTrailLeft = `${playheadProgress * 100}%`;
+  const canRenderPlayheadTrail = sliderDuration > 0 && currentTime > 0.08;
+  const shouldExpandPlayheadTrail = isPlaying && canRenderPlayheadTrail;
+  const shouldKeepCollapsedPlayheadTrail = isActiveTrack && !isPlaying && canRenderPlayheadTrail;
 
   const stopCurrentTrack = (trackId: number): void => {
     setIsVisualizerHidden(true);
@@ -2415,6 +2467,32 @@ function ShopDropTrackControl({
 
     stopCurrentTrack(track.id);
   };
+
+  useEffect(() => {
+    if (playheadTrailHideTimeoutRef.current !== null) {
+      window.clearTimeout(playheadTrailHideTimeoutRef.current);
+      playheadTrailHideTimeoutRef.current = null;
+    }
+
+    if (shouldExpandPlayheadTrail || shouldKeepCollapsedPlayheadTrail) {
+      setIsPlayheadTrailRendered(true);
+      return undefined;
+    }
+
+    if (isPlayheadTrailRendered) {
+      playheadTrailHideTimeoutRef.current = window.setTimeout(() => {
+        setIsPlayheadTrailRendered(false);
+        playheadTrailHideTimeoutRef.current = null;
+      }, 340);
+    }
+
+    return () => {
+      if (playheadTrailHideTimeoutRef.current !== null) {
+        window.clearTimeout(playheadTrailHideTimeoutRef.current);
+        playheadTrailHideTimeoutRef.current = null;
+      }
+    };
+  }, [isPlayheadTrailRendered, shouldExpandPlayheadTrail, shouldKeepCollapsedPlayheadTrail]);
 
   useEffect(() => {
     if (audioRef.current !== null) {
@@ -2502,6 +2580,37 @@ function ShopDropTrackControl({
       <span style={trackStackStyle}>
         <span style={sliderWrapStyle}>
           <span style={trackSliderInputWrapStyle}>
+            {isPlayheadTrailRendered ? (
+              <span aria-hidden="true" style={playbackHeadTrailStyle}>
+                {[0, 1, 2, 3, 4].map((index) => {
+                  const width = Math.max(2, 9 - index * 1.5);
+                  const collapsedWidth = Math.max(1.5, width * 0.32);
+                  const expandedOffset = 10 + index * 6;
+                  const collapsedOffset = 2 + index * 0.7;
+                  const offset = shouldExpandPlayheadTrail ? expandedOffset : collapsedOffset;
+                  return (
+                    <span
+                      key={index}
+                      style={{
+                        ...playbackHeadTrailSegmentBaseStyle,
+                        left: `calc(${playheadTrailLeft} - ${offset}px)`,
+                        width: shouldExpandPlayheadTrail ? width : collapsedWidth,
+                        opacity: shouldExpandPlayheadTrail
+                          ? Math.max(0.12, 0.5 - index * 0.075)
+                          : Math.max(0.04, 0.16 - index * 0.025),
+                        transformOrigin: '100% 50%',
+                        transition:
+                          'left 260ms cubic-bezier(0.22, 1, 0.36, 1), width 260ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease',
+                        animation: shouldExpandPlayheadTrail
+                          ? `shop-tracks-playhead-trail-pulse ${520 + index * 70}ms ease-in-out infinite`
+                          : 'none',
+                        animationDelay: `${index * -55}ms`,
+                      }}
+                    />
+                  );
+                })}
+              </span>
+            ) : null}
             <input
               type="range"
               min={0}
@@ -2558,6 +2667,7 @@ function ShopDropTrackControl({
           <span style={{fontWeight: isPlaying ? 900 : 400, letterSpacing: isPlaying ? 0.45 : 0}}>
             {track.title}
           </span>
+          {isSampleMode ? <span style={trackTitlePreviewStyle}> (preview)</span> : null}
         </p>
       </span>
       <audio
