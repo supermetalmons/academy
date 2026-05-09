@@ -22,9 +22,9 @@ const alternatePlayItems: Array<{
   note?: string;
 }> = [
   {
-    label: "Meinong's Tabletop Edition*",
+    label: "Meinong's Tabletop*",
     href: 'https://coldnightwarmth.github.io/meinongs-tabletop/',
-    note: '(*you can also play Mana Garden, a Mons version of Snake here!)',
+    note: '(*you can also play Mana Garden, a Mons version of Snake, here!)',
   },
   {
     label: 'Tabletop Simulator Edition',

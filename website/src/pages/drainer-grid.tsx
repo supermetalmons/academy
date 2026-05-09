@@ -861,6 +861,14 @@ export default function DrainerGridPage(): ReactNode {
             }}>
             3d board
           </button>
+          <button
+            type="button"
+            style={topBarButtonStyle}
+            onClick={() => {
+              window.location.assign('/shop-tracks');
+            }}>
+            shop tracks
+          </button>
         </div>
       </div>
       <div data-grid-zoom-controls="true" aria-label="Zoom controls" style={zoomControlsStyle}>

@@ -2756,6 +2756,14 @@ export default function ThreeDBoardPage(): ReactNode {
             }}>
             3d board
           </button>
+          <button
+            type="button"
+            style={currentTopBarButtonStyle}
+            onClick={() => {
+              window.location.assign('/shop-tracks');
+            }}>
+            shop tracks
+          </button>
         </div>
       </div>
       {isItemPickupChoiceOpen ? <div aria-hidden="true" style={itemChoiceGlobalBackdropBlurStyle} /> : null}
