@@ -6,7 +6,7 @@ import {
   preloadSiteSoundEffects,
 } from '@site/src/utils/siteSoundEffects';
 
-type InstructionSection = 'basic-rules' | 'video-tutorial' | 'lessons' | 'manual';
+type InstructionSection = 'basic-rules' | 'video-tutorial' | 'history' | 'lessons' | 'manual';
 
 type InstructionSubnavProps = {
   active: InstructionSection;
@@ -73,6 +73,12 @@ const lessonsIconStyle: CSSProperties = {
   height: '16px',
 };
 
+const historyIconStyle: CSSProperties = {
+  ...labelIconStyle,
+  width: '17px',
+  height: '17px',
+};
+
 const manualIconStyle: CSSProperties = {
   ...labelIconStyle,
   width: '19px',
@@ -86,7 +92,7 @@ const basicRulesLabel: ReactNode = (
     <svg
       viewBox="0 0 24 24"
       aria-hidden="true"
-      style={labelIconStyle}
+      style={historyIconStyle}
       className="section-subnav__label-icon"
       fill="none"
       stroke="currentColor"
@@ -125,6 +131,32 @@ const videoTutorialLabel: ReactNode = (
       <path d="M8.4 6.9v10.2L17 12z" fill="currentColor" stroke="none" />
     </svg>
     <span className="section-subnav__label-text">Videos</span>
+  </span>
+);
+
+const historyLabel: ReactNode = (
+  <span style={labelWithIconStyle}>
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      style={labelIconStyle}
+      className="section-subnav__label-icon"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round">
+      <path
+        d="M14 2.1 15.7 7.3 20.9 9l-5.2 1.7L14 15.9l-1.7-5.2L7.1 9l5.2-1.7z"
+        fill="currentColor"
+        stroke="none"
+      />
+      <path d="M4.5 8.4C1.9 11 1.7 14.1 3.8 16.1c2.8 2.7 9.5 1.2 15.5-3.4" />
+      <path d="M19.3 12.7 16.3 12.2l1.4 2.7" />
+      <path d="M5.9 3.5l.5 1.6 1.6.5-1.6.5-.5 1.6-.5-1.6-1.6-.5 1.6-.5z" fill="currentColor" stroke="none" />
+      <path d="M20 3.5l.35 1.1 1.1.35-1.1.35L20 6.4l-.35-1.1-1.1-.35 1.1-.35z" fill="currentColor" stroke="none" />
+    </svg>
+    <span className="section-subnav__label-text">History</span>
   </span>
 );
 
@@ -172,6 +204,7 @@ const manualLabel = (isActive: boolean): ReactNode => (
 const items: Array<{key: InstructionSection; label: (isActive: boolean) => ReactNode; to: string}> = [
   {key: 'basic-rules', label: () => basicRulesLabel, to: '/instruction'},
   {key: 'video-tutorial', label: () => videoTutorialLabel, to: '/instruction/video-tutorial'},
+  {key: 'history', label: () => historyLabel, to: '/instruction/history'},
   {key: 'lessons', label: lessonsLabel, to: '/instruction/lessons'},
   {key: 'manual', label: manualLabel, to: '/instruction/manual'},
 ];
@@ -193,6 +226,8 @@ export default function InstructionSubnav({active}: InstructionSubnavProps): Rea
             key={item.key}
             to={item.to}
             className={`section-subnav__tab${isActive ? ' section-subnav__tab--active' : ''}`}
+            draggable={false}
+            onDragStart={(event) => event.preventDefault()}
             onMouseDown={() => setPressedItem(item.key)}
             onMouseUp={() => setPressedItem(null)}
             onMouseLeave={() => setPressedItem(null)}

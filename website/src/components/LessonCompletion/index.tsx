@@ -5,6 +5,10 @@ import {
   readLessonCompletionsFromStorage,
   writeLessonCompletionsToStorage,
 } from '@site/src/constants/lessonFavorites';
+import {
+  playSiteSoundEffect,
+  preloadSiteSoundEffects,
+} from '@site/src/utils/siteSoundEffects';
 
 type LessonCompletionBadgeProps = {
   lessonId: LessonId;
@@ -168,6 +172,7 @@ export function LessonCompletionButton({
     if (typeof window === 'undefined') {
       return;
     }
+    preloadSiteSoundEffects(['completion']);
     const syncCompletionState = () => {
       setIsLessonCompleted(readLessonCompletionsFromStorage().has(lessonId));
     };
@@ -186,6 +191,7 @@ export function LessonCompletionButton({
       nextCompletions.delete(lessonId);
     } else {
       nextCompletions.add(lessonId);
+      playSiteSoundEffect('completion');
     }
     const safeCompletions = writeLessonCompletionsToStorage(nextCompletions);
     setIsLessonCompleted(safeCompletions.has(lessonId));

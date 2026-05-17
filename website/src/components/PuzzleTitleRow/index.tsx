@@ -6,6 +6,10 @@ import {
   readPuzzleCompletionsFromStorage,
   writePuzzleCompletionsToStorage,
 } from '@site/src/constants/puzzleFavorites';
+import {
+  playSiteSoundEffect,
+  preloadSiteSoundEffects,
+} from '@site/src/utils/siteSoundEffects';
 import {useEffect, useState, type CSSProperties, type ReactNode} from 'react';
 
 type PuzzleTitleRowProps = {
@@ -408,10 +412,13 @@ export default function PuzzleTitleRow({
     const isCorrectSolution = checkSolution?.() === true;
     setSubmitResult(isCorrectSolution ? 'correct' : 'incorrect');
     if (isCorrectSolution) {
+      playSiteSoundEffect('completion');
       markPuzzleCompleted();
       setCompletionBadgeReplayNonce((current) => current + 1);
       launchPuzzleWinConfetti();
       onCorrectSubmit?.();
+    } else {
+      playSiteSoundEffect('incorrectPuzzle');
     }
   };
 
@@ -419,6 +426,7 @@ export default function PuzzleTitleRow({
     if (typeof window === 'undefined') {
       return;
     }
+    preloadSiteSoundEffects(['completion', 'incorrectPuzzle']);
     const mediaQuery = window.matchMedia(
       `(max-width: ${PUZZLE_THIN_ACTION_LAYOUT_MAX_WIDTH_PX}px)`,
     );

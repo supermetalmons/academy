@@ -1616,6 +1616,8 @@ export default function NewTopLayout({
             key={item.label}
             to={item.navigateTo ?? item.to}
             className="mons-box-button"
+            draggable={false}
+            onDragStart={(event) => event.preventDefault()}
             onMouseDown={() => setPressedItem(item.to)}
             onMouseUp={() => setPressedItem(null)}
             onMouseLeave={() => setPressedItem(null)}
@@ -1807,7 +1809,11 @@ export default function NewTopLayout({
           {!isMobileSidebarMode && showNavBelowRow ? (
             <div style={navBelowRowStyle}>{renderPrimaryNav(navBelowNavStyle)}</div>
           ) : null}
-          <MiniSiteMusicControls hidden={isMusicRoute} />
+          <MiniSiteMusicControls
+            hidden={isMusicRoute}
+            forceVisible={isHomepageRoute}
+            randomizeWhenForced={isHomepageRoute}
+          />
         </header>
         {isMobileSidebarMode ? (
           <>
@@ -1861,6 +1867,8 @@ export default function NewTopLayout({
                       key={`mobile-${item.label}`}
                       to={item.navigateTo ?? item.to}
                       className="mons-box-button"
+                      draggable={false}
+                      onDragStart={(event) => event.preventDefault()}
                       onMouseDown={() => setPressedItem(item.to)}
                       onMouseUp={() => setPressedItem(null)}
                       onMouseLeave={() => setPressedItem(null)}

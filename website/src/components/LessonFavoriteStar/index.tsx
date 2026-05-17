@@ -4,6 +4,10 @@ import {
   readLessonFavoritesFromStorage,
   writeLessonFavoritesToStorage,
 } from '@site/src/constants/lessonFavorites';
+import {
+  playFavoriteChangeSound,
+  preloadSiteSoundEffects,
+} from '@site/src/utils/siteSoundEffects';
 import {useEffect, useRef, useState, type CSSProperties, type ReactNode} from 'react';
 
 type LessonFavoriteStarProps = {
@@ -77,6 +81,7 @@ export default function LessonFavoriteStar({
     if (typeof window === 'undefined') {
       return;
     }
+    preloadSiteSoundEffects(['favoriteOn', 'favoriteOff']);
     const syncFavoriteState = () => {
       setIsFavorite(readLessonFavoritesFromStorage().has(lessonId));
     };
@@ -150,11 +155,13 @@ export default function LessonFavoriteStar({
   const toggleFavorite = () => {
     const nextFavorites = readLessonFavoritesFromStorage();
     if (nextFavorites.has(lessonId)) {
+      playFavoriteChangeSound(false);
       nextFavorites.delete(lessonId);
       writeLessonFavoritesToStorage(nextFavorites);
       setIsFavorite(false);
       return;
     }
+    playFavoriteChangeSound(true);
     nextFavorites.add(lessonId);
     writeLessonFavoritesToStorage(nextFavorites);
     setIsFavorite(true);

@@ -10,6 +10,7 @@ type ResourcesSection = 'super-metal-mons' | 'sandbox' | 'gallery' | 'music' | '
 
 type ResourcesSubnavProps = {
   active: ResourcesSection;
+  onTabClick?: (section: ResourcesSection) => void;
 };
 
 const wrapStyle: CSSProperties = {
@@ -164,7 +165,7 @@ const items: Array<{key: ResourcesSection; label: ReactNode; to: string}> = [
   {key: 'other', label: linksLabel, to: '/resources/links'},
 ];
 
-export default function ResourcesSubnav({active}: ResourcesSubnavProps): ReactNode {
+export default function ResourcesSubnav({active, onTabClick}: ResourcesSubnavProps): ReactNode {
   const [pressedItem, setPressedItem] = useState<ResourcesSection | null>(null);
 
   useEffect(() => {
@@ -181,12 +182,15 @@ export default function ResourcesSubnav({active}: ResourcesSubnavProps): ReactNo
             key={item.key}
             to={item.to}
             className={`section-subnav__tab${isActive ? ' section-subnav__tab--active' : ''}`}
+            draggable={false}
+            onDragStart={(event) => event.preventDefault()}
             onMouseDown={() => setPressedItem(item.key)}
             onMouseUp={() => setPressedItem(null)}
             onMouseLeave={() => setPressedItem(null)}
             onTouchStart={() => setPressedItem(item.key)}
             onTouchEnd={() => setPressedItem(null)}
             onClick={() => {
+              onTabClick?.(item.key);
               playSiteSoundEffect('pageButton');
             }}
             style={{

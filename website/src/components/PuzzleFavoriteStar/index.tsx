@@ -4,6 +4,10 @@ import {
   readPuzzleFavoritesFromStorage,
   writePuzzleFavoritesToStorage,
 } from '@site/src/constants/puzzleFavorites';
+import {
+  playFavoriteChangeSound,
+  preloadSiteSoundEffects,
+} from '@site/src/utils/siteSoundEffects';
 import {useEffect, useRef, useState, type CSSProperties, type ReactNode} from 'react';
 
 type PuzzleFavoriteStarProps = {
@@ -77,6 +81,7 @@ export default function PuzzleFavoriteStar({
     if (typeof window === 'undefined') {
       return;
     }
+    preloadSiteSoundEffects(['favoriteOn', 'favoriteOff']);
     const syncFavoriteState = () => {
       setIsFavorite(readPuzzleFavoritesFromStorage().has(puzzleId));
     };
@@ -150,11 +155,13 @@ export default function PuzzleFavoriteStar({
   const toggleFavorite = () => {
     const nextFavorites = readPuzzleFavoritesFromStorage();
     if (nextFavorites.has(puzzleId)) {
+      playFavoriteChangeSound(false);
       nextFavorites.delete(puzzleId);
       writePuzzleFavoritesToStorage(nextFavorites);
       setIsFavorite(false);
       return;
     }
+    playFavoriteChangeSound(true);
     nextFavorites.add(puzzleId);
     writePuzzleFavoritesToStorage(nextFavorites);
     setIsFavorite(true);

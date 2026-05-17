@@ -5,7 +5,7 @@ import type * as Preset from '@docusaurus/preset-classic';
 const config: Config = {
   title: 'Mons Academy',
   tagline: 'Strategy lessons, puzzles, and resources for Super Metal Mons.',
-  favicon: 'img/favicon.ico',
+  favicon: 'img/favicon.png',
 
   future: {
     v4: true,

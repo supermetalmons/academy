@@ -113,7 +113,7 @@ const homeGuestBookCloseButtonStyle: CSSProperties = {
 
 const homeGuestBookFormStyle: CSSProperties = {
   display: 'grid',
-  gridTemplateColumns: 'minmax(0, 1fr) auto',
+  gridTemplateColumns: 'minmax(0, 1fr) auto auto',
   gap: '0.5rem',
   alignItems: 'center',
 };
@@ -156,12 +156,15 @@ const homeGuestBookButtonContentStyle: CSSProperties = {
   alignItems: 'center',
   justifyContent: 'center',
   gap: '0.32rem',
+  lineHeight: 1.2,
+  transform: 'translateY(0.01rem)',
 };
 
 const homeGuestBookButtonIconStyle: CSSProperties = {
   width: '0.92rem',
   height: '0.92rem',
   display: 'block',
+  flexShrink: 0,
 };
 
 const homeGuestBookErrorStyle: CSSProperties = {
@@ -2099,7 +2102,7 @@ export function HomeExperience({
                         strokeLinejoin="round"
                       />
                     </svg>
-                    <span>read book</span>
+                    <span>read</span>
                   </span>
                 ) : isGuestBookSubmitting ? (
                   'signing...'
@@ -2107,6 +2110,29 @@ export function HomeExperience({
                   'submit'
                 )}
               </button>
+              {!hasSignedGuestBook ? (
+                <button
+                  type="button"
+                  style={homeGuestBookButtonStyle}
+                  onClick={openGuestBook}>
+                  <span style={homeGuestBookButtonContentStyle}>
+                    <svg
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      style={homeGuestBookButtonIconStyle}
+                      fill="none">
+                      <path
+                        d="M9 6H20M9 12H20M9 18H20M4 6H4.01M4 12H4.01M4 18H4.01"
+                        stroke="currentColor"
+                        strokeWidth="2.2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    <span>read</span>
+                  </span>
+                </button>
+              ) : null}
             </form>
             {guestBookError ? <span style={homeGuestBookErrorStyle}>{guestBookError}</span> : null}
           </div>

@@ -599,6 +599,7 @@ type SuperMetalMonsBoardProps = {
   onRenderWidthChange?: (width: number) => void;
   winningSolutionPulseTrigger?: number;
   threeDBoardViewportBottomExtensionPx?: number;
+  externalSandboxBoardSnapshot?: SuperMetalMonsBoardSnapshot | null;
 };
 
 type Tile = {
@@ -1987,6 +1988,7 @@ export default function SuperMetalMonsBoard({
   onRenderWidthChange,
   winningSolutionPulseTrigger = 0,
   threeDBoardViewportBottomExtensionPx = 0,
+  externalSandboxBoardSnapshot = null,
 }: SuperMetalMonsBoardProps): ReactNode {
   const playerStartingPotionCount = getPlayerStartingPotionCount(boardPreset);
   const opponentStartingPotionCount = getOpponentStartingPotionCount(boardPreset);
@@ -3212,6 +3214,72 @@ export default function SuperMetalMonsBoard({
     opponentStartingPotionCount,
     playerStartingPotionCount,
   ]);
+
+  useEffect(() => {
+    if (!isSandboxFreeMoveBoard || externalSandboxBoardSnapshot === null) {
+      return;
+    }
+    clearAllScoredManaFadeTimers();
+    clearAllManaPoolPulseTimers();
+    clearAllAttackEffectTimers();
+    clearAllPotionBubbleEffectTimers();
+    clearAllPotionResourceExitTimers();
+    clearWinPiecePulseTimers();
+    const nextBoardEntities = cloneBoardEntities(externalSandboxBoardSnapshot.boardEntities);
+    setBoardEntities(nextBoardEntities);
+    setUndoHistory([]);
+    setHoveredTile(null);
+    setSelectedTile(null);
+    setHoveredMoveResourceId(null);
+    setSelectedMoveResourceId(null);
+    setPendingItemPickupChoice(null);
+    setPendingDemonRebound(null);
+    setPendingSpiritPush(null);
+    setHoveredItemChoice(null);
+    setScoredManaFadeSpritesById({});
+    setManaPoolPulseSprites([]);
+    setAttackEffectSprites([]);
+    setPotionBubbleEffectSprites([]);
+    setExitingPlayerPotionResourceIds([]);
+    setExitingInstructionPotionResourceIds([]);
+    setRenderedAngelProtectionZones([]);
+    setRenderedBombRangeZones([]);
+    setResetFadeInByEntityId({});
+    setResetGhostFadeInByTileKey({});
+    setResetAnimation(null);
+    setResetAnimationProgress(1);
+    setWinPiecePulsePhase('idle');
+    setPlayerScore(externalSandboxBoardSnapshot.playerScore);
+    setOpponentScore(externalSandboxBoardSnapshot.opponentScore);
+    setPlayerPotionCount(externalSandboxBoardSnapshot.playerPotionCount);
+    setOpponentPotionCount(externalSandboxBoardSnapshot.opponentPotionCount);
+    setPlayerActiveAbilityStarAvailable(
+      externalSandboxBoardSnapshot.playerActiveAbilityStarAvailable,
+    );
+    setPlayerManaMoveAvailable(externalSandboxBoardSnapshot.playerManaMoveAvailable);
+    setPlayerMovementDistanceOffsetsByMonId({});
+    setPlayerMovementStartTileOverridesByMonId({});
+    setFaintedMonIdSet(new Set(externalSandboxBoardSnapshot.faintedMonIds));
+    setSandboxManaSpawnTileById({});
+    setSandboxItemSpawnTileById({});
+    previouslyScoredManaIdsRef.current = getScoredManaEntityIdSet(nextBoardEntities);
+    previousBoardEntitiesByIdRef.current = new Map(
+      nextBoardEntities.map((entity) => [entity.id, entity]),
+    );
+    forcedManaScoreSideByIdRef.current = {};
+    sandboxDirectManaScoreSideRef.current = 'white';
+    lastActiveAbilityUsedPotionRef.current = false;
+    lastAnimatedOpponentScoreRef.current = externalSandboxBoardSnapshot.opponentScore;
+    lastAnimatedPlayerScoreRef.current = externalSandboxBoardSnapshot.playerScore;
+    onPotionCountChange?.({
+      side: 'white',
+      count: externalSandboxBoardSnapshot.playerPotionCount,
+    });
+    onPotionCountChange?.({
+      side: 'black',
+      count: externalSandboxBoardSnapshot.opponentPotionCount,
+    });
+  }, [externalSandboxBoardSnapshot, isSandboxFreeMoveBoard, onPotionCountChange]);
 
   useEffect(
     () => () => {
@@ -11748,7 +11816,7 @@ export default function SuperMetalMonsBoard({
             cy={tile.row + 0.5}
             r={tile.isAdjacentDirectMove ? 0.125 : 0.095}
             fill={tile.isAdjacentDirectMove ? ADJACENT_MOVE_DOT_COLOR : hoveredTileCenterDotColor}
-            opacity={tile.isAdjacentDirectMove ? 0.78 : 0.16}
+            opacity={tile.isAdjacentDirectMove ? 0.78 : 0.09}
             pointerEvents="none"
             shapeRendering="geometricPrecision"
           />

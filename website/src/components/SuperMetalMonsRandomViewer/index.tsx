@@ -1,5 +1,10 @@
 import {useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode} from 'react';
 import {superMetalMonsNfts, type SuperMetalMonsNft} from '@site/src/data/superMetalMonsNfts';
+import {
+  playFavoriteChangeSound,
+  playSiteSoundEffect,
+  preloadSiteSoundEffects,
+} from '@site/src/utils/siteSoundEffects';
 
 type GenKey = 'gen1' | 'gen2';
 type TiltState = {
@@ -1325,6 +1330,7 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
     if (typeof window === 'undefined') {
       return;
     }
+    preloadSiteSoundEffects(['viewerShuffle', 'viewerUndo', 'favoriteOn', 'favoriteOff']);
     setFavoriteMons(parseFavoriteMons(window.localStorage.getItem(FAVORITES_STORAGE_KEY)));
   }, []);
 
@@ -1584,6 +1590,7 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
     if (folderGalleryMode !== 'favorites' || !favoriteMons.has(favoriteHref)) {
       return;
     }
+    playFavoriteChangeSound(pendingFavoriteRemovals.has(favoriteHref));
     setPendingFavoriteRemovals((current) => {
       const next = new Set(current);
       if (next.has(favoriteHref)) {
@@ -1744,6 +1751,7 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
   };
   const toggleSelectedMonFavorite = () => {
     const willFavorite = !isSelectedMonFavorite;
+    playFavoriteChangeSound(willFavorite);
     setFavoriteMons((current) => {
       const next = new Set(current);
       if (next.has(selectedMonFavoriteKey)) {
@@ -1766,6 +1774,7 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
     if (restoreSnapshot === undefined) {
       return;
     }
+    playSiteSoundEffect('viewerUndo');
     const restoreIndex = restoreSnapshot.index;
     clearNameCycleTimers();
     setIsNameCycling(false);
@@ -2372,6 +2381,7 @@ export default function SuperMetalMonsRandomViewer(): ReactNode {
                     if (candidateIndices.length === 0) {
                       return;
                     }
+                    playSiteSoundEffect('viewerShuffle');
                     const nextIndex = getRandomIndexFromList(candidateIndices, index);
                     pushUndoHistory(index, enabledGens, lockedType);
                     setIndex(nextIndex);

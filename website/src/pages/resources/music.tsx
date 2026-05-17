@@ -2,6 +2,11 @@ import {useEffect, useRef, useState, type CSSProperties, type ReactNode} from 'r
 import BlankSectionPage from '@site/src/components/BlankSectionPage';
 import ResourcesSubnav from '@site/src/components/ResourcesSubnav';
 import {useSiteMusicPlayer} from '@site/src/components/SiteMusicPlayer';
+import SiteMusicVisualizer from '@site/src/components/SiteMusicVisualizer';
+import {
+  playFavoriteChangeSound,
+  preloadSiteSoundEffects,
+} from '@site/src/utils/siteSoundEffects';
 
 const DOWNLOAD_ALL_LOADING_MS = 8500;
 const DOWNLOAD_ALL_FILE_NAME = 'supermons-tracks.zip';
@@ -18,18 +23,22 @@ const playerWrapStyle: CSSProperties = {
 const playerShellStyle: CSSProperties = {
   width: 'min(100%, 820px)',
   margin: '0 auto',
-  border: '1px solid #000',
   backgroundColor: '#fff',
   color: '#000',
   display: 'grid',
   gridTemplateColumns: 'minmax(0, 1fr)',
 };
 
+const visualizerStageStyle: CSSProperties = {
+  width: 'min(100%, 920px)',
+  margin: '0 auto',
+};
+
 const nowPlayingStyle: CSSProperties = {
-  borderBottom: '1px solid #000',
   padding: '1rem 1.1rem 0.9rem',
   display: 'grid',
   gap: '0.32rem',
+  transform: 'translateY(-8px)',
 };
 
 const eyebrowStyle: CSSProperties = {
@@ -134,6 +143,12 @@ const controlsStyle: CSSProperties = {
   padding: '0.9rem 1.1rem 1rem',
   display: 'grid',
   gap: '0.8rem',
+  border: '1px solid #000',
+};
+
+const controlsBoxStyle: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'minmax(0, 1fr)',
 };
 
 const controlRowStyle: CSSProperties = {
@@ -177,6 +192,8 @@ const iconButtonBaseStyle: CSSProperties = {
 const currentTrackDownloadStyle: CSSProperties = {
   ...iconButtonBaseStyle,
   flex: '0 0 auto',
+  border: 'none',
+  backgroundColor: 'transparent',
   color: '#000',
   textDecoration: 'none',
 };
@@ -222,6 +239,7 @@ const progressStyle: CSSProperties = {
   width: '100%',
   accentColor: '#000',
   cursor: 'pointer',
+  outline: 'none',
 };
 
 const trackListStyle: CSSProperties = {
@@ -233,7 +251,6 @@ const trackListStyle: CSSProperties = {
   scrollbarWidth: 'thin',
   scrollbarColor: '#000 rgba(0, 0, 0, 0.12)',
   scrollbarGutter: 'stable',
-  borderTop: '1px solid #000',
 };
 
 const trackButtonBaseStyle: CSSProperties = {
@@ -705,6 +722,7 @@ export default function ResourcesMusicPage(): ReactNode {
   const currentTrackFavoritePulseRef = useRef<SVGSVGElement | null>(null);
   const [isDownloadAllLoading, setIsDownloadAllLoading] = useState(false);
   const {
+    audioElement,
     tracks,
     currentTrack,
     currentTrackIndex,
@@ -718,6 +736,7 @@ export default function ResourcesMusicPage(): ReactNode {
     musicVolume,
     play,
     pause,
+    togglePlay,
     skipTrack,
     selectTrack,
     setShuffleEnabled,
@@ -741,6 +760,10 @@ export default function ResourcesMusicPage(): ReactNode {
         favoriteTrackFileNameSet.has(track.fileName) ? [index] : [],
       )
     : tracks.map((_, index) => index);
+
+  useEffect(() => {
+    preloadSiteSoundEffects(['favoriteOn', 'favoriteOff']);
+  }, []);
 
   useEffect(() => {
     const trackList = trackListRef.current;
@@ -898,6 +921,16 @@ export default function ResourcesMusicPage(): ReactNode {
     <BlankSectionPage title="Resources">
       <ResourcesSubnav active="music" />
       <section style={playerWrapStyle}>
+        <div style={visualizerStageStyle}>
+          <SiteMusicVisualizer
+            audioElement={audioElement}
+            currentTime={currentTime}
+            duration={duration}
+            isPlaying={isPlaying}
+            onSeek={seek}
+            onTogglePlay={togglePlay}
+          />
+        </div>
         <div style={playerShellStyle}>
           <div style={nowPlayingStyle}>
             <p style={eyebrowStyle}>Now Playing</p>
@@ -918,6 +951,7 @@ export default function ResourcesMusicPage(): ReactNode {
                       : currentTrackFavoriteButtonStyle
                   }
                   onClick={() => {
+                    playFavoriteChangeSound(!isCurrentTrackFavorite);
                     if (!isCurrentTrackFavorite) {
                       runCurrentTrackFavoritePulseAnimation();
                     }
@@ -968,158 +1002,161 @@ export default function ResourcesMusicPage(): ReactNode {
               </a>
             </div>
           </div>
-          <div style={controlsStyle}>
-            <div style={controlRowStyle}>
-              <div style={controlClusterStyle}>
-                <button
-                  type="button"
-                  aria-label="Shuffle"
-                  title="Shuffle"
-                  style={isShuffleEnabled ? iconButtonActiveStyle : iconButtonBaseStyle}
-                  onClick={() => setShuffleEnabled(!isShuffleEnabled)}>
-                  {renderIcon('shuffle')}
-                </button>
-                <button
-                  type="button"
-                  aria-label="Previous track"
-                  title="Previous"
-                  style={iconButtonBaseStyle}
-                  onClick={() => skipTrack(-1)}>
-                  {renderIcon('previous')}
-                </button>
-                <button
-                  type="button"
-                  aria-label={isPlaying ? 'Pause track' : 'Play track'}
-                  title={isPlaying ? 'Pause' : 'Play'}
-                  style={playButtonStyle}
-                  onClick={() => {
-                    if (isPlaying) {
-                      pause();
-                      return;
-                    }
-                    play();
-                  }}>
-                  {renderIcon(isPlaying ? 'pause' : 'play')}
-                </button>
-                <button
-                  type="button"
-                  aria-label="Next track"
-                  title="Next"
-                  style={iconButtonBaseStyle}
-                  onClick={() => skipTrack(1)}>
-                  {renderIcon('next')}
-                </button>
-                <button
-                  type="button"
-                  aria-label={loopButtonLabel}
-                  title={loopButtonLabel}
-                  style={{
-                    ...(loopMode !== 'off' ? iconButtonActiveStyle : iconButtonBaseStyle),
-                    position: 'relative',
-                  }}
-                  onClick={() =>
-                    setLoopMode(loopMode === 'off' ? 'all' : loopMode === 'all' ? 'one' : 'off')
-                  }>
-                  {renderIcon('loop')}
-                  {loopMode === 'one' ? (
-                    <span aria-hidden="true" style={loopOneBadgeStyle}>
-                      1
-                    </span>
-                  ) : null}
-                </button>
-              </div>
-              <div style={controlFilterButtonWrapStyle}>
-                <button
-                  type="button"
-                  aria-label={
-                    isFavoritesOnlyEnabled ? 'Show all tracks' : 'Show favorite tracks'
-                  }
-                  title={isFavoritesOnlyEnabled ? 'Show all tracks' : 'Show favorite tracks'}
-                  style={isFavoritesOnlyEnabled ? iconButtonActiveStyle : iconButtonBaseStyle}
-                  onClick={() => setFavoritesOnlyEnabled(!isFavoritesOnlyEnabled)}>
-                  {renderStarIcon(isFavoritesOnlyEnabled)}
-                </button>
-              </div>
-            </div>
-            <div style={timeRowStyle}>
-              <span style={timeTextStyle}>{formatTime(currentTime)}</span>
-              <input
-                type="range"
-                min={0}
-                max={duration || 0}
-                step={0.1}
-                value={Math.min(currentTime, duration || 0)}
-                aria-label="Track progress"
-                style={progressStyle}
-                onChange={(event) => seek(Number(event.currentTarget.value))}
-              />
-              <span style={timeTextStyle}>{formatTime(duration)}</span>
-            </div>
-          </div>
-          <ol ref={trackListRef} className="music-track-list-scrollbar" style={trackListStyle}>
-            {visibleTrackIndexes.map((index) => {
-              const track = tracks[index];
-              const isActive = index === currentTrackIndex;
-              const isFavorite = favoriteTrackFileNameSet.has(track.fileName);
-              return (
-                <li
-                  key={track.fileName}
-                  ref={(node) => {
-                    trackItemRefs.current[index] = node;
-                  }}>
-                  <div
-                    style={isActive ? trackRowActiveStyle : trackRowBaseStyle}>
-                    <button
-                      type="button"
-                      style={trackSelectButtonStyle}
-                      onClick={() => selectTrack(index)}>
-                      <span style={trackNumberStyle}>{String(index + 1).padStart(2, '0')}</span>
-                      <span style={trackTitleStyle}>{track.title}</span>
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={
-                        isFavorite
-                          ? `Remove ${track.title} from favorites`
-                          : `Add ${track.title} to favorites`
+          <div style={controlsBoxStyle}>
+            <div style={controlsStyle}>
+              <div style={controlRowStyle}>
+                <div style={controlClusterStyle}>
+                  <button
+                    type="button"
+                    aria-label="Shuffle"
+                    title="Shuffle"
+                    style={isShuffleEnabled ? iconButtonActiveStyle : iconButtonBaseStyle}
+                    onClick={() => setShuffleEnabled(!isShuffleEnabled)}>
+                    {renderIcon('shuffle')}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Previous track"
+                    title="Previous"
+                    style={iconButtonBaseStyle}
+                    onClick={() => skipTrack(-1)}>
+                    {renderIcon('previous')}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={isPlaying ? 'Pause track' : 'Play track'}
+                    title={isPlaying ? 'Pause' : 'Play'}
+                    style={playButtonStyle}
+                    onClick={() => {
+                      if (isPlaying) {
+                        pause();
+                        return;
                       }
-                      title={isFavorite ? 'Remove favorite' : 'Add favorite'}
-                      style={
-                        isFavorite
-                          ? trackFavoriteButtonActiveStyle
-                          : trackFavoriteButtonStyle
-                      }
-                      onClick={() => {
-                        if (!isFavorite) {
-                          runTrackFavoritePulseAnimation(track.fileName);
-                        }
-                        toggleFavoriteTrack(track.fileName);
-                      }}>
-                      {renderStarIcon(isFavorite, (node) => {
-                        trackFavoriteIconRefs.current[track.fileName] = node;
-                      })}
-                      <span style={trackFavoritePulseWrapStyle} aria-hidden="true">
-                        <svg
-                          ref={(node) => {
-                            trackFavoritePulseRefs.current[track.fileName] = node;
-                          }}
-                          viewBox="0 0 24 24"
-                          style={trackFavoritePulseIconStyle}>
-                          <path
-                            d="M12 2.6L14.9 8.4L21.2 9.3L16.6 13.7L17.7 20L12 17L6.3 20L7.4 13.7L2.8 9.3L9.1 8.4L12 2.6Z"
-                            fill="none"
-                            stroke="#ffe26a"
-                            strokeWidth="2.1"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
+                      play();
+                    }}>
+                    {renderIcon(isPlaying ? 'pause' : 'play')}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Next track"
+                    title="Next"
+                    style={iconButtonBaseStyle}
+                    onClick={() => skipTrack(1)}>
+                    {renderIcon('next')}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={loopButtonLabel}
+                    title={loopButtonLabel}
+                    style={{
+                      ...(loopMode !== 'off' ? iconButtonActiveStyle : iconButtonBaseStyle),
+                      position: 'relative',
+                    }}
+                    onClick={() =>
+                      setLoopMode(loopMode === 'off' ? 'all' : loopMode === 'all' ? 'one' : 'off')
+                    }>
+                    {renderIcon('loop')}
+                    {loopMode === 'one' ? (
+                      <span aria-hidden="true" style={loopOneBadgeStyle}>
+                        1
                       </span>
-                    </button>
-                  </div>
-                </li>
-              );
-            })}
-          </ol>
+                    ) : null}
+                  </button>
+                </div>
+                <div style={controlFilterButtonWrapStyle}>
+                  <button
+                    type="button"
+                    aria-label={
+                      isFavoritesOnlyEnabled ? 'Show all tracks' : 'Show favorite tracks'
+                    }
+                    title={isFavoritesOnlyEnabled ? 'Show all tracks' : 'Show favorite tracks'}
+                    style={isFavoritesOnlyEnabled ? iconButtonActiveStyle : iconButtonBaseStyle}
+                    onClick={() => setFavoritesOnlyEnabled(!isFavoritesOnlyEnabled)}>
+                    {renderStarIcon(isFavoritesOnlyEnabled)}
+                  </button>
+                </div>
+              </div>
+              <div style={timeRowStyle}>
+                <span style={timeTextStyle}>{formatTime(currentTime)}</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={duration || 0}
+                  step={0.1}
+                  value={Math.min(currentTime, duration || 0)}
+                  aria-label="Track progress"
+                  style={progressStyle}
+                  onChange={(event) => seek(Number(event.currentTarget.value))}
+                />
+                <span style={timeTextStyle}>{formatTime(duration)}</span>
+              </div>
+            </div>
+            <ol ref={trackListRef} className="music-track-list-scrollbar" style={trackListStyle}>
+              {visibleTrackIndexes.map((index) => {
+                const track = tracks[index];
+                const isActive = index === currentTrackIndex;
+                const isFavorite = favoriteTrackFileNameSet.has(track.fileName);
+                return (
+                  <li
+                    key={track.fileName}
+                    ref={(node) => {
+                      trackItemRefs.current[index] = node;
+                    }}>
+                    <div
+                      style={isActive ? trackRowActiveStyle : trackRowBaseStyle}>
+                      <button
+                        type="button"
+                        style={trackSelectButtonStyle}
+                        onClick={() => selectTrack(index)}>
+                        <span style={trackNumberStyle}>{String(index + 1).padStart(2, '0')}</span>
+                        <span style={trackTitleStyle}>{track.title}</span>
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={
+                          isFavorite
+                            ? `Remove ${track.title} from favorites`
+                            : `Add ${track.title} to favorites`
+                        }
+                        title={isFavorite ? 'Remove favorite' : 'Add favorite'}
+                        style={
+                          isFavorite
+                            ? trackFavoriteButtonActiveStyle
+                            : trackFavoriteButtonStyle
+                        }
+                        onClick={() => {
+                          playFavoriteChangeSound(!isFavorite);
+                          if (!isFavorite) {
+                            runTrackFavoritePulseAnimation(track.fileName);
+                          }
+                          toggleFavoriteTrack(track.fileName);
+                        }}>
+                        {renderStarIcon(isFavorite, (node) => {
+                          trackFavoriteIconRefs.current[track.fileName] = node;
+                        })}
+                        <span style={trackFavoritePulseWrapStyle} aria-hidden="true">
+                          <svg
+                            ref={(node) => {
+                              trackFavoritePulseRefs.current[track.fileName] = node;
+                            }}
+                            viewBox="0 0 24 24"
+                            style={trackFavoritePulseIconStyle}>
+                            <path
+                              d="M12 2.6L14.9 8.4L21.2 9.3L16.6 13.7L17.7 20L12 17L6.3 20L7.4 13.7L2.8 9.3L9.1 8.4L12 2.6Z"
+                              fill="none"
+                              stroke="#ffe26a"
+                              strokeWidth="2.1"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        </span>
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
         </div>
         <div style={downloadAllRowStyle}>
           <button

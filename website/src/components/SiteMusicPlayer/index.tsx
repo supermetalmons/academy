@@ -78,6 +78,7 @@ type PersistedMusicPlayerState = {
 };
 
 type SiteMusicPlayerValue = {
+  audioElement: HTMLAudioElement | null;
   tracks: SupermonsTrack[];
   currentTrack: SupermonsTrack;
   currentTrackIndex: number;
@@ -92,6 +93,7 @@ type SiteMusicPlayerValue = {
   isMiniControlsVisible: boolean;
   musicVolume: number;
   play: () => void;
+  playRandomTrack: () => void;
   pause: () => void;
   togglePlay: () => void;
   hideMiniControls: () => void;
@@ -228,6 +230,7 @@ function renderMiniIcon(kind: 'previous' | 'play' | 'pause' | 'next'): ReactNode
 
 export function SiteMusicPlayerProvider({children}: {children: ReactNode}): ReactNode {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
   const initialMusicState = useMemo(() => readPersistedMusicPlayerState(), []);
   const [currentTrackIndex, setCurrentTrackIndex] = useState(
     initialMusicState?.currentTrackIndex ?? 0,
@@ -250,6 +253,11 @@ export function SiteMusicPlayerProvider({children}: {children: ReactNode}): Reac
     initialMusicState?.isMiniControlsVisible ?? initialMusicState?.hasActivated ?? false,
   );
   const [musicVolume, setMusicVolume] = useState(MUSIC_VOLUME_DEFAULT);
+
+  const handleAudioRef = useCallback((node: HTMLAudioElement | null) => {
+    audioRef.current = node;
+    setAudioElement(node);
+  }, []);
 
   const currentTrack = supermonsTracks[currentTrackIndex];
   const currentTrackSrc = useMemo(() => getTrackSrc(currentTrack.fileName), [currentTrack.fileName]);
@@ -281,6 +289,45 @@ export function SiteMusicPlayerProvider({children}: {children: ReactNode}): Reac
       })
       .catch(() => setIsPlaying(false));
   }, []);
+
+  const playTrackFromStart = useCallback((nextIndex: number) => {
+    const audio = audioRef.current;
+    if (!audio) {
+      return;
+    }
+    const boundedIndex =
+      Number.isFinite(nextIndex) && nextIndex >= 0 && nextIndex < supermonsTracks.length
+        ? Math.floor(nextIndex)
+        : 0;
+    setCurrentTrackIndex(boundedIndex);
+    setCurrentTime(0);
+    setIsPlaying(true);
+    setHasActivated(true);
+    setIsMiniControlsVisible(true);
+    const nextSrc = getTrackSrc(supermonsTracks[boundedIndex].fileName);
+    audio.preload = 'auto';
+    audio.src = nextSrc;
+    audio.load();
+    try {
+      audio.currentTime = 0;
+    } catch {
+      // Some browsers reject seeking before metadata is available.
+    }
+    void audio
+      .play()
+      .then(() => {
+        setIsPlaying(true);
+        setHasActivated(true);
+        setIsMiniControlsVisible(true);
+      })
+      .catch(() => setIsPlaying(false));
+  }, []);
+
+  const playRandomTrack = useCallback(() => {
+    setIsShuffleEnabled(true);
+    setLoopMode('all');
+    playTrackFromStart(Math.floor(Math.random() * supermonsTracks.length));
+  }, [playTrackFromStart]);
 
   const pause = useCallback(() => {
     const audio = audioRef.current;
@@ -477,6 +524,7 @@ export function SiteMusicPlayerProvider({children}: {children: ReactNode}): Reac
 
   const value = useMemo(
     () => ({
+      audioElement,
       tracks: supermonsTracks,
       currentTrack,
       currentTrackIndex,
@@ -491,6 +539,7 @@ export function SiteMusicPlayerProvider({children}: {children: ReactNode}): Reac
       isMiniControlsVisible,
       musicVolume,
       play,
+      playRandomTrack,
       pause,
       togglePlay,
       hideMiniControls,
@@ -504,6 +553,7 @@ export function SiteMusicPlayerProvider({children}: {children: ReactNode}): Reac
       seek,
     }),
     [
+      audioElement,
       currentTrack,
       currentTrackIndex,
       currentTime,
@@ -519,6 +569,7 @@ export function SiteMusicPlayerProvider({children}: {children: ReactNode}): Reac
       musicVolume,
       pause,
       play,
+      playRandomTrack,
       seek,
       setFavoritesOnlyEnabled,
       selectTrack,
@@ -532,7 +583,7 @@ export function SiteMusicPlayerProvider({children}: {children: ReactNode}): Reac
   return (
     <SiteMusicPlayerContext.Provider value={value}>
       <audio
-        ref={audioRef}
+        ref={handleAudioRef}
         src={currentTrackSrc}
         preload="metadata"
         style={hiddenAudioStyle}
@@ -579,14 +630,32 @@ export function useSiteMusicPlayer(): SiteMusicPlayerValue {
 
 export function MiniSiteMusicControls({
   hidden = false,
+  forceVisible = false,
+  randomizeWhenForced = false,
 }: {
   hidden?: boolean;
+  forceVisible?: boolean;
+  randomizeWhenForced?: boolean;
 }): ReactNode {
-  const {isMiniControlsVisible, isPlaying, skipTrack, togglePlay} = useSiteMusicPlayer();
+  const {
+    isMiniControlsVisible,
+    isPlaying,
+    playRandomTrack,
+    skipTrack,
+    togglePlay,
+  } = useSiteMusicPlayer();
 
-  if (hidden || !isMiniControlsVisible) {
+  if (hidden || (!forceVisible && !isMiniControlsVisible)) {
     return null;
   }
+
+  const handleTogglePlay = (): void => {
+    if (!isPlaying && randomizeWhenForced) {
+      playRandomTrack();
+      return;
+    }
+    togglePlay();
+  };
 
   return (
     <div style={miniControlsWrapStyle} aria-label="Music controls">
@@ -603,7 +672,7 @@ export function MiniSiteMusicControls({
         aria-label={isPlaying ? 'Pause track' : 'Play track'}
         title={isPlaying ? 'Pause' : 'Play'}
         style={miniControlButtonStyle}
-        onClick={togglePlay}>
+        onClick={handleTogglePlay}>
         {renderMiniIcon(isPlaying ? 'pause' : 'play')}
       </button>
       <button
